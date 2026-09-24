@@ -37,4 +37,8 @@ const float *micFftBandas();
 // FFTs procesados desde que inicio (debug: confirma que el stream fluye)
 int micFftConteo();
 
+// ¿El microfono + FFT estan activos ahora? Lo consulta el sensor puntual
+// para no apagar una animacion que ya este usando el microfono.
+bool micFftActivo();
+
 #endif // MICFFT_H

@@ -15,6 +15,9 @@ from app.hardware.ble_relay import RelayBroker
 from app.hardware.device_state import DeviceState
 
 
+PREFIJOS_SENSOR = frozenset({"TEMP:", "LUZ:", "BOTON:", "ACCEL:", "MIC:", "BAT:"})
+
+
 class SerialTransport:
     def __init__(self, baud: int = 115200):
         self.baud = baud
@@ -392,7 +395,9 @@ class SerialTransport:
             esperado = self._respuesta_esperada
             if esperado:
                 prefijo, evento, resultado = esperado
-                if texto.startswith(prefijo):
+                if texto.startswith(prefijo) or (
+                    prefijo in PREFIJOS_SENSOR and texto == "SENSOR:?"
+                ):
                     resultado.append(texto)
                     evento.set()
 
@@ -524,7 +529,9 @@ class SerialTransport:
         esperado = self._respuesta_esperada
         if esperado:
             prefijo, evento, resultado = esperado
-            if texto.startswith(prefijo):
+            if texto.startswith(prefijo) or (
+                prefijo in PREFIJOS_SENSOR and texto == "SENSOR:?"
+            ):
                 resultado.append(texto)
                 evento.set()
 

@@ -168,8 +168,9 @@ void procesarComando(ManagedString cmd)
         metroDetener();
     }
     // SENSOR:* -> herramientas de la IA: leen un sensor REAL y responden
-    // por serial con el valor (TEMP:24, LUZ:120, BOTON:1:0, ACCEL:...).
-    // No tocan la cara ni el loading: son lecturas puras e instantaneas.
+    // por serial con el valor (TEMP:24, LUZ:120, BOTON:1:0, ACCEL:...,
+    // MIC:... o BAT:...). No cambian la emocion; la luz puede usar la matriz
+    // un instante y el microfono solo se enciende durante su muestra.
     else if (cmd.substring(0, 7) == "SENSOR:") {
         ManagedString sensor = cmd.substring(7, cmd.length());
         if (sensor == "TEMP") {
@@ -186,6 +187,33 @@ void procesarComando(ManagedString cmd)
             LecturaAcelerometro l = leerAcelerometro();
             responder(ManagedString("ACCEL:") + l.x + ":" + l.y + ":" + l.z
                              + ":" + l.pitch + ":" + l.roll + "\n");
+        }
+        else if (sensor == "MIC" || sensor == "SONIDO") {
+            LecturaMicrofono l = leerMicrofono();
+            if (l.estado == 0) {
+                responder(ManagedString("MIC:BUSY\n"));
+            }
+            else if (l.estado < 0) {
+                responder(ManagedString("MIC:ERR\n"));
+            }
+            else {
+                ManagedString salida = ManagedString("MIC:");
+                salida = salida + l.nivel;
+                for (int i = 0; i < 5; i++) {
+                    salida = salida + ManagedString(":");
+                    salida = salida + l.bandas[i];
+                }
+                salida = salida + ManagedString(":") + l.ventanas + ManagedString("\n");
+                responder(salida);
+            }
+        }
+        else if (sensor == "BAT" || sensor == "BATERIA") {
+            LecturaBateria l = leerBateria();
+            ManagedString salida = ManagedString("BAT:");
+            salida = salida + l.bateria_mv;
+            salida = salida + ManagedString(":") + l.vin_mv;
+            salida = salida + ManagedString(":") + l.fuente + ManagedString("\n");
+            responder(salida);
         }
         else {
             responder(ManagedString("SENSOR:?\n"));

@@ -88,6 +88,8 @@ const LABELS_HERRAMIENTA: Record<string, string> = {
   leer_luz: 'midiendo la luz…',
   leer_botones: 'mirando los botones…',
   leer_movimiento: 'sintiendo el movimiento…',
+  leer_sonido: 'escuchando el sonido…',
+  leer_bateria: 'midiendo la batería…',
   reloj: 'mirando el reloj…',
   buscar_en_web: 'buscando en la web…',
   calcular: 'haciendo la cuenta…',

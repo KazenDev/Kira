@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 from pathlib import Path
 
 os.environ["KIRA_SIN_SERIAL"] = "1"
@@ -86,8 +87,22 @@ def test_exclusive_device_requests() -> None:
     check(manager.hilo is None, "close termina el worker serial", manager.hilo)
 
 
+def test_sensor_firmware_desconocido() -> None:
+    print("\n== 4) firmware viejo: SENSOR:? cierra la espera con error útil ==")
+    manager = SerialManager()
+    try:
+        evento = threading.Event()
+        resultado: list[str] = []
+        manager._respuesta_esperada = ("MIC:", evento, resultado)
+        manager.relay_linea_entrante("SENSOR:?")
+        check(evento.is_set(), "SENSOR:? completa la espera", (evento.is_set(), resultado))
+        check(resultado == ["SENSOR:?"], "la respuesta se conserva para el backend", resultado)
+    finally:
+        manager.close()
+
+
 def test_unique_audio_files() -> None:
-    print("\n== 4) conversiones de audio sin colisiones ==")
+    print("\n== 5) conversiones de audio sin colisiones ==")
     original = ks.GRABACIONES_DIR
     with tempfile.TemporaryDirectory(prefix="kira_audio_test_") as tmp:
         ks.GRABACIONES_DIR = tmp
@@ -106,6 +121,7 @@ def main() -> int:
     test_audio_parser()
     test_device_state()
     test_exclusive_device_requests()
+    test_sensor_firmware_desconocido()
     test_unique_audio_files()
     print()
     if FALLOS:

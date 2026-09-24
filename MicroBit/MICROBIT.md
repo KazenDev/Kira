@@ -51,7 +51,8 @@ MicroBit/
 │   │       └── Transiciones/   ← 3 efectos de transición entre emociones (60 FPS)
 │   └── Funciones/             ← LECTURA DE SENSORES para tool calling de la IA
 │       ├── Temperatura/  Luz/  Botones/  Acelerometro/
-│       └── Funciones.h         ← API única: leerTemperatura(), leerLuz(), ...
+│       ├── Microfono/  Bateria/
+│       └── Funciones.h         ← API única de temperatura, luz, botones, movimiento, sonido y batería
 └── Referencias/               ← repos CODAL completos (consulta local, sin GitHub)
     ├── codal-microbit-v2-samples/  ← EL PROYECTO: se sincroniza source/ y se compila
     ├── codal-core/                 ← las APIs: Image, Serial, AnimatedDisplay...
@@ -62,7 +63,7 @@ MicroBit/
 ### El flujo (Principal.cpp)
 1. `uBit.init()` → brillo tenue (90) → arranca la **réplica LED** (fibra paralela
    que manda el frame real a la PC) → **apaga el micrófono** al boot (CODAL lo
-   prende solo; solo la animación Barra lo reactiva).
+   prende solo; solo la animación Barra o una consulta puntual lo reactivan).
 2. Bucle infinito: `revisarSerial()` (escucha comandos **sin bloquear** la
    animación), atiende los flancos de A/B para la escucha manual y renderiza
    la emoción activa (o boca hablando, o loading).
@@ -87,7 +88,7 @@ al instante, y después lo que corresponda.
 | `TEST` | Demo automática (recorre emociones + loadings) |
 | `BLINK` | Parpadeo simple de ojos |
 | `TRANS` / `TRANS0/1/2` / `TRANSALL` | Probar transiciones |
-| `SENSOR:TEMP` / `SENSOR:LUZ` / `SENSOR:BOTON` / `SENSOR:ACCEL` | Lee un sensor REAL y responde `TEMP:24`, `LUZ:120`, `BOTON:1:0`, `ACCEL:x:y:z:pitch:roll` |
+| `SENSOR:TEMP` / `SENSOR:LUZ` / `SENSOR:BOTON` / `SENSOR:ACCEL` / `SENSOR:MIC` / `SENSOR:BAT` | Lee un sensor REAL y responde `TEMP:24`, `LUZ:120`, `BOTON:1:0`, `ACCEL:x:y:z:pitch:roll`, `MIC:nivel:b0:b1:b2:b3:b4:ventanas` o `BAT:bateria_mv:vin_mv:fuente` |
 | `ESCUCHAR` | Arma la escucha manual; A abre, A envía y B cancela |
 
 ---
@@ -178,12 +179,16 @@ transmite (deja de parpadear el LED amarillo de actividad).
 ## 🛠️ COMPILAR Y FLASHEAR
 
 ```bash
-# 1. Sincronizar nuestro código al source del proyecto samples
-rsync -a Codigo/Animaciones/ Referencias/codal-microbit-v2-samples/source/Animaciones/
+# 1. Sincronizar TODO Codigo/ (incluye Animaciones/ y Funciones/)
+rsync -a --delete Codigo/ Referencias/codal-microbit-v2-samples/source/
+rm -f Referencias/codal-microbit-v2-samples/source/Principal.cpp
 cp Codigo/Principal.cpp Referencias/codal-microbit-v2-samples/source/main.cpp
 
-# 2. Compilar (genera MICROBIT.hex)
-cd Referencias/codal-microbit-v2-samples && python3 build.py
+# 2. Compilar desde cero si se agregaron archivos .cpp nuevos
+#    (CMake usa un glob recursive y no siempre detecta el cambio solo)
+cd Referencias/codal-microbit-v2-samples
+rm -rf build
+python3 build.py
 
 # 3. Flashear: copiar el hex al drive del micro:bit (el bootloader lo consume solo)
 cp MICROBIT.hex /media/zkazen/MICROBIT/
@@ -216,11 +221,25 @@ int  leerTemperatura();                    // °C  (uBit.thermometer.getTemperat
 int  leerLuz();                            // 0..255 (uBit.display.readLightLevel())
 int  leerBotones();                        // bit0=A, bit1=B (isPressed)
 LecturaAcelerometro leerAcelerometro();    // x,y,z (mili-g) + pitch,roll (grados)
+LecturaMicrofono leerMicrofono();          // nivel + 5 bandas relativas (0..100)
+LecturaBateria leerBateria();              // mV de bateria/entrada + fuente
 ```
 
-Protocolo: `SENSOR:TEMP` → `TEMP:24`. Verificado en vivo (23°C ✅).
+Protocolo: `SENSOR:TEMP` → `TEMP:24`, `SENSOR:LUZ` → `LUZ:120`,
+`SENSOR:BOTON` → `BOTON:1:0`, `SENSOR:ACCEL` → `ACCEL:x:y:z:pitch:roll`,
+`SENSOR:MIC` → `MIC:nivel:b0:b1:b2:b3:b4:ventanas` y
+`SENSOR:BAT` → `BAT:bateria_mv:vin_mv:fuente`.
+
+El sonido es una medida **relativa**, no dB absolutos: el FFT se enciende sólo
+para tomar la muestra y se apaga al terminar. Si hay una escucha manual activa,
+responde `MIC:BUSY` para no interrumpir el audio. La lectura de batería es
+aproximada y depende de lo que exponga el chip de interfaz; `0` significa que
+no hay dato disponible, no que la batería esté vacía. La lectura de luz usa la
+matriz LED como sensor durante un instante y puede producir un parpadeo mínimo.
+
 Idea: que Kira/Kiro puedan decir "qué temperatura hace", "¿me sacudiste?",
-"estoy acostado", etc., usando estos datos reales.
+"estoy acostado", "¿hay mucho ruido?", "¿cuánta batería le queda?", etc.,
+usando estos datos reales.
 
 ---
 

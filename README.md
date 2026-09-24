@@ -24,8 +24,10 @@ La primera cuenta creada recibe una copia del snapshot legacy de Kira; el origin
 
 La escucha del micrófono es manual: el comando `ESCUCHAR` deja la placa
 armada, el primer A abre el micro, el segundo A envía el audio y B lo cancela.
-No se usa VAD para cerrar el turno. El firmware se compila con el proyecto
-CODAL local y se flashea como `MICROBIT.hex`.
+No se usa VAD para cerrar el turno. Además del termómetro, la firmware expone
+luz, botones, acelerómetro, una lectura relativa del sonido y el voltaje de
+alimentación para que la IA pueda usarlos como herramientas. El firmware se
+compila con el proyecto CODAL local y se flashea como `MICROBIT.hex`.
 
 ## Verificación
 

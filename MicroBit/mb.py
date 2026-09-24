@@ -39,6 +39,13 @@ COMANDOS = {
     "fastidio": "FASTIDIO", "annoyed": "FASTIDIO",
     "miedo": "MIEDO", "scared": "MIEDO",
     "cansado": "CANSADO", "tired": "CANSADO",
+    # sensores onboard
+    "temp": "SENSOR:TEMP", "temperatura": "SENSOR:TEMP",
+    "luz": "SENSOR:LUZ", "light": "SENSOR:LUZ",
+    "boton": "SENSOR:BOTON", "botones": "SENSOR:BOTON",
+    "movimiento": "SENSOR:ACCEL", "acel": "SENSOR:ACCEL",
+    "sonido": "SENSOR:MIC", "microfono": "SENSOR:MIC",
+    "bateria": "SENSOR:BAT", "battery": "SENSOR:BAT",
     # sistema
     "talk": "TALK",
     "loading": "LOADING",
@@ -67,7 +74,7 @@ EN BUCLE (hasta que mandes stop o otra cosa):
   metrostop         corta el metronomo (botones: A -5 | B +5 | A+B para)
   test              demo automatica de todas las emociones
   trans / transall / trans0-2     transiciones de prueba
-SENSORES (lectura, no tocan la cara): temp luz boton accel
+SENSORES (lectura; no cambian la emocion): temp luz boton accel sonido bateria
 CONTROL:  stop (corta y vuelve a alegria) | cancelar (descarta la escucha) | salir | ayuda
 OTRO:     cualquier comando en MAYUSCULAS va tal cual al micro:bit"""
 
