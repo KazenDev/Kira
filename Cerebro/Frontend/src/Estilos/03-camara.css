@@ -28,12 +28,7 @@
   align-items: center;
   gap: 10px;
   padding: 6px 8px 6px 6px;
-  background: rgba(27, 33, 43, 0.97);
   border: 1px solid var(--border-strong);
-  border-radius: 16px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   animation: foto-pop 0.16s var(--ease);
   z-index: 3;
 }
@@ -115,17 +110,8 @@
 
 /* ---- celular: la píldora pasa a dos filas (el texto NO queda bajo los botones) ---- */
 @media (max-width: 560px) {
-  .composer {
-    padding: 10px 14px 54px;
-  }
 
   /* la fila de acciones sigue abajo, ahora DEBAJO del texto (no encima) */
-  .composer-acciones {
-    left: 10px;
-    right: 10px;
-    bottom: 6px;
-    height: auto;
-  }
 
   .foto-chip {
     bottom: calc(100% + 6px);
@@ -144,8 +130,5 @@
   }
 
   /* bajar: tiene que quedar ARRIBA de la píldora, que en el cel es más alta */
-  .bajar-btn {
-    bottom: 128px;
-  }
 }
 

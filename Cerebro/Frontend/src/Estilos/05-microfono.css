@@ -35,8 +35,6 @@
   gap: 10px;
   height: 58px;
   padding: 0 9px;
-  border-radius: 29px;
-  background: var(--elev-2);
   border: 1px solid var(--border-strong);
   box-shadow: none;
   overflow: hidden;
