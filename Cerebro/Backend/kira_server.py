@@ -1604,6 +1604,21 @@ HERRAMIENTAS: dict[str, dict] = {
         "comando": "SENSOR:BAT",
         "prefijo": "BAT:",
     },
+    "leer_gesto": {
+        "descripcion": "Lee el ultimo gesto estable del acelerometro (sacudida, caida libre, inclinacion, cara arriba/abajo o impacto) y la magnitud actual en mili-g. No es una velocidad.",
+        "comando": "SENSOR:GESTO",
+        "prefijo": "GESTO:",
+    },
+    "leer_brujula": {
+        "descripcion": "Lee el rumbo magnetico y la fuerza del campo. El rumbo puede requerir calibracion; si no esta disponible devuelve -1.",
+        "comando": "SENSOR:BRUJULA",
+        "prefijo": "BRUJULA:",
+    },
+    "leer_toque": {
+        "descripcion": "Lee el logo capacitivo de la micro:bit: 1 si esta tocado, 0 si no, y su lectura capacitiva cruda.",
+        "comando": "SENSOR:TOQUE",
+        "prefijo": "TOUCH:",
+    },
     "reloj": {
         "descripcion": "Hora y fecha actuales del sistema (no usa el micro:bit).",
         "comando": None,
@@ -1755,6 +1770,43 @@ def formatear_sensor(nombre: str, linea: str) -> str:
                 vin_texto = f"{vin_mv} mV" if vin_mv not in {"0", "-1"} else "no disponible"
                 return f"alimentación: batería {bateria_texto}, entrada {vin_texto}, fuente {fuente_texto}"
             return f"alimentación: {valor}"
+        if nombre == "leer_gesto":
+            partes = valor.split(":")
+            if len(partes) >= 2:
+                codigo, magnitud = partes[:2]
+                nombres_gesto = {
+                    "0": "ninguno",
+                    "1": "inclinación hacia arriba",
+                    "2": "inclinación hacia abajo",
+                    "3": "inclinación a la izquierda",
+                    "4": "inclinación a la derecha",
+                    "5": "cara arriba",
+                    "6": "cara abajo",
+                    "7": "caída libre",
+                    "8": "impacto de 3 G",
+                    "9": "impacto de 6 G",
+                    "10": "impacto de 8 G",
+                    "11": "sacudida",
+                    "12": "impacto de 2 G",
+                }
+                gesto_texto = nombres_gesto.get(codigo, f"gesto {codigo}")
+                return f"último gesto: {gesto_texto}; magnitud actual {magnitud} mili-g"
+            return f"gesto: {valor}"
+        if nombre == "leer_brujula":
+            partes = valor.split(":")
+            if len(partes) >= 3:
+                rumbo, campo, calibrada = partes[:3]
+                if calibrada != "1" or rumbo.startswith("-"):
+                    return f"brújula: necesita calibración; campo magnético {campo}"
+                return f"brújula: rumbo {rumbo} grados; campo magnético {campo}"
+            return f"brújula: {valor}"
+        if nombre == "leer_toque":
+            partes = valor.split(":")
+            if len(partes) >= 2:
+                presionado, lectura = partes[:2]
+                estado = "tocado" if presionado == "1" else "no tocado"
+                return f"logo táctil: {estado}; lectura capacitiva {lectura}"
+            return f"logo táctil: {valor}"
     except Exception:
         pass
     return f"lectura cruda: {linea}"

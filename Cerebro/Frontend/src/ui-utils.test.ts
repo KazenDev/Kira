@@ -51,6 +51,9 @@ describe('labelHerramienta (tool trace: estado NOMBRADO en vez de puntos)', () =
     expect(labelHerramienta('leer_temperatura')).toBe('leyendo el termómetro…');
     expect(labelHerramienta('leer_sonido')).toBe('escuchando el sonido…');
     expect(labelHerramienta('leer_bateria')).toBe('midiendo la batería…');
+    expect(labelHerramienta('leer_gesto')).toBe('detectando el movimiento…');
+    expect(labelHerramienta('leer_brujula')).toBe('buscando el norte…');
+    expect(labelHerramienta('leer_toque')).toBe('comprobando el logo…');
     expect(labelHerramienta('buscar_en_web')).toBe('buscando en la web…');
     expect(labelHerramienta('calcular')).toBe('haciendo la cuenta…');
     expect(labelHerramienta('guardar_recuerdo')).toBe('anotándolo en su memoria…');

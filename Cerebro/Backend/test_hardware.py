@@ -11,6 +11,7 @@ os.environ["KIRA_SIN_SERIAL"] = "1"
 
 from app.hardware.audio_capture import consume_audio_capture  # noqa: E402
 from app.hardware.device_state import DeviceState  # noqa: E402
+from app.hardware.serial_transport import PREFIJOS_SENSOR  # noqa: E402
 import kira_server as ks  # noqa: E402
 from kira_server import SerialManager  # noqa: E402
 
@@ -99,6 +100,26 @@ def test_sensor_firmware_desconocido() -> None:
         check(resultado == ["SENSOR:?"], "la respuesta se conserva para el backend", resultado)
     finally:
         manager.close()
+
+    check(
+        {"GESTO:", "BRUJULA:", "TOUCH:"}.issubset(PREFIJOS_SENSOR),
+        "los prefijos de los tres sensores nuevos también son reconocidos",
+        sorted(PREFIJOS_SENSOR),
+    )
+    for prefijo in ("GESTO:", "BRUJULA:", "TOUCH:"):
+        manager = SerialManager()
+        try:
+            evento = threading.Event()
+            resultado: list[str] = []
+            manager._respuesta_esperada = (prefijo, evento, resultado)
+            manager.relay_linea_entrante("SENSOR:?")
+            check(
+                evento.is_set() and resultado == ["SENSOR:?"],
+                f"SENSOR:? completa una espera {prefijo}",
+                (prefijo, evento.is_set(), resultado),
+            )
+        finally:
+            manager.close()
 
 
 def test_unique_audio_files() -> None:

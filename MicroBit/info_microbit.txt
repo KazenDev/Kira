@@ -48,6 +48,10 @@ Comandos serial (linea terminada en \n):
   SENSOR:ACCEL  -> ACCEL:<x>:<y>:<z>:<pitch>:<roll>
   SENSOR:MIC    -> MIC:<nivel>:<b0>:<b1>:<b2>:<b3>:<b4>:<ventanas>
   SENSOR:BAT    -> BAT:<bateria_mV>:<entrada_mV>:<fuente>
+  SENSOR:GESTO  -> GESTO:<codigo>:<magnitud_mili-g>
+  SENSOR:BRUJULA -> BRUJULA:<rumbo>:<campo>:<calibrada>
+  SENSOR:TOQUE  -> TOUCH:<presionado>:<lectura capacitiva>
+  CALIBRAR:BRUJULA -> calibracion UX manual de CODAL (puede tardar ~32 s)
   ESCUCHAR     -> espera manual: primer A graba, segundo A envia, B cancela
 Respuesta: ACK:<COMANDO> y, para sensores, la linea de lectura correspondiente.
 

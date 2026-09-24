@@ -133,6 +133,22 @@ void procesarComando(ManagedString cmd)
         // loading: la proxima pasada de animarLuz pedira tapar/iluminar.
         recalibrarLuz();
     }
+    // CALIBRAR:BRUJULA -> ejecuta la UX oficial de CODAL. Es un comando
+    // manual, no una tool: puede tardar hasta ~32 s y por eso no se dispara
+    // desde una consulta puntual de la IA.
+    else if (cmd == "CALIBRAR:BRUJULA") {
+        detenerHablar();
+        detenerLoading();
+        detenerVoz();
+        escucharDetener();
+        metroDetener();
+        int resultado = uBit.compass.calibrate();
+        if (resultado == DEVICE_OK) {
+            responder(ManagedString("BRUJULA:CALIBRADA\n"));
+        } else {
+            responder(ManagedString("BRUJULA:CALIBRACION:ERROR\n"));
+        }
+    }
     // ESCUCHAR -> ESCUCHA MANUAL: deja la placa armada y muestra el aro.
     // El primer A abre el micro; el segundo A envía; B cancela.
     else if (cmd == "ESCUCHAR") {
@@ -169,8 +185,9 @@ void procesarComando(ManagedString cmd)
     }
     // SENSOR:* -> herramientas de la IA: leen un sensor REAL y responden
     // por serial con el valor (TEMP:24, LUZ:120, BOTON:1:0, ACCEL:...,
-    // MIC:... o BAT:...). No cambian la emocion; la luz puede usar la matriz
-    // un instante y el microfono solo se enciende durante su muestra.
+    // MIC:..., BAT:..., GESTO:..., BRUJULA:... o TOUCH:...). No cambian
+    // la emocion; la luz puede usar la matriz un instante y el microfono solo
+    // se enciende durante su muestra.
     else if (cmd.substring(0, 7) == "SENSOR:") {
         ManagedString sensor = cmd.substring(7, cmd.length());
         if (sensor == "TEMP") {
@@ -213,6 +230,29 @@ void procesarComando(ManagedString cmd)
             salida = salida + l.bateria_mv;
             salida = salida + ManagedString(":") + l.vin_mv;
             salida = salida + ManagedString(":") + l.fuente + ManagedString("\n");
+            responder(salida);
+        }
+        else if (sensor == "GESTO" || sensor == "GESTOS") {
+            LecturaGesto l = leerGesto();
+            ManagedString salida = ManagedString("GESTO:");
+            salida = salida + l.codigo;
+            salida = salida + ManagedString(":") + l.magnitud_mg + ManagedString("\n");
+            responder(salida);
+        }
+        else if (sensor == "BRUJULA" || sensor == "COMPASS" ||
+                 sensor == "MAG" || sensor == "MAGNETO") {
+            LecturaBrujula l = leerBrujula();
+            ManagedString salida = ManagedString("BRUJULA:");
+            salida = salida + l.rumbo;
+            salida = salida + ManagedString(":") + l.campo;
+            salida = salida + ManagedString(":") + l.calibrada + ManagedString("\n");
+            responder(salida);
+        }
+        else if (sensor == "TOQUE" || sensor == "TACTIL" || sensor == "LOGO") {
+            LecturaTactil l = leerToque();
+            ManagedString salida = ManagedString("TOUCH:");
+            salida = salida + l.presionado;
+            salida = salida + ManagedString(":") + l.lectura + ManagedString("\n");
             responder(salida);
         }
         else {

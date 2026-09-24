@@ -70,7 +70,7 @@ El chat de Kira corre en el cel, y los comandos de la IA llegan a la placa por B
 2. Abrir BLE en el cel + SCANNER → buscar **"BBC micro:bit [XXXX]"**
 3. CONECTAR → expandir **Nordic UART Service**
 4. La característica **RX (6e400002)** = escribir aquí los comandos:
-   `METRO:120:4`, `HAPPY`, `SENSOR:TEMP`, `SENSOR:LUZ`, `SENSOR:ACCEL`, `SENSOR:MIC`, `SENSOR:BAT`, `STOP`...
+   `METRO:120:4`, `HAPPY`, `SENSOR:TEMP`, `SENSOR:LUZ`, `SENSOR:ACCEL`, `SENSOR:MIC`, `SENSOR:BAT`, `SENSOR:GESTO`, `SENSOR:BRUJULA`, `SENSOR:TOQUE`, `CALIBRAR:BRUJULA`, `STOP`...
    (el botón de flecha ↑ permite mandar texto; con el flush del firmware
    no hace falta el `\n` final)
 5. La característica **TX (6e400003)** = notificaciones (ACKs y respuestas):

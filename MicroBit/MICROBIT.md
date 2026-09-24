@@ -51,8 +51,8 @@ MicroBit/
 │   │       └── Transiciones/   ← 3 efectos de transición entre emociones (60 FPS)
 │   └── Funciones/             ← LECTURA DE SENSORES para tool calling de la IA
 │       ├── Temperatura/  Luz/  Botones/  Acelerometro/
-│       ├── Microfono/  Bateria/
-│       └── Funciones.h         ← API única de temperatura, luz, botones, movimiento, sonido y batería
+│       ├── Microfono/  Bateria/  Gestos/  Brujula/  Tactil/
+│       └── Funciones.h         ← API única de temperatura, luz, botones, movimiento, sonido, batería, gestos, brújula y toque
 └── Referencias/               ← repos CODAL completos (consulta local, sin GitHub)
     ├── codal-microbit-v2-samples/  ← EL PROYECTO: se sincroniza source/ y se compila
     ├── codal-core/                 ← las APIs: Image, Serial, AnimatedDisplay...
@@ -89,6 +89,10 @@ al instante, y después lo que corresponda.
 | `BLINK` | Parpadeo simple de ojos |
 | `TRANS` / `TRANS0/1/2` / `TRANSALL` | Probar transiciones |
 | `SENSOR:TEMP` / `SENSOR:LUZ` / `SENSOR:BOTON` / `SENSOR:ACCEL` / `SENSOR:MIC` / `SENSOR:BAT` | Lee un sensor REAL y responde `TEMP:24`, `LUZ:120`, `BOTON:1:0`, `ACCEL:x:y:z:pitch:roll`, `MIC:nivel:b0:b1:b2:b3:b4:ventanas` o `BAT:bateria_mv:vin_mv:fuente` |
+| `SENSOR:GESTO` | Devuelve el último gesto estable de CODAL y la magnitud actual: `GESTO:codigo:magnitud_mg` |
+| `SENSOR:BRUJULA` | Devuelve rumbo, intensidad magnética y estado de calibración: `BRUJULA:rumbo:campo:calibrada` |
+| `SENSOR:TOQUE` | Devuelve estado y lectura capacitiva del logo: `TOUCH:presionado:lectura` |
+| `CALIBRAR:BRUJULA` | Ejecuta la calibración UX oficial de CODAL; es manual y puede tardar unos 32 s |
 | `ESCUCHAR` | Arma la escucha manual; A abre, A envía y B cancela |
 
 ---
@@ -223,12 +227,18 @@ int  leerBotones();                        // bit0=A, bit1=B (isPressed)
 LecturaAcelerometro leerAcelerometro();    // x,y,z (mili-g) + pitch,roll (grados)
 LecturaMicrofono leerMicrofono();          // nivel + 5 bandas relativas (0..100)
 LecturaBateria leerBateria();              // mV de bateria/entrada + fuente
+LecturaGesto leerGesto();                  // último gesto CODAL + magnitud (mili-g)
+LecturaBrujula leerBrujula();              // rumbo + campo + calibración
+LecturaTactil leerToque();                 // estado del logo + lectura capacitiva
 ```
 
 Protocolo: `SENSOR:TEMP` → `TEMP:24`, `SENSOR:LUZ` → `LUZ:120`,
 `SENSOR:BOTON` → `BOTON:1:0`, `SENSOR:ACCEL` → `ACCEL:x:y:z:pitch:roll`,
-`SENSOR:MIC` → `MIC:nivel:b0:b1:b2:b3:b4:ventanas` y
-`SENSOR:BAT` → `BAT:bateria_mv:vin_mv:fuente`.
+`SENSOR:MIC` → `MIC:nivel:b0:b1:b2:b3:b4:ventanas`,
+`SENSOR:BAT` → `BAT:bateria_mv:vin_mv:fuente`,
+`SENSOR:GESTO` → `GESTO:codigo:magnitud_mg`,
+`SENSOR:BRUJULA` → `BRUJULA:rumbo:campo:calibrada` y
+`SENSOR:TOQUE` → `TOUCH:presionado:lectura`.
 
 El sonido es una medida **relativa**, no dB absolutos: el FFT se enciende sólo
 para tomar la muestra y se apaga al terminar. Si hay una escucha manual activa,
@@ -237,9 +247,26 @@ aproximada y depende de lo que exponga el chip de interfaz; `0` significa que
 no hay dato disponible, no que la batería esté vacía. La lectura de luz usa la
 matriz LED como sensor durante un instante y puede producir un parpadeo mínimo.
 
+`leer_gesto` devuelve el **último gesto estable** que CODAL reconoce, no una
+estimación de velocidad: los códigos cubren inclinación, cara arriba/abajo,
+caída libre, sacudida e impulsos de 2/3/6/8 G. La magnitud es
+`sqrt(x²+y²+z²)` e incluye la gravedad, por lo que en reposo ronda 1000 mili-g.
+
+La brújula usa el magnetómetro combinado del chip de movimiento. `BRUJULA:-1:...:0`
+significa que todavía no hay calibración: CODAL no debe entrar automáticamente
+en una calibración interactiva de hasta 32 segundos desde una consulta de la IA.
+El campo se informa como lectura reportada por CODAL, sin llamarlo dB ni
+convertirlo a una unidad no verificada. Para activar la calibración estándar,
+mandá `CALIBRAR:BRUJULA` desde USB o BLE (o `python3 mb.py calibrarbrujula` y
+dejá que la pantalla indique cuándo terminar); mové la placa siguiendo la UX en
+todas las direcciones. Una consulta puntual no la reemplaza.
+
+El logo táctil devuelve un estado debounced (`1`/`0`) y la lectura capacitiva
+cruda. No es una medición de fuerza de contacto.
+
 Idea: que Kira/Kiro puedan decir "qué temperatura hace", "¿me sacudiste?",
-"estoy acostado", "¿hay mucho ruido?", "¿cuánta batería le queda?", etc.,
-usando estos datos reales.
+"¿hacia dónde apunta la brújula?", "¿estoy tocando el logo?", "¿hay mucho ruido?",
+"¿cuánta batería le queda?", etc., usando estos datos reales.
 
 ---
 
