@@ -1,0 +1,1969 @@
+/* ================================================================================
+   KIRA — Dark warm minimal / token-based
+   Patrón: conversación en columna centrada + sidebar colapsable + composer-píldora.
+   Cero gradientes, cero patrones de fondo, elevación por tono de superficie.
+   ================================================================================ */
+
+/* Los tokens globales viven ahora en tokens.css. */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-1);
+  /* NADA de `min-height: 100vh` acá. En el celu 100vh es el viewport GRANDE
+     (el de la barra oculta), así que el body quedaba más alto que la pantalla
+     visible: el DOCUMENTO se volvía scrolleable y, al tocar el input, el
+     navegador corría la página entera para dejarlo a la vista -> el header se
+     iba para arriba y todo parecía "bajarse" (con aire muerto abajo).
+     El alto real lo maneja .app con 100dvh (el viewport de verdad). */
+  height: 100%;
+  overflow: hidden;           /* el scroll vive SOLO dentro de la app */
+  overscroll-behavior: none;  /* sin rebote ni pull-to-refresh al scrollear */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font-family: inherit;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+input {
+  font-family: inherit;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- scrollbar finita ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3733 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #3a3733;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #4a453f;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- accesibilidad: foco visible siempre claro ---------- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ================= LAYOUT GENERAL: sidebar + panel ================= */
+.app {
+  display: flex;
+  height: 100dvh;
+  /* el armazón NUNCA scrollea: el único scroller es .mensajes (y la sidebar).
+     Sin esto, cualquier desborde hace scrolleable el documento y el navegador
+     puede correr la página entera al enfocar el input (bug del celu). */
+  overflow: hidden;
+  /* el acento transiciona suave al cambiar de personaje */
+  transition: --accent 0.45s var(--ease), --accent-hover 0.45s var(--ease),
+    --accent-soft 0.45s var(--ease);
+}
+
+/* ---------- MODO por personaje: todo el acento cambia según a quién hablás ---------- */
+/* Kira -> rojo (Among Us) | sin elegir -> rojo base de :root */
+/* El acento por personaje vive en tokens.css. */
+/* ---------- SIDEBAR (historial de chats, izquierda) ---------- */
+.sidebar {
+  width: 330px;
+  min-width: 330px;
+  height: 100dvh;
+  background: var(--elev-1);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+  animation: aparecer var(--t-slow) var(--ease-out) both;
+  transition: width var(--t-med) var(--ease), min-width var(--t-med) var(--ease);
+}
+
+/* ---------- SIDEBAR PLEGADO (colapsable, solo iconos) ---------- */
+.sidebar.colapsada {
+  width: 62px;
+  min-width: 62px;
+}
+
+.sidebar.colapsada .sidebar-header {
+  padding: 10px 8px;
+}
+
+.sidebar.colapsada .sidebar-logo,
+.sidebar.colapsada .sidebar-filtros,
+.sidebar.colapsada .sidebar-footer {
+  display: none;
+}
+
+.sidebar.colapsada .lista-chats.oculta {
+  display: block;
+  padding-top: 4px;
+}
+
+.sidebar.colapsada .item-chat {
+  justify-content: center;
+  padding: 8px 0;
+  animation: item-entrar-chico var(--t-fast) var(--ease-out) both;
+}
+
+@keyframes item-entrar-chico {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sidebar.colapsada .item-cuerpo,
+.sidebar.colapsada .item-x {
+  display: none;
+}
+
+.sidebar.colapsada .item-avatar {
+  width: 42px;
+  height: 42px;
+}
+
+.sidebar.colapsada .item-emoji {
+  font-size: 1.3rem;
+}
+
+.sidebar.colapsada .item-chat.activo {
+  box-shadow: none;
+}
+
+.sidebar.colapsada .btn-nuevo {
+  width: 34px;
+  height: 34px;
+}
+
+/* En la rail angosta no dejamos controles de navegación que se desbordan
+   sobre el header: quedan sólo el toggle y los chats. El header tampoco
+   duplica el botón de volver cuando la rail está plegada. */
+.sidebar.colapsada .btn-inicio,
+.sidebar.colapsada .sidebar-nuevo {
+  display: none;
+}
+
+.app.sidebar-colapsada .chat-header .volver-inicio {
+  display: none;
+}
+
+/* ---------- botón plegar (arriba del sidebar) ---------- */
+.btn-plegar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  flex: none;
+}
+.btn-plegar:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+.btn-plegar.plegado {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 12px 10px;
+}
+
+/* ---------- logo plano (sin gradiente, sin background-clip) ---------- */
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding-left: 4px;
+}
+.sidebar-logo h1 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.sidebar-logo p {
+  font-size: 11.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-logo .logo-svg {
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+  flex: none;
+}
+
+/* botón "+" nuevo chat */
+.sidebar-nuevo {
+  position: relative;
+}
+.btn-nuevo {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.btn-nuevo:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+.btn-nuevo:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.btn-nuevo:disabled:hover {
+  background: none;
+  color: var(--text-2);
+}
+/* ---------- buscador ---------- */
+.sidebar-filtros {
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.buscador {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--elev-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  padding: 7px 14px;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.buscador:focus-within {
+  border-color: var(--accent);
+  background: var(--elev-3);
+}
+.buscador-ico {
+  color: var(--text-3);
+  flex: none;
+}
+.buscador input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--text-1);
+  font-size: 13.5px;
+}
+.buscador input::placeholder {
+  color: var(--text-3);
+}
+.buscador-x {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  transition: background var(--t-fast), color var(--t-fast);
+  flex: none;
+}
+.buscador-x:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+
+/* ---------- lista de chats ---------- */
+.lista-chats {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lista-vacia {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.item-chat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 13px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background var(--t-med) var(--ease), transform var(--t-fast) var(--ease);
+  animation: item-entrar var(--t-med) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+  position: relative;
+}
+.item-chat:active {
+  transform: scale(0.985);
+}
+
+@keyframes item-entrar {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* la SALIDA va más rápido que la entrada (0.2s vs 0.26s) y con ease-in:
+   el usuario ya decidió, no hay por qué retenerlo */
+.item-chat.saliendo {
+  animation: item-salir 0.2s var(--ease-in) both;
+}
+@keyframes item-salir {
+  from {
+    opacity: 1;
+    transform: none;
+    max-height: 60px;
+    margin: 0;
+    padding: 9px 10px;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+    max-height: 0;
+    margin: 0;
+    padding: 0 10px;
+  }
+}
+
+.item-chat:hover {
+  background: var(--elev-2);
+}
+.item-chat.activo {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+.item-chat.activo .item-nombre {
+  color: var(--text-1);
+}
+
+.item-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  transition: transform var(--t-fast) var(--ease);
+}
+.item-chat:hover .item-avatar {
+  transform: scale(1.04);
+}
+.item-emoji {
+  font-size: 1.2rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.item-cuerpo {
+  flex: 1;
+  min-width: 0;
+}
+.item-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.item-nombre {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-hora {
+  font-size: 11px;
+  color: var(--text-3);
+  flex: none;
+}
+.item-preview {
+  font-size: 12px;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item-x {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity var(--t-fast), background var(--t-fast), color var(--t-fast);
+  flex: none;
+}
+.item-chat:hover .item-x {
+  opacity: 1;
+}
+.item-x:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+
+/* ---------- footer del sidebar ---------- */
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.mb-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.mb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex: none;
+  animation: pulse 2.4s var(--ease-in-out) infinite;
+}
+/* latido del punto de estado (antes NO existía este keyframes: la animación
+   'pulse' era inválida en silencio y el punto nunca latía) */
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.55;
+  }
+}
+.mb-status.ok .mb-dot {
+  background: var(--ok);
+}
+.mb-status.con .mb-dot {
+  background: #d9a441;
+}
+/* "placa por BLE": el CELULAR es el cable (modo feria). Es un estado BUENO
+   —el enlace vive y la placa contesta por el celu— así que va en ámbar con
+   latido, igual que "conectado...". Antes caía en .mal y pintaba el punto
+   ROJO sin latido: parecía una falla justo cuando estaba conectada. */
+.mb-status.relay .mb-dot {
+  background: #d9a441;
+}
+.mb-status.mal .mb-dot {
+  background: var(--danger);
+  animation: none;
+}
+.mb-status.chico {
+  font-size: 11px;
+}
+
+.sidebar-footer-botones {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-ajustes {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition: background var(--t-fast), color var(--t-fast), transform var(--t-med) var(--ease-in-out);
+}
+.btn-ajustes:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+  transform: rotate(90deg);
+}
+/* El botón de sincronización actual usa .icon-btn.chico. */
+.icon-btn.chico {
+  width: 32px;
+  height: 32px;
+}
+/* OJO: la clase se usa EN el svg (className de lucide) y tambien envuelto.
+   Antes solo estaba `.girando svg` (descendiente): el spinner del puente BLE
+   y el del boton de recargar nunca giraban. */
+.girando svg,
+svg.girando {
+  animation: girar 0.8s linear infinite;
+}
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ================= PANEL PRINCIPAL ================= */
+.panel {
+  flex: 1;
+  min-width: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  position: relative;
+}
+
+/* ---------- BIENVENIDA / selección ---------- */
+.pantalla {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: 40px 24px;
+}
+/* Centrado SEGURO: justify-content:center + overflow recorta lo de ARRIBA
+   y lo vuelve inalcanzable (el bug del inicio cortado en el cel). Con
+   margin auto: centra si cabe, arranca arriba si sobra. */
+.pantalla > :first-child {
+  margin-top: auto;
+}
+.pantalla > :last-child {
+  margin-bottom: auto;
+}
+
+.hero {
+  text-align: center;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: subir-suave var(--t-slow) var(--ease-out) both;
+}
+
+.hero .logo-svg {
+  width: 72px;
+  height: 72px;
+  color: var(--accent);
+  filter: drop-shadow(0 6px 18px var(--accent-soft));
+}
+
+.hero h1 {
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  color: var(--text-1);
+  line-height: 1.05;
+}
+.hero h1 .amp {
+  color: var(--text-3);
+  font-weight: 400;
+  margin: 0 6px;
+}
+
+.subtitulo {
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.7;
+  max-width: 500px;
+}
+
+/* La pantalla de bienvenida actual usa .hero-kira y .welcome-*. */
+
+@keyframes subir-suave {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ================= CHAT ================= */
+.chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---------- header del chat: limpio, se "prende" (borde+sombra) al scrollear ---------- */
+.chat-header {
+  height: 60px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  background: rgba(25, 24, 23, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid transparent;
+  z-index: 10;
+  transition: border-color var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease);
+}
+.chat-header.scrolleo {
+  border-bottom-color: var(--border);
+  box-shadow: var(--shadow-1);
+}
+
+.volver {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition: background var(--t-fast), color var(--t-fast);
+  flex: none;
+}
+.volver:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+.hamburguesa {
+  display: none;
+}
+
+.chat-header .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+  transition: box-shadow var(--t-med) var(--ease);
+}
+/* mientras habla, el avatar "respira" un halo suave: detalle vivo */
+.chat-header .avatar.hablando {
+  animation: hablar-pulso 1.3s ease-in-out infinite;
+}
+@keyframes hablar-pulso {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-soft), var(--shadow-1);
+  }
+  50% {
+    box-shadow: 0 0 0 7px var(--accent-soft), var(--shadow-1);
+  }
+}
+
+.chat-titulo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chat-titulo h2 {
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.1;
+}
+
+/* ---------- botón LED (abre el popover con la réplica del micro:bit) ---------- */
+.led-btn-wrap {
+  position: relative;
+}
+.led-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--elev-2);
+  border: 1px solid var(--border);
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  flex: none;
+}
+.led-btn:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+}
+.led-btn .mb-dot {
+  width: 6px;
+  height: 6px;
+}
+
+/* popover con la réplica del micro:bit */
+.led-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  background: var(--elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px;
+  z-index: 30;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  /* entrada/salida con Motion (AnimatePresence) */
+}
+.led-popover .emocion-label {
+  display: block;
+  text-align: center;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ---------- zona de mensajes: columna centrada, ritmo generoso ---------- */
+/* (el scrolling lo maneja JS: instantáneo siguiendo el stream, suave al bajar) */
+.mensajes {
+  flex: 1;
+  min-height: 0; /* CLAVE: sin esto el contenedor no se encoge, el scroll se
+                    escapa al body, el header se va con la página y sobra
+                    aire muerto (el bug del hueco + header fantasma en el cel) */
+  overflow-y: auto;
+  padding: 28px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+/* con pocos mensajes, el contenido se pega abajo (sin hueco muerto
+   entre el último mensaje y el input) */
+.mensajes > :first-child {
+  margin-top: auto;
+}
+.mensajes > * {
+  max-width: 720px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* --- turno del ASISTENTE: sin burbuja, avatar + texto a ancho completo --- */
+.turn {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  animation: msg-in var(--t-med) var(--ease-out);
+  position: relative;
+}
+.turn + .turn,
+.user-msg + .turn,
+.turn + .user-msg {
+  margin-top: 6px;
+}
+.turn-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  margin-top: 2px;
+  box-shadow: var(--shadow-1);
+}
+.turn-cuerpo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.turn-cuerpo .md {
+  font-size: 16.5px;
+  line-height: 1.72;
+  color: var(--text-1);
+  letter-spacing: -0.003em;
+}
+.parcial {
+  font-size: 16.5px;
+  line-height: 1.72;
+  color: var(--text-1);
+  letter-spacing: -0.003em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--accent);
+  margin-left: 2px;
+  vertical-align: -0.12em;
+  animation: parpadeo 0.9s steps(2) infinite;
+}
+@keyframes parpadeo {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Acciones al hover del mensaje: la estructura actual vive en .msg-acciones-wrap. */
+.turn-pie {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+}
+.msg-accion {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.msg-accion:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+
+/* --- mensaje del USUARIO: píldora a la derecha, tinte sutil del personaje ---
+   (la entrada con "pop" la hace Motion, sin CSS) */
+.user-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 8px 0;
+}
+.user-bubble {
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  border-bottom-right-radius: 7px;
+  padding: 11px 16px;
+  color: var(--text-1);
+  font-size: 15.5px;
+  line-height: 1.6;
+  max-width: 72%;
+  box-shadow: var(--shadow-1);
+}
+.user-bubble .md {
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+/* timestamps FUERA de las burbujas, chicos y discretos */
+.hora {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ---------- typing indicator (3 puntos + nombre; entrada/salida con Motion) ---------- */
+.typing {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0 4px;
+}
+.typing-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+}
+.typing-texto {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: inline-block;
+  animation: blink 1.1s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes blink {
+  0%,
+  70%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+/* ---------- SKELETONS: la FORMA de lo que viene (shimmer sutil) ----------
+   Regla de craft: el skeleton imita el resultado (si se muestra una fila,
+   hay que llegar con UNA fila; si caben 3,3). El shimmer es decorativo:
+   con reduced-motion queda el fondo plano (informativo igual). */
+.sk {
+  position: relative;
+  overflow: hidden;
+  background: var(--elev-2);
+  border-radius: 8px;
+  display: block;
+}
+.sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.055), transparent);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+.sk-linea {
+  height: 12px;
+}
+.sk-linea.chico {
+  height: 9px;
+  border-radius: 6px;
+}
+.sk-seccion {
+  height: 10px;
+  border-radius: 6px;
+  margin-top: 14px;
+}
+/* panel de memoria: total + secciones + recuerdos */
+.memoria-sk {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+.sk-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---------- fuentes de la web (verificables) ---------- */
+.fuentes {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 460px;
+  /* aparecen con el fin del mensaje: mismo entrance que el resto (antes
+     quedaban estáticas de golpe, como pegadas) */
+  animation: msg-in var(--t-med) var(--ease-out) both;
+}
+.fuentes-titulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+.fuente {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text-2);
+  font-size: 13px;
+  text-decoration: none;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+.fuente:hover {
+  background: var(--elev-2);
+  border-color: var(--accent-soft);
+  color: var(--text-1);
+  text-decoration: none;
+}
+.fuente-n {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.fuente-titulo-texto {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fuente svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+/* ---------- error ---------- */
+.error {
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: rgba(224, 101, 95, 0.12);
+  border: 1px solid rgba(224, 101, 95, 0.3);
+  color: #e88a85;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px auto;
+  max-width: 720px;
+  width: 100%;
+  animation: msg-in var(--t-fast) var(--ease);
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ================= COMPOSER (tarjeta moderna: textarea + fila de acciones) ================= */
+.input-bar {
+  padding: 12px 16px 18px;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+  position: relative;
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 768px;
+  margin: 0 auto;
+  background: var(--elev-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-xl);
+  padding: 14px 14px 10px 18px;
+  box-shadow: var(--shadow-1);
+  transition: border-color var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease),
+    background var(--t-med) var(--ease);
+}
+.composer:focus-within {
+  border-color: var(--accent);
+  background: var(--elev-2);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-2);
+}
+.composer textarea {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-1);
+  font-size: 15.5px;
+  line-height: 1.55;
+  resize: none;
+  max-height: 132px;
+  overflow-y: auto;
+  font-family: inherit;
+  transition: height 0.14s var(--ease); /* crece suave al escribir */
+}
+.composer textarea::placeholder {
+  color: var(--text-3);
+}
+
+.composer-acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* El hint de atajos ya no reserva aire en la fila (iba invisible con flex:1
+   y hasta interceptaba toques en el cel): vive en los title de los botones.
+   El espaciador puro colapsa a cero y el enviar queda SIEMPRE al final. */
+.composer-espacio {
+  flex: 1;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+  flex: none;
+}
+.icon-btn:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+.icon-btn:active {
+  transform: scale(0.94);
+}
+.icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.icon-btn:disabled:hover {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.send-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #191817;
+  box-shadow: var(--shadow-1);
+  transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
+  flex: none;
+}
+.send-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+.send-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.94);
+}
+.send-btn:disabled {
+  background: var(--elev-3);
+  color: var(--text-3);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* botón STOP (mismo lugar que enviar, mientras responde) */
+.send-btn.stop {
+  background: var(--accent);
+}
+.send-btn.stop:hover {
+  background: var(--accent-hover);
+}
+
+/* ---------- botón flotante "bajar al último" (cuando scrolleaste arriba) ---------- */
+.bajar-btn {
+  position: absolute;
+  bottom: 106px;
+  left: 50%;
+  translate: -50% 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--elev-2);
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-2);
+  z-index: 12;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease);
+}
+.bajar-btn:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+}
+
+/* contador de caracteres: solo visible cerca del límite (300) */
+.char-count {
+  font-size: 11px;
+  color: var(--text-3);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.char-count.visible {
+  opacity: 1;
+}
+
+/* ---------- ORBE de escucha GPT (reacciona a tu voz en vivo) ---------- */
+.orbe-escucha {
+  max-width: 768px;
+  margin: 0 auto;
+  height: 52px;
+  border-radius: 28px;
+  background: var(--elev-2);
+  border: 1px solid var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+/* La_UI actual dibuja el estado con .orbe-barras y .orbe-estado. */
+
+/* ================= RÉPLICA DEL MICRO:BIT (matriz LED) ================= */
+.microbit-board {
+  width: 150px;
+  background: #24241f;
+  border: 1px solid #3a3a32;
+  border-radius: 10px;
+  padding: 12px 14px 10px;
+  position: relative;
+}
+.microbit-board::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 40%);
+  pointer-events: none;
+}
+.microbit-matriz {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.led {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: #1b1b17;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.8);
+  opacity: 0.35;
+}
+.led-on {
+  background: var(--color, #ff5c52);
+  box-shadow:
+    0 0 4px 1px var(--color, #ff5c52),
+    0 0 10px 2px color-mix(in srgb, var(--color, #ff5c52) 35%, transparent);
+  opacity: 1;
+  animation: led-in 0.3s ease both;
+  animation-delay: calc(var(--i, 0) * 14ms);
+}
+@keyframes led-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.led-loading {
+  background: var(--color, #ff5c52);
+  animation: led-pulso 1s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 60ms);
+  opacity: 0.6;
+}
+@keyframes led-pulso {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.microbit-conector {
+  height: 4px;
+  background: linear-gradient(90deg, #b58a3e, #d9b96a, #b58a3e);
+  border-radius: 2px;
+  margin-top: 8px;
+}
+
+/* ================= SETTINGS (modal; entrada/salida con Motion) ================= */
+.ajustes-fondo {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.ajustes-panel {
+  width: 100%;
+  max-width: 460px;
+  max-height: 85dvh;
+  overflow-y: auto;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 20px;
+}
+.ajustes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.ajustes-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-1);
+}
+.ajustes-x {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.ajustes-x:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+.ajustes-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ajustes-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ajustes-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+}
+.ajustes-titulo h3 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.ajustes-fila {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: var(--elev-2);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  text-align: left;
+  transition: border-color var(--t-fast), background var(--t-fast);
+}
+.ajustes-fila:hover {
+  background: var(--elev-3);
+}
+.ajustes-fila.activa {
+  border-color: var(--accent-soft);
+}
+.ajustes-fila.peligro.confirmando {
+  border-color: var(--danger);
+}
+.ajustes-fila:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ajustes-fila-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--elev-3);
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  flex: none;
+}
+.ajustes-fila.peligro .ajustes-fila-ico {
+  color: var(--danger);
+}
+.ajustes-fila-texto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ajustes-fila-texto strong {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.ajustes-fila-texto small {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+
+/* toggle switch */
+.toggle {
+  width: 42px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: var(--elev-3);
+  border: 1px solid var(--border);
+  position: relative;
+  flex: none;
+  transition: background var(--t-fast) var(--ease);
+}
+.toggle-bola {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-3);
+  transition: transform var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.toggle.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.toggle.on .toggle-bola {
+  transform: translateX(18px);
+  background: var(--accent);
+}
+
+.ajustes-acerca {
+  background: var(--elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ajustes-acerca p {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.ajustes-acerca strong {
+  color: var(--text-1);
+}
+.ajustes-feria {
+  color: var(--text-3) !important;
+  font-size: 12px !important;
+}
+
+/* ================= MARKDOWN ================= */
+.md > * + * {
+  margin-top: 0.7em;
+}
+.md p {
+  margin: 0;
+}
+.md a {
+  color: var(--accent);
+}
+.md strong {
+  color: var(--text-1);
+  font-weight: 600;
+}
+.md em {
+  color: var(--text-1);
+}
+.md ul,
+.md ol {
+  padding-left: 1.5em;
+}
+.md li {
+  margin: 0.25em 0;
+}
+.md li::marker {
+  color: var(--text-3);
+}
+.md code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--elev-3);
+  color: var(--accent);
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
+}
+.md pre {
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px;
+  overflow-x: auto;
+}
+.md pre code {
+  background: transparent;
+  color: var(--text-1);
+  padding: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.md blockquote {
+  border-left: 3px solid var(--accent-soft);
+  padding-left: 14px;
+  color: var(--text-2);
+}
+.md table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 7px 10px;
+  text-align: left;
+}
+.md th {
+  background: var(--elev-2);
+  color: var(--text-1);
+  font-weight: 600;
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.md del {
+  color: var(--text-3);
+}
+
+/* ================= ANIMACIONES GLOBALES ================= */
+@keyframes aparecer {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 860px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform var(--t-med) var(--ease);
+    width: 300px;
+    min-width: 300px;
+  }
+  .sidebar.abierta {
+    transform: translateX(0);
+  }
+  .sidebar.colapsada {
+    width: 62px;
+    min-width: 62px;
+  }
+
+  .sidebar.colapsada .item-cuerpo,
+  .sidebar.colapsada .item-x {
+    display: flex;
+  }
+
+  .sidebar.colapsada .item-avatar {
+    width: 52px;
+    height: 52px;
+  }
+
+  .sidebar.colapsada .item-emoji {
+    font-size: 1.55rem;
+  }
+
+  .sidebar.colapsada .item-chat.activo {
+    box-shadow: none;
+  }
+
+  .sidebar-fondo {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 15;
+    animation: aparecer 0.2s ease both;
+  }
+
+  .hamburguesa {
+    display: grid;
+  }
+}
+
+@media (max-width: 560px) {
+  .user-bubble {
+    max-width: 88%;
+  }
+  .chat-header {
+    padding: 0 10px;
+  }
+  .hero h1 {
+    font-size: 2rem;
+  }
+  .turn {
+    gap: 10px;
+  }
+  .turn-avatar,
+  .typing-avatar {
+    width: 28px;
+    height: 28px;
+  }
+  .mensajes {
+    padding: 18px 12px 10px;
+  }
+  .input-bar {
+    padding: 10px 12px 14px;
+  }
+  .composer {
+    padding: 12px 12px 8px 14px;
+  }
+  .led-btn span {
+    display: none; /* solo el icono en pantallas chicas */
+  }
+}
+
+/* ============ ACCESIBILIDAD: respetar quien prefiere poco movimiento ============ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001s !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* EXCEPCIÓN: la señal de carga/estado NO se congela. Un spinner parado
+     parece ROTO; el reduced-motion quita movimiento decorativo, no información. */
+  svg.girando,
+  .girando svg {
+    animation: girar 1.4s linear infinite !important;
+  }
+  .mb-dot {
+    animation: pulse 2.4s ease-in-out infinite !important;
+  }
+}
+
+/* ============ PUENTE BLE (modo feria: el cel es el cable) ============ */
+.puente-ble {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 0.72rem;
+  color: var(--color, #8b949e);
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--color, #8b949e) 45%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: all 0.15s ease;
+}
+.puente-ble:active { transform: scale(0.96); }
+.puente-ble.conectado {
+  border-style: solid;
+  color: #3fb950;
+  border-color: rgba(63, 185, 80, 0.5);
+  opacity: 1;
+}
+
+/* ============ CELULAR PRIMERO: la feria vive en el telefono ============ */
+@media (max-width: 560px) {
+  /* iOS hace zoom si el input tiene menos de 16px */
+  .composer textarea {
+    font-size: 16px;
+    max-height: 120px;
+  }
+
+  /* botones con diana de dedo (44px minimo en acciones primarias) */
+  .composer-acciones button,
+  .puente-ble {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* header móvil: 7 elementos no caben en 360px. Fuera el volver (←):
+     en el cel se navega con la hamburguesa → drawer → nuevo chat.
+     Acciones del header a 40px (compactas pero tocables). */
+  .chat-header .volver:not(.hamburguesa) {
+    display: none;
+  }
+  .chat-header button {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  .header-acciones {
+    gap: 2px;
+  }
+  .chat-titulo h2 {
+    font-size: 14.5px;
+  }
+  .mb-status {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.68rem;
+  }
+  .puente-ble {
+    font-size: 0.78rem;
+    padding: 8px 14px;
+  }
+
+  /* las burbujas usan todo el ancho util */
+  .mensajes {
+    padding: 14px 10px 8px;
+  }
+  .user-bubble,
+  .chat [class*='burbuja'] {
+    max-width: 92%;
+  }
+
+  /* header compacto: menos padding, pill mas chica */
+  .chat-header {
+    gap: 8px;
+  }
+  .chat-header .pill,
+  .chat-header span[class*='estado'] {
+    font-size: 0.65rem;
+  }
+
+  /* el hero (selector inicial) respira mejor en vertical */
+  .hero {
+    padding: 18px 14px;
+  }
+  .hero h1 {
+    font-size: 1.6rem;
+  }
+
+  /* el textarea crece menos: el teclado no se come todo */
+  .composer {
+    padding: 10px 12px 8px;
+  }
+  .input-bar {
+    /* UNA sola capa abajo: el safe-area del sistema, sin aire doble
+       (antes input-bar + composer sumaban ~50px muertos bajo la caja) */
+    padding: 8px 10px max(4px, env(safe-area-inset-bottom));
+  }
+}
+
+/* --- Puente BLE: estados de resurrección --- */
+.puente-ble.reconectando {
+  border-color: rgba(210, 168, 255, 0.5);
+  color: #d2a8ff;
+}
+.puente-ble.rechazado {
+  border-color: rgba(248, 81, 73, 0.55);
+  color: #f85149;
+}
+.puente-ble .girando {
+  animation: puente-girar 1.1s linear infinite;
+}
+@keyframes puente-girar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* el orbe-escucha ahora es BOTON: que se sienta tocable */
+button.orbe-escucha {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+button.orbe-escucha:active {
+  transform: scale(0.985);
+}
+
+/* ============ REDISEÑO A PRUEBA DE BALAS ============ */
+
+/* --- chips de sugerencia (chat vacío: romper el hielo) --- */
+.sugerencias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding: 6px 12px 14px;
+}
+.sugerencia {
+  padding: 9px 15px;
+  font-size: 0.82rem;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 40px;
+}
+.sugerencia:hover {
+  color: var(--text-1);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.sugerencia:active { transform: scale(0.96); }
+
+/* --- reintentar en errores (conserva lo escrito) --- */
+.error-reintentar {
+  margin-left: 8px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+.error-reintentar:hover { border-color: var(--accent); }
+
+/* --- panel de memoria viva 🧠 (reusa base del modal de ajustes) --- */
+.memoria-panel {
+  max-height: min(78vh, 640px);
+  overflow-y: auto;
+}
+.memoria-total {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  margin: 2px 0 12px;
+}
+.memoria-seccion {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 14px 0 8px;
+}
+.memoria-diario {
+  background: var(--elev-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.memoria-diario .memoria-seccion { margin-top: 0; }
+.memoria-diario p {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  margin: 4px 0;
+}
+.memoria-opinion { font-style: italic; }
+.memoria-item {
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.memoria-item p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0 0 3px;
+}
+.memoria-meta {
+  font-size: 0.7rem;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.memoria-vacia {
+  font-size: 0.85rem;
+  color: var(--text-2);
+  text-align: center;
+  padding: 18px 0;
+}
+
+/* (el reduced-motion global vive arriba, junto a accesibilidad — con su
+   excepción para que el spinner de carga siga girando) */
+

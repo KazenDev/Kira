@@ -1,0 +1,151 @@
+/* ============================================================================
+   CÁMARA (📷): el botón, la miniatura de la foto y la foto en la burbuja.
+
+   Va al FINAL a propósito: el composer tiene varios bloques en este archivo y
+   el último (la "píldora compacta", donde texto y botones comparten fila) es
+   el que manda. Estas reglas necesitan ganarle a ese, así que van después.
+
+   La píldora superpone la fila de acciones al texto y le reserva 100px a la
+   izquierda (ver .composer): ahí entran la CÁMARA y el MICRÓFONO. En el cel no
+   caben dos botones de 42px al costado del texto, así que ahí la píldora pasa a
+   DOS FILAS: texto arriba a todo el ancho y botones abajo (media query final).
+   ============================================================================ */
+
+/* el input file vive oculto: lo dispara el botón de la cámara */
+.foto-input {
+  display: none;
+}
+
+/* Miniaturita de la foto pendiente: FLOTA arriba de la píldora (patrón
+   WhatsApp/Telegram). No va adentro porque la píldora reserva 100px a la
+   izquierda para los botones y la miniatura quedaría aplastada. */
+.foto-chip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 6px;
+  background: rgba(27, 33, 43, 0.97);
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: foto-pop 0.16s var(--ease);
+  z-index: 3;
+}
+.foto-chip img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex: none;
+  border: 1px solid var(--border);
+}
+.foto-chip-texto {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.foto-chip-quitar {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.foto-chip-quitar:hover {
+  background: rgba(248, 81, 73, 0.85);
+  color: #fff;
+}
+
+/* el botón de la cámara se marca cuando hay una foto esperando */
+.composer .icon-btn.activo {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.foto-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-top-color: var(--accent);
+  animation: foto-girar 0.7s linear infinite;
+}
+
+/* la FOTO ya enviada, en la burbuja del usuario */
+.user-bubble.con-foto {
+  padding: 6px;
+  max-width: min(74%, 380px);
+}
+.user-foto {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 13px;
+  border: 1px solid var(--border);
+  background: var(--elev-1);
+}
+.user-bubble.con-foto .md {
+  padding: 9px 10px 3px;
+}
+
+@keyframes foto-girar {
+  to { transform: rotate(360deg); }
+}
+@keyframes foto-pop {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---- celular: la píldora pasa a dos filas (el texto NO queda bajo los botones) ---- */
+@media (max-width: 560px) {
+  .composer {
+    padding: 10px 14px 54px;
+  }
+
+  /* la fila de acciones sigue abajo, ahora DEBAJO del texto (no encima) */
+  .composer-acciones {
+    left: 10px;
+    right: 10px;
+    bottom: 6px;
+    height: auto;
+  }
+
+  .foto-chip {
+    bottom: calc(100% + 6px);
+    gap: 8px;
+  }
+  .foto-chip img {
+    width: 38px;
+    height: 38px;
+  }
+
+  .user-bubble.con-foto {
+    max-width: 90%;
+  }
+  .user-foto {
+    max-height: 260px;
+  }
+
+  /* bajar: tiene que quedar ARRIBA de la píldora, que en el cel es más alta */
+  .bajar-btn {
+    bottom: 128px;
+  }
+}
+

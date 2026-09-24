@@ -1,0 +1,243 @@
+@media (max-width: 860px) {
+  .sidebar,
+  .sidebar.colapsada {
+    width: min(340px, 88vw);
+    min-width: min(340px, 88vw);
+    visibility: hidden;
+    transition:
+      transform var(--t-med) var(--ease),
+      visibility 0s linear var(--t-med);
+  }
+
+  .sidebar.abierta {
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .sidebar.colapsada .sidebar-logo,
+  .sidebar.colapsada .sidebar-filtros,
+  .sidebar.colapsada .lista-chats.oculta {
+    display: flex;
+  }
+
+  .sidebar.colapsada .lista-chats.oculta {
+    flex-direction: column;
+  }
+
+  .sidebar.colapsada .item-chat-open {
+    justify-content: flex-start;
+    padding: 9px 10px;
+  }
+
+  .sidebar.colapsada .item-cuerpo,
+  .sidebar.colapsada .item-x {
+    display: block;
+  }
+
+  .sidebar.colapsada .item-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .sidebar.colapsada .sidebar-footer {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 9px 10px;
+  }
+
+  .sidebar.colapsada .mb-status-texto,
+  .sidebar.colapsada .sidebar-footer-botones {
+    display: flex;
+  }
+
+  .sidebar-plegar-desktop {
+    display: none;
+  }
+
+  .sidebar-cerrar-movil {
+    display: grid;
+  }
+
+  .pantalla {
+    justify-content: flex-start;
+    padding: 70px 20px 28px;
+  }
+
+  .pantalla-topbar {
+    display: block;
+  }
+
+  .hero-kira {
+    margin-top: 18px;
+  }
+
+  .welcome-suggestions {
+    grid-template-columns: 1fr;
+    max-width: 520px;
+    gap: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .chat-header {
+    height: 58px;
+    min-height: 58px;
+    padding: 0 8px;
+    gap: 5px;
+  }
+
+  /* La ruta a Inicio ya no se oculta: el drawer no es el único navegación. */
+  .chat-header .volver:not(.hamburguesa) {
+    display: grid;
+  }
+
+  .chat-header .avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .chat-titulo h2 {
+    font-size: 13.5px;
+  }
+
+  .chat-titulo .mb-status {
+    font-size: 9.8px;
+  }
+
+  .led-btn,
+  .header-more-btn,
+  .volver {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .led-btn {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .led-btn > span:not(.led-estado) {
+    display: none;
+  }
+
+  .led-estado {
+    position: absolute;
+    right: 5px;
+    bottom: 5px;
+    width: 5px;
+    height: 5px;
+    border: 1px solid var(--bg);
+  }
+
+  .header-more-menu {
+    position: fixed;
+    top: auto;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    width: auto;
+    transform-origin: bottom right;
+  }
+
+  .mensajes {
+    padding: 16px 12px 8px;
+  }
+
+  .turn {
+    padding: 7px 0;
+  }
+
+  .user-bubble {
+    max-width: 88%;
+    border-radius: 15px 15px 6px 15px;
+  }
+
+  .msg-acciones-disparador {
+    width: 34px;
+    height: 34px;
+    opacity: 0.68;
+  }
+
+  .sugerencias {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 8px 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sugerencias::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sugerencia {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .input-bar {
+    padding: 6px 9px max(6px, env(safe-area-inset-bottom));
+  }
+
+  .composer {
+    min-height: 56px;
+    padding: 7px 52px 7px 98px;
+    border-radius: 15px;
+  }
+
+  .composer-acciones {
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    height: 42px;
+  }
+
+  .composer textarea {
+    min-height: 40px;
+    max-height: 132px;
+    padding: 8px 0;
+  }
+
+  .bajar-btn {
+    bottom: 78px;
+  }
+}
+
+@media (max-width: 360px) {
+  .chat-header {
+    padding-inline: 5px;
+  }
+
+  .chat-header .avatar {
+    display: none;
+  }
+
+  .composer {
+    padding-left: 88px;
+    padding-right: 48px;
+  }
+
+  .composer .icon-btn,
+  .composer .send-btn {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .item-x {
+    opacity: 0.72;
+  }
+
+  .msg-acciones-disparador {
+    opacity: 0.72;
+  }
+}
+
+
+

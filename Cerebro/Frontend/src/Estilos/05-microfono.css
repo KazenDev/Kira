@@ -1,0 +1,178 @@
+/* ================================================================================
+   V5b — MIC + PÍLDORA DE GRABACIÓN (referencia: ChatGPT / patrones EXA)
+   Estado: reposo → grabando (REC latiente + cronómetro + barras en vivo)
+   → ✕ cancelar / ✓ enviar. Superficie plana, hairline, acento solo en acciones.
+   ================================================================================ */
+
+/* reposo: NEUTRO (nada de "seleccionado"), solo el ícono tintado de acento
+   para diferenciarlo de la cámara; el fondo aparece solo al tocar/hover */
+.composer .icon-btn.mic-btn {
+  color: var(--accent);
+  background: transparent;
+}
+.composer .icon-btn.mic-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  transform: scale(1.06);
+}
+.composer .icon-btn.mic-btn:active {
+  transform: scale(0.94);
+}
+/* deshabilitado (mientras responde): sin fondo, sin zoom;
+   el opacity .45 de .icon-btn ya lo apaga visualmente */
+.composer .icon-btn.mic-btn:disabled,
+.composer .icon-btn.mic-btn:disabled:hover {
+  transform: none;
+  background: transparent;
+  color: var(--accent);
+}
+
+/* ---------- la píldora mientras graba ---------- */
+.orbe-escucha {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 58px;
+  padding: 0 9px;
+  border-radius: 29px;
+  background: var(--elev-2);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* botones de la píldora: ✕ cancelar (neutro) / ✓ enviar (acento) */
+.orbe-accion {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.orbe-cancelar {
+  background: transparent;
+  color: var(--text-2);
+}
+.orbe-cancelar:hover {
+  background: var(--elev-3);
+  color: var(--text-1);
+}
+.orbe-cancelar:active {
+  transform: scale(0.9);
+}
+.orbe-enviar {
+  background: var(--accent);
+  color: #191817;
+}
+.orbe-enviar:hover {
+  background: var(--accent-hover);
+  transform: scale(1.06);
+}
+.orbe-enviar:active {
+  transform: scale(0.93);
+}
+
+/* estado: punto REC rojo que latea + cronómetro m:ss tabular */
+.orbe-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+.orbe-rec {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: rec-latir 1.5s ease-out infinite;
+}
+@keyframes rec-latir {
+  0% { box-shadow: 0 0 0 0 rgba(224, 101, 95, 0.5); }
+  70% { box-shadow: 0 0 0 7px rgba(224, 101, 95, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(224, 101, 95, 0); }
+}
+.orbe-tiempo {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  letter-spacing: 0.03em;
+  color: var(--text-2);
+  min-width: 30px;
+}
+
+/* WAVEFORM: 16 barras con altura por la voz REAL (--nivel 0..90, de la
+   ruta serial o del AnalyserNode del celular) + ola base siempre viva */
+.orbe-barras {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 32px;
+  flex: 1;
+  min-width: 0;
+}
+.orbe-barras i {
+  display: block;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.92;
+  height: calc(4px + (var(--nivel, 0) * 0.26px) * var(--f, 1));
+  transform-origin: center;
+  transition: height 90ms linear;
+  animation: barra-ola 1.2s ease-in-out infinite alternate;
+}
+/* desfases para que el bosque no respire todo al mismo tiempo */
+.orbe-barras i:nth-child(odd) { animation-duration: 1.05s; }
+.orbe-barras i:nth-child(3n) { animation-duration: 1.35s; }
+@keyframes barra-ola {
+  from { transform: scaleY(0.55); }
+  to { transform: scaleY(1.2); }
+}
+
+.orbe-hint {
+  font-size: 12.5px;
+  color: var(--text-3);
+  flex: none;
+  white-space: nowrap;
+}
+
+/* barra de progreso hacia el límite de 60s (solo ruta celular) */
+.orbe-progreso {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2.5px;
+  width: var(--progreso, 0%);
+  background: var(--accent);
+  opacity: 0.6;
+  transition: width 0.3s linear;
+}
+
+@media (max-width: 560px) {
+  /* el cronómetro + REC ya cuentan la historia: el hint no hace falta */
+  .orbe-hint {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbe-rec,
+  .orbe-barras i {
+    animation: none !important;
+  }
+  .orbe-barras i {
+    transform: none;
+  }
+  .orbe-progreso {
+    transition: none;
+  }
+}
+

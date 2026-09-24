@@ -1,0 +1,12 @@
+/* ================================================================================
+   KIRA — CAPA PRODUCTO REAL
+   La capa final está dividida por responsabilidad. El orden de estos imports
+   conserva exactamente la cascada de la capa original.
+   ============================================================================== */
+
+@import './07-product-sidebar.css';
+@import './07-product-inicio.css';
+@import './07-product-chat.css';
+@import './07-product-composer.css';
+@import './07-product-ajustes.css';
+@import './07-product-responsive.css';
