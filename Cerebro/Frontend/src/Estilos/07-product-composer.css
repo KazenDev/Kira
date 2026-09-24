@@ -1,0 +1,55 @@
+/* ---------- Composer: una superficie sobria, foco sólo al escribir ---------- */
+.input-bar {
+  padding: 8px 18px 15px;
+  background: var(--bg);
+}
+
+.composer {
+  max-width: 780px;
+  min-height: 58px;
+  padding: 8px 56px 8px 102px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--elev-2);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background: var(--elev-2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.composer textarea {
+  min-height: 40px;
+  padding: 8px 0;
+}
+
+.composer .send-btn {
+  color: #1b1614;
+  background: var(--accent);
+}
+
+.composer .send-btn:disabled {
+  color: var(--text-3);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.orbe-escucha {
+  max-width: 780px;
+  border-color: var(--border-strong);
+  border-radius: 15px;
+  background: var(--elev-2);
+}
+
+.foto-chip {
+  border-color: var(--border-strong);
+  border-radius: 12px;
+  background: var(--elev-2);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+

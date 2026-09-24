@@ -1,0 +1,247 @@
+/* ==============================================================================
+   AJUSTES COMPLETOS: memoria/privacidad, dispositivo y diagnóstico
+   Las superficies se mantienen sólidas y planas como el resto de la app.
+   ============================================================================== */
+.ajustes-panel-completo {
+  max-width: 560px;
+}
+
+.ajustes-error {
+  margin: -6px 0 14px;
+  font-size: 0.78rem;
+}
+
+.ajustes-nota {
+  color: var(--text-3);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  margin: -1px 0 3px;
+}
+
+.ajustes-nota-chica {
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.ajustes-fila.subtoggle {
+  padding: 9px 10px;
+  background: transparent;
+  border-color: transparent;
+}
+
+.ajustes-fila.subtoggle:hover:not(:disabled) {
+  background: var(--elev-2);
+  border-color: var(--border);
+}
+
+.ajustes-fila.subtoggle .ajustes-fila-ico {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+.ajustes-fila.subtoggle .toggle {
+  transform: scale(0.9);
+  transform-origin: right center;
+}
+
+.ajustes-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.ajustes-boton {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--text-1);
+  background: var(--elev-2);
+  font-size: 0.78rem;
+  transition: background var(--t-fast), border-color var(--t-fast), opacity var(--t-fast);
+}
+
+.ajustes-boton:hover:not(:disabled) {
+  background: var(--elev-3);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+}
+
+.ajustes-boton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ajustes-slider {
+  padding: 9px 11px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--elev-2);
+}
+
+.ajustes-slider.deshabilitado {
+  opacity: 0.55;
+}
+
+.ajustes-slider-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  margin-bottom: 8px;
+}
+
+.ajustes-slider output {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ajustes-slider input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.ajustes-resumen {
+  color: var(--text-3);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  margin-top: -1px;
+}
+
+.ajustes-estado-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--elev-2);
+}
+
+.ajustes-estado-card > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ajustes-estado-card strong {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ajustes-estado-card small {
+  color: var(--text-3);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.estado-punto {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-3);
+}
+
+.estado-punto.ok {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 16%, transparent);
+}
+
+.estado-punto.off {
+  background: var(--text-3);
+}
+
+.ajustes-diagnostico {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--border);
+}
+
+.ajustes-diagnostico > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  background: var(--elev-2);
+}
+
+.ajustes-diagnostico span {
+  color: var(--text-3);
+  font-size: 0.74rem;
+}
+
+.ajustes-diagnostico strong {
+  color: var(--text-2);
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.ajustes-diagnostico .ok-texto {
+  color: var(--ok);
+}
+
+.memoria-item-con-boton {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.memoria-item-contenido {
+  flex: 1;
+  min-width: 0;
+}
+
+.memoria-olvidar {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 8px;
+  color: var(--text-3);
+  opacity: 0.72;
+  transition: color var(--t-fast), background var(--t-fast), opacity var(--t-fast);
+}
+
+.memoria-olvidar:hover:not(:disabled) {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  opacity: 1;
+}
+
+.memoria-olvidar:disabled {
+  opacity: 0.35;
+  cursor: wait;
+}
+
+@media (max-width: 560px) {
+  .ajustes-panel-completo {
+    max-width: none;
+  }
+
+  .ajustes-fila {
+    padding: 10px;
+  }
+
+  .ajustes-boton {
+    min-height: 40px;
+  }
+}
+

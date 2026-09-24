@@ -1,0 +1,727 @@
+/* ==============================================================================
+   KIRA — INTERFAZ V3 "COMPANION"
+   Rediseño coherente para escritorio + móvil.
+   Mantiene las mismas clases/JSX: no requiere tocar la lógica del chat.
+   Objetivo: menos "prototipo", más aplicación propia y más presencia del personaje.
+   ============================================================================== */
+
+/* Los tokens globales y el acento por personaje viven en tokens.css. */
+html,
+body,
+#root {
+  background: var(--bg);
+}
+
+body {
+  background:
+    radial-gradient(900px 460px at 74% -130px, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%),
+    var(--bg);
+}
+
+/* La capa ambiental anterior se eliminó: el JSX actual no monta .ambiente. */
+
+/* ---------- 2) SIDEBAR: más ligero y con mejor jerarquía ---------- */
+.sidebar {
+  width: 292px;
+  min-width: 292px;
+  background: rgba(16, 22, 32, 0.96);
+  border-right: 1px solid var(--border);
+  box-shadow: 18px 0 55px rgba(0, 0, 0, 0.10);
+}
+
+.sidebar-header {
+  min-height: 68px;
+  padding: 13px 14px 11px;
+  gap: 8px;
+}
+
+.sidebar-logo {
+  gap: 11px;
+}
+
+.sidebar-logo .logo-svg {
+  width: 38px;
+  height: 38px;
+  padding: 6px;
+  border-radius: 13px;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.sidebar-logo h1 {
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+}
+
+.sidebar-logo p {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.btn-plegar,
+.btn-nuevo,
+.btn-ajustes,
+.icon-btn,
+.volver {
+  border: 1px solid transparent;
+}
+
+.btn-plegar:hover,
+.btn-nuevo:hover,
+.btn-ajustes:hover,
+.icon-btn:hover,
+.volver:hover {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--border);
+}
+
+.sidebar-filtros {
+  padding: 3px 12px 12px;
+  gap: 9px;
+}
+
+.buscador {
+  min-height: 40px;
+  padding: 8px 13px;
+  background: rgba(255, 255, 255, 0.035);
+  border-color: var(--border);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.015);
+}
+
+.buscador:focus-within {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.lista-chats {
+  padding: 4px 8px 10px;
+  gap: 3px;
+}
+
+.item-chat {
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-left-width: 1px;
+  border-radius: 14px;
+}
+
+.item-chat:hover {
+  background: rgba(255, 255, 255, 0.038);
+  border-color: rgba(255, 255, 255, 0.035);
+}
+
+.item-chat.activo {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 16%, transparent),
+    color-mix(in srgb, var(--accent) 7%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 82%, transparent);
+}
+
+.item-avatar {
+  width: 38px;
+  height: 38px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.item-nombre {
+  font-size: 13.5px;
+  font-weight: 560;
+}
+
+.item-preview {
+  margin-top: 2px;
+  color: color-mix(in srgb, var(--text-3) 92%, transparent);
+}
+
+.sidebar-footer {
+  min-height: 54px;
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.018);
+  border-top-color: var(--border);
+}
+
+/* ---------- 3) PANEL + HEADER: Kira se sienta presente ---------- */
+.panel {
+  background: transparent;
+}
+
+.chat-header {
+  height: 70px;
+  min-height: 70px;
+  padding: 0 22px;
+  gap: 11px;
+  background: rgba(13, 17, 24, 0.70);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+}
+
+.chat-header.scrolleo {
+  border-bottom-color: var(--border);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.18);
+}
+
+.chat-header .avatar {
+  width: 42px;
+  height: 42px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 5%, transparent),
+    var(--shadow-1);
+}
+
+.chat-titulo {
+  gap: 4px;
+}
+
+.chat-titulo h2 {
+  font-size: 16.5px;
+  font-weight: 680;
+  letter-spacing: -0.022em;
+}
+
+.chat-titulo .mb-status,
+.chat-titulo [class*='estado'] {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.header-acciones {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  flex: none;
+}
+
+.header-acciones > button,
+.header-acciones .led-btn,
+.header-acciones .icon-btn {
+  min-height: 36px;
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.header-acciones > button:hover,
+.header-acciones .led-btn:hover,
+.header-acciones .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-strong);
+}
+
+.led-btn {
+  min-height: 36px;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.puente-icono.conectado {
+  color: #72d7a5;
+  border-color: rgba(114, 215, 165, 0.28) !important;
+  background: rgba(114, 215, 165, 0.075) !important;
+}
+.puente-icono.rechazado {
+  color: #ff8982;
+  border-color: rgba(255, 137, 130, 0.28) !important;
+}
+.puente-icono.reconectando {
+  color: #c8a6ff;
+}
+
+/* ---------- 4) MENSAJES: conversación, no pared de texto ---------- */
+.mensajes {
+  padding: 32px clamp(18px, 4vw, 64px) 18px;
+  gap: 10px;
+  scroll-padding-bottom: 130px;
+}
+
+.mensajes > * {
+  max-width: 880px;
+}
+
+.turn {
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.turn + .turn,
+.user-msg + .turn,
+.turn + .user-msg {
+  margin-top: 5px;
+}
+
+.turn-avatar,
+.typing-avatar {
+  width: 34px;
+  height: 34px;
+  margin-top: 5px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--elev-2));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.16);
+}
+
+.turn-cuerpo {
+  gap: 8px;
+  max-width: min(780px, calc(100% - 48px));
+  padding: 14px 16px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.052);
+  border-radius: 18px 18px 18px 7px;
+  box-shadow: 0 7px 22px rgba(0, 0, 0, 0.10);
+}
+
+.turn-cuerpo .md,
+.parcial {
+  font-size: 15.8px;
+  line-height: 1.67;
+  letter-spacing: -0.004em;
+}
+
+.turn-pie {
+  min-height: 20px;
+  margin-top: 1px;
+}
+
+/* Las acciones actuales viven en .msg-acciones-wrap. */
+.user-msg {
+  padding: 6px 0;
+}
+
+.user-bubble {
+  max-width: min(72%, 650px);
+  padding: 11px 15px;
+  font-size: 15.4px;
+  line-height: 1.58;
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--accent) 17%, var(--elev-2)),
+      color-mix(in srgb, var(--accent) 8%, var(--elev-2)));
+  border: 1px solid color-mix(in srgb, var(--accent) 23%, var(--border));
+  border-radius: 18px 18px 7px 18px;
+  box-shadow: 0 7px 22px rgba(0, 0, 0, 0.12);
+}
+
+.hora {
+  padding-inline: 5px;
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.typing {
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.typing-texto {
+  min-height: 38px;
+  padding: 9px 13px;
+  border-radius: 16px 16px 16px 7px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.typing-dots span {
+  width: 5px;
+  height: 5px;
+}
+
+/* markdown dentro de las respuestas */
+.md pre {
+  background: #0a0f16;
+  border-color: var(--border-strong);
+  border-radius: 13px;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.md code {
+  background: rgba(255, 255, 255, 0.06);
+  color: color-mix(in srgb, var(--accent) 84%, var(--text-1));
+}
+
+.md blockquote {
+  border-left-color: color-mix(in srgb, var(--accent) 52%, transparent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  padding: 9px 12px;
+  border-radius: 0 10px 10px 0;
+}
+
+/* ---------- 5) COMPOSER: protagonista visual, pero sin parecer nave espacial ---------- */
+.input-bar {
+  padding: 10px 22px 20px;
+  background: linear-gradient(to top,
+    rgba(13, 17, 24, 1) 36%,
+    rgba(13, 17, 24, 0.90) 64%,
+    rgba(13, 17, 24, 0));
+}
+
+.composer {
+  max-width: 880px;
+  gap: 6px;
+  padding: 13px 13px 9px 16px;
+  background: rgba(24, 32, 45, 0.93);
+  border: 1px solid var(--border-strong);
+  border-radius: 23px;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.25),
+    inset 0 1px rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.composer:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent),
+    0 16px 44px rgba(0, 0, 0, 0.30);
+}
+
+.composer textarea {
+  min-height: 28px;
+  padding: 2px 4px 4px;
+  font-size: 15.5px;
+  line-height: 1.5;
+}
+
+.composer textarea::placeholder {
+  color: color-mix(in srgb, var(--text-3) 90%, transparent);
+}
+
+.composer-acciones {
+  gap: 6px;
+}
+
+.icon-btn {
+  width: 35px;
+  height: 35px;
+  color: var(--text-2);
+}
+
+.send-btn {
+  width: 38px;
+  height: 38px;
+  color: #08101d;
+  background: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, white 10%);
+  box-shadow: 0 7px 20px color-mix(in srgb, var(--accent) 19%, transparent);
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 9px 24px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.send-btn:disabled {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: transparent;
+  color: var(--text-3);
+}
+
+.bajar-btn {
+  bottom: 116px;
+  background: rgba(24, 32, 45, 0.95);
+  border-color: var(--border-strong);
+  backdrop-filter: blur(12px);
+}
+
+/* ---------- 6) MICRO:BIT / POPOVERS / MODALES ---------- */
+.led-popover,
+.ajustes-panel,
+.memoria-panel {
+  background: rgba(18, 24, 35, 0.98);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-3);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.microbit-board {
+  background: #111820;
+  border-color: rgba(255, 255, 255, 0.09);
+}
+
+.orbe-escucha {
+  max-width: 880px;
+  background: rgba(24, 32, 45, 0.93);
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.22);
+}
+
+.sugerencias {
+  max-width: 880px;
+  margin-inline: auto;
+  gap: 9px;
+}
+
+.sugerencia {
+  background: rgba(255, 255, 255, 0.024);
+  border-color: var(--border);
+}
+
+.sugerencia:hover {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+/* ---------- 7) HERO / selección de personaje ---------- */
+.pantalla {
+  gap: 30px;
+  padding: 46px 26px;
+}
+
+.hero {
+  max-width: 680px;
+  gap: 17px;
+}
+
+.hero .logo-svg {
+  width: 78px;
+  height: 78px;
+  padding: 13px;
+  border-radius: 25px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border);
+  filter: drop-shadow(0 12px 28px color-mix(in srgb, var(--accent) 12%, transparent));
+}
+
+.hero h1 {
+  font-size: clamp(2.1rem, 5vw, 3.15rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+  color: var(--text-1);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+}
+
+.hero h1 .amp {
+  color: var(--text-3);
+}
+
+.subtitulo {
+  max-width: 570px;
+  font-size: 15.5px;
+  line-height: 1.7;
+}
+
+/* La pantalla de bienvenida actual no usa tarjetas de personaje. */
+
+/* ---------- 8) MICRO-INTERACCIONES ---------- */
+.item-chat,
+.composer,
+.user-bubble,
+.turn-cuerpo,
+.header-acciones button,
+.led-btn,
+.send-btn {
+  transition:
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    box-shadow var(--t-med) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+
+.chat-header .avatar.hablando {
+  animation: companion-pulse 1.55s ease-in-out infinite;
+}
+
+@keyframes companion-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 5%, transparent),
+      0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent),
+      var(--shadow-1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 7%, transparent),
+      0 0 0 9px color-mix(in srgb, var(--accent) 5%, transparent),
+      var(--shadow-1);
+  }
+}
+
+.mb-status.ok .mb-dot,
+.mb-status.con .mb-dot,
+.mb-status.relay .mb-dot {
+  animation: mb-latido-v3 2.2s ease-in-out infinite;
+}
+
+@keyframes mb-latido-v3 {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 178, 134, 0.38); }
+  50% { box-shadow: 0 0 0 5px rgba(79, 178, 134, 0); }
+}
+
+/* ---------- 9) RESPONSIVE ---------- */
+@media (min-width: 1450px) {
+  .sidebar {
+    width: 306px;
+    min-width: 306px;
+  }
+
+  .mensajes > *,
+  .composer,
+  .orbe-escucha,
+  .sugerencias {
+    max-width: 920px;
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 861px) {
+  .sidebar {
+    width: 270px;
+    min-width: 270px;
+  }
+
+  .mensajes {
+    padding-inline: 26px;
+  }
+
+  .mensajes > *,
+  .composer,
+  .orbe-escucha {
+    max-width: 760px;
+  }
+}
+
+@media (max-width: 860px) {
+  .sidebar {
+    width: min(320px, 86vw);
+    min-width: min(320px, 86vw);
+    background: rgba(16, 22, 32, 0.985);
+    box-shadow: 18px 0 55px rgba(0, 0, 0, 0.36);
+  }
+
+  .sidebar-fondo {
+    background: rgba(5, 8, 13, 0.62);
+    backdrop-filter: blur(3px);
+  }
+
+  .chat-header {
+    padding-inline: 14px;
+  }
+
+  .mensajes {
+    padding-inline: 16px;
+  }
+
+  .mensajes > *,
+  .composer,
+  .orbe-escucha,
+  .sugerencias {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .chat-header {
+    height: 62px;
+    min-height: 62px;
+    padding: 0 9px;
+    gap: 7px;
+  }
+
+  .chat-header .avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .chat-titulo h2 {
+    font-size: 14.5px;
+  }
+
+  .header-acciones {
+    gap: 2px;
+  }
+
+  .header-acciones > button,
+  .header-acciones .led-btn,
+  .header-acciones .icon-btn {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .mensajes {
+    padding: 14px 9px 8px;
+    gap: 7px;
+  }
+
+  .turn {
+    gap: 8px;
+    padding: 5px 0;
+  }
+
+  .turn-avatar,
+  .typing-avatar {
+    width: 29px;
+    height: 29px;
+    margin-top: 4px;
+  }
+
+  .turn-cuerpo {
+    max-width: calc(100% - 37px);
+    padding: 11px 12px 10px;
+    border-radius: 16px 16px 16px 6px;
+  }
+
+  .turn-cuerpo .md,
+  .parcial {
+    font-size: 15px;
+    line-height: 1.62;
+  }
+
+  .user-bubble {
+    max-width: 90%;
+    padding: 10px 13px;
+    font-size: 15px;
+    border-radius: 16px 16px 6px 16px;
+  }
+
+  .input-bar {
+    padding: 7px 9px max(6px, env(safe-area-inset-bottom));
+  }
+
+  .composer {
+    padding: 10px 10px 7px 12px;
+    border-radius: 20px;
+  }
+
+  .composer textarea {
+    font-size: 16px;
+    max-height: 120px;
+  }
+
+  .bajar-btn {
+    bottom: 96px;
+  }
+
+  .pantalla {
+    padding: 28px 14px;
+  }
+
+  .hero .logo-svg {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+  }
+
+  .hero h1 {
+    font-size: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-header .avatar.hablando,
+  .mb-status.ok .mb-dot,
+  .mb-status.con .mb-dot {
+    animation: none !important;
+  }
+}
+

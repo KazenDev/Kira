@@ -1,0 +1,71 @@
+/* ================================================================================
+   KIRA — TOKENS Y BASE DE TEMA
+   Fuente única para las variables que sobrevivieron a las capas visuales.
+   Las reglas de componentes empiezan en 00-legacy.css.
+   ============================================================================== */
+
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ff5c52;
+}
+@property --accent-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ff7068;
+}
+@property --accent-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(255, 92, 82, 0.16);
+}
+
+:root {
+  /* Superficies y texto: valores finales de la interfaz actual. */
+  --bg: #191817;
+  --elev-1: #151413;
+  --elev-2: #211f1d;
+  --elev-3: #2b2825;
+  --text-1: #e8e6e3;
+  --text-2: #aaa69f;
+  --text-3: #77736d;
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.13);
+
+  /* Acento base y estados de feedback. */
+  --accent: #ff5c52;
+  --accent-hover: #ff7068;
+  --accent-soft: rgba(255, 92, 82, 0.16);
+  --ok: #4fb286;
+  --danger: #e0655f;
+
+  /* Sombras: última definición efectiva de la capa V5. */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.32);
+  --shadow-3: 0 12px 36px rgba(0, 0, 0, 0.45);
+
+  /* Radios y marca. */
+  --r-sm: 9px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 18px;
+  --r-pill: 999px;
+  --rojo: #e8443b;
+
+  /* Stack y timings compartidos por todos los componentes. */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, system-ui, sans-serif;
+  --t-fast: 160ms;
+  --t-med: 260ms;
+  --t-slow: 380ms;
+  --ease: cubic-bezier(0.2, 0, 0.4, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.app[data-pj='kira'] {
+  --accent: #d96f55;
+  --accent-hover: #e58268;
+  --accent-soft: rgba(217, 111, 85, 0.14);
+}

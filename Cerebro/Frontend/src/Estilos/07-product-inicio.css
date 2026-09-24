@@ -1,0 +1,218 @@
+/* ---------- Welcome: Kira única, sin selector ni tarjeta ---------- */
+.pantalla {
+  position: relative;
+  justify-content: center;
+  gap: 18px;
+  padding: 38px 24px;
+}
+
+.pantalla-topbar {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: 12px;
+  display: none;
+}
+
+.inicio-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  background: transparent;
+}
+
+.inicio-menu:hover {
+  color: var(--text-1);
+  background: var(--elev-2);
+}
+
+.hero-kira {
+  width: min(680px, 100%);
+  max-width: 680px;
+  gap: 12px;
+  text-align: center;
+}
+
+.hero-kira .logo-svg {
+  width: 62px;
+  height: 62px;
+  margin-bottom: 2px;
+}
+
+.hero-saludo {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero-kira h1 {
+  font-size: clamp(2.2rem, 5vw, 3.2rem);
+  line-height: 1;
+}
+
+.hero-kira .subtitulo {
+  max-width: 510px;
+  margin: 0;
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.58;
+}
+
+.welcome-acciones {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(440px, 100%);
+  margin-top: 10px;
+}
+
+.welcome-primary,
+.welcome-secondary {
+  width: 100%;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+.welcome-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: center;
+  min-height: 58px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  color: var(--text-1);
+  background: color-mix(in srgb, var(--accent) 10%, var(--elev-2));
+  text-align: left;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+
+.welcome-primary:hover {
+  background: color-mix(in srgb, var(--accent) 16%, var(--elev-2));
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+}
+
+.welcome-primary > span:first-child {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.welcome-primary-meta {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-primary svg {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--accent);
+}
+
+.welcome-primary-simple {
+  display: flex;
+  justify-content: center;
+  min-height: 48px;
+  color: #1b1614;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.welcome-primary-simple:hover {
+  color: #1b1614;
+  background: var(--accent-hover);
+}
+
+.welcome-primary-simple svg {
+  color: currentColor;
+}
+
+.welcome-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  color: var(--text-3);
+  background: transparent;
+  font-size: 12.5px;
+}
+
+.welcome-secondary:hover {
+  color: var(--text-1);
+  background: var(--elev-2);
+}
+
+.welcome-suggestions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(680px, 100%);
+  max-width: 680px;
+  margin-top: 14px;
+  padding: 0;
+  gap: 0 18px;
+}
+
+.welcome-suggestions .sugerencia {
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 10px 2px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--text-2);
+  background: transparent;
+  text-align: left;
+}
+
+.welcome-suggestions .sugerencia:hover {
+  color: var(--text-1);
+  border-top-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: transparent;
+}
+
+.welcome-suggestions .sugerencia svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+.welcome-loading {
+  display: grid;
+  gap: 8px;
+  width: min(440px, 100%);
+  margin-top: 12px;
+}
+
+.welcome-loading span {
+  height: 42px;
+  border-radius: var(--r-md);
+  background: var(--elev-2);
+  animation: welcome-pulse 1.2s ease-in-out infinite;
+}
+
+.welcome-loading span:last-child {
+  width: 72%;
+  justify-self: center;
+  animation-delay: 120ms;
+}
+
+@keyframes welcome-pulse {
+  50% { opacity: 0.55; }
+}
+
