@@ -15,7 +15,10 @@ from app.hardware.ble_relay import RelayBroker
 from app.hardware.device_state import DeviceState
 
 
-PREFIJOS_SENSOR = frozenset({"TEMP:", "LUZ:", "BOTON:", "ACCEL:", "MIC:", "BAT:"})
+PREFIJOS_SENSOR = frozenset({
+    "TEMP:", "LUZ:", "BOTON:", "ACCEL:", "MIC:", "BAT:",
+    "GESTO:", "BRUJULA:", "TOUCH:",
+})
 
 
 class SerialTransport:

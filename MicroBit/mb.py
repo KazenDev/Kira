@@ -46,6 +46,12 @@ COMANDOS = {
     "movimiento": "SENSOR:ACCEL", "acel": "SENSOR:ACCEL",
     "sonido": "SENSOR:MIC", "microfono": "SENSOR:MIC",
     "bateria": "SENSOR:BAT", "battery": "SENSOR:BAT",
+    "gesto": "SENSOR:GESTO", "gestos": "SENSOR:GESTO",
+    "brujula": "SENSOR:BRUJULA", "compass": "SENSOR:BRUJULA",
+    "mag": "SENSOR:BRUJULA", "magnetico": "SENSOR:BRUJULA",
+    "toque": "SENSOR:TOQUE", "tactil": "SENSOR:TOQUE", "logo": "SENSOR:TOQUE",
+    "calibrarbrujula": "CALIBRAR:BRUJULA",
+    "calibrarcompass": "CALIBRAR:BRUJULA",
     # sistema
     "talk": "TALK",
     "loading": "LOADING",
@@ -74,7 +80,8 @@ EN BUCLE (hasta que mandes stop o otra cosa):
   metrostop         corta el metronomo (botones: A -5 | B +5 | A+B para)
   test              demo automatica de todas las emociones
   trans / transall / trans0-2     transiciones de prueba
-SENSORES (lectura; no cambian la emocion): temp luz boton accel sonido bateria
+SENSORES (lectura; no cambian la emocion): temp luz boton accel sonido bateria gesto brujula toque
+CALIBRAR: calibrarbrujula (mové la plaquita siguiendo la pantalla; puede tardar ~32 s)
 CONTROL:  stop (corta y vuelve a alegria) | cancelar (descarta la escucha) | salir | ayuda
 OTRO:     cualquier comando en MAYUSCULAS va tal cual al micro:bit"""
 

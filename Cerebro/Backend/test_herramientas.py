@@ -67,7 +67,8 @@ def test_unitarios():
           ks.clave_tool({"nombre": "x", "a": 1, "b": 2}) == ks.clave_tool({"nombre": "x", "b": 2, "a": 1}))
     seriales = [
         "leer_temperatura", "leer_luz", "leer_botones", "leer_movimiento",
-        "leer_sonido", "leer_bateria", "controlar_metronomo",
+        "leer_sonido", "leer_bateria", "leer_gesto", "leer_brujula",
+        "leer_toque", "controlar_metronomo",
     ]
     check("tools de la placa -> cadena (serial)", all(ks.es_tool_placa(n) for n in seriales),
           str([n for n in seriales if not ks.es_tool_placa(n)]))
@@ -135,9 +136,12 @@ def test_unitarios():
         "leer_movimiento": ("SENSOR:ACCEL", "ACCEL:"),
         "leer_sonido": ("SENSOR:MIC", "MIC:"),
         "leer_bateria": ("SENSOR:BAT", "BAT:"),
+        "leer_gesto": ("SENSOR:GESTO", "GESTO:"),
+        "leer_brujula": ("SENSOR:BRUJULA", "BRUJULA:"),
+        "leer_toque": ("SENSOR:TOQUE", "TOUCH:"),
     }
     check(
-        "los seis sensores tienen comando y prefijo",
+        "los nueve sensores tienen comando y prefijo",
         all(
             ks.HERRAMIENTAS.get(n, {}).get("comando") == c
             and ks.HERRAMIENTAS.get(n, {}).get("prefijo") == p
@@ -165,6 +169,24 @@ def test_unitarios():
         "batería" in ks.formatear_sensor("leer_bateria", "BAT:2980:3000:2"),
         ks.formatear_sensor("leer_bateria", "BAT:2980:3000:2"),
     )
+    check(
+        "el formato de gesto traduce el codigo CODAL y la magnitud",
+        "sacudida" in ks.formatear_sensor("leer_gesto", "GESTO:11:1450")
+        and "1450 mili-g" in ks.formatear_sensor("leer_gesto", "GESTO:11:1450"),
+        ks.formatear_sensor("leer_gesto", "GESTO:11:1450"),
+    )
+    check(
+        "el formato de brújula avisa cuando falta calibración",
+        "necesita calibración" in ks.formatear_sensor("leer_brujula", "BRUJULA:-1:4200:0")
+        and "rumbo 135" in ks.formatear_sensor("leer_brujula", "BRUJULA:135:4200:1"),
+        ks.formatear_sensor("leer_brujula", "BRUJULA:-1:4200:0"),
+    )
+    check(
+        "el formato táctil distingue logo tocado de suelto",
+        "tocado" in ks.formatear_sensor("leer_toque", "TOUCH:1:38")
+        and "no tocado" in ks.formatear_sensor("leer_toque", "TOUCH:0:4"),
+        ks.formatear_sensor("leer_toque", "TOUCH:1:38"),
+    )
 
     original_leer_sensor = ks.serial_mgr.leer_sensor
     llamadas = []
@@ -178,6 +200,9 @@ def test_unitarios():
             "SENSOR:ACCEL": "ACCEL:0:1000:5:3:0",
             "SENSOR:MIC": "MIC:42:40:20:10:5:2:1",
             "SENSOR:BAT": "BAT:2980:3000:2",
+            "SENSOR:GESTO": "GESTO:11:1450",
+            "SENSOR:BRUJULA": "BRUJULA:135:4200:1",
+            "SENSOR:TOQUE": "TOUCH:1:38",
         }.get(comando)
 
     try:
@@ -189,12 +214,15 @@ def test_unitarios():
     finally:
         ks.serial_mgr.leer_sensor = original_leer_sensor
     check(
-        "los seis sensores llegan por el mismo camino serial/BLE",
+        "los nueve sensores llegan por el mismo camino serial/BLE",
         llamadas == [(c, p) for c, p in esperados.values()],
         str(llamadas),
     )
     check("el resultado de sonido llega a la IA", resultados["leer_sonido"]["ok"] and "espectro" in resultados["leer_sonido"]["resultado"], resultados["leer_sonido"])
     check("el resultado de bateria llega a la IA", resultados["leer_bateria"]["ok"] and "2980 mV" in resultados["leer_bateria"]["resultado"], resultados["leer_bateria"])
+    check("el resultado de gesto llega a la IA", resultados["leer_gesto"]["ok"] and "sacudida" in resultados["leer_gesto"]["resultado"], resultados["leer_gesto"])
+    check("el resultado de brújula llega a la IA", resultados["leer_brujula"]["ok"] and "135 grados" in resultados["leer_brujula"]["resultado"], resultados["leer_brujula"])
+    check("el resultado de toque llega a la IA", resultados["leer_toque"]["ok"] and "tocado" in resultados["leer_toque"]["resultado"], resultados["leer_toque"])
 
     def sensor_no_soportado(comando, prefijo, timeout=4.0):
         return "SENSOR:?"

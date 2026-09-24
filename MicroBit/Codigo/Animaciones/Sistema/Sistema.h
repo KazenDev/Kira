@@ -36,6 +36,10 @@ extern EmocionActual emocionActual;   // definido en Sistema.cpp
 //   SENSOR:ACCEL -> ACCEL:x:y:z:pitch:roll
 //   SENSOR:MIC   -> MIC:nivel:b0:b1:b2:b3:b4:ventanas
 //   SENSOR:BAT   -> BAT:bateria_mV:vin_mV:fuente
+//   SENSOR:GESTO -> GESTO:codigo:magnitud_mg
+//   SENSOR:BRUJULA -> BRUJULA:rumbo:campo:calibrada
+//   SENSOR:TOQUE -> TOUCH:presionado:lectura
+// CALIBRAR:BRUJULA  -> UX oficial de CODAL (manual, puede tardar ~32 s)
 void procesarComando(ManagedString cmd);  // recibe "HAPPY", "SAD", etc.
 // Lee el serial: si llego un comando completo, lo procesa y devuelve true.
 // Lo llaman el bucle principal Y las animaciones largas (para que se

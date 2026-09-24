@@ -65,8 +65,9 @@ segmentación de frases y helpers de TTS.
 ### Hardware
 
 - `SerialTransport`: worker, cola, ACK, sensores y audio. El registro de
-  herramientas incluye temperatura, luz, botones, acelerómetro, sonido relativo
-  y voltaje de alimentación. `SerialManager` queda como alias compatible.
+  herramientas incluye temperatura, luz, botones, acelerómetro, sonido relativo,
+  voltaje de alimentación, gestos, brújula y logo táctil. `SerialManager` queda
+  como alias compatible.
 - `BleRelayHub`/`RelayBroker`: propiedad, latido, cola, expiración y NACK del
   puente del navegador. Se mantienen los límites históricos del relay.
 - `DeviceState`: estado de conexión, ACK y réplica LED.
@@ -290,7 +291,9 @@ No se deben llamar directamente a `SerialManager` desde dos hilos. La
 orquestación debe pasar por `escuchar`, `grabar` o `leer_sensor`, que aplican el
 lock exclusivo. `leer_sonido` devuelve `MIC:BUSY` si hay una escucha manual;
 `leer_bateria` devuelve voltajes aproximados y `0` cuando el dato no está
-disponible. Si se añade una nueva operación física, debe usar el mismo seam.
+disponible; `leer_brujula` devuelve `rumbo=-1` mientras falte calibración, sin
+lanzar la UX interactiva; `leer_gesto` informa un gesto estable y magnitud, no
+una velocidad. Si se añade una nueva operación física, debe usar el mismo seam.
 
 ### La reflexión no termina
 
