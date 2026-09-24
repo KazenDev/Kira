@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+memoria/rag/
+auth.sqlite3
+auth.sqlite3-*
+usuarios/
+.pytest_cache/
+__pycache__/

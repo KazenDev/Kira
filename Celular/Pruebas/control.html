@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Kira BLE - Control desde el celular</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3;
+    max-width: 520px; margin: 0 auto; padding: 14px;
+  }
+  h1 { font-size: 1.15rem; margin: 4px 0 2px; }
+  .sub { font-size: .8rem; color: #8b949e; margin-bottom: 12px; }
+  #conectar {
+    width: 100%; padding: 16px; font-size: 1.05rem; font-weight: 700;
+    border: 0; border-radius: 12px; background: #238636; color: #fff; cursor: pointer;
+  }
+  #conectar:disabled { background: #30363d; color: #8b949e; }
+  #estado { font-size: .85rem; margin: 10px 2px; min-height: 1.2em; }
+  .ok { color: #3fb950; } .mal { color: #f85149; }
+  h2 { font-size: .85rem; color: #8b949e; text-transform: uppercase; letter-spacing: .08em; margin: 16px 4px 8px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  button.cmd {
+    padding: 13px 4px; font-size: 1.3rem; border: 1px solid #30363d; border-radius: 10px;
+    background: #161b22; color: #e6edf3; cursor: pointer;
+  }
+  button.cmd:active { background: #21262d; transform: scale(.96); }
+  button.cmd small { display: block; font-size: .62rem; color: #8b949e; margin-top: 2px; }
+  .fila { display: flex; gap: 8px; margin-top: 8px; }
+  input {
+    flex: 1; padding: 12px; font-size: 1rem; border: 1px solid #30363d; border-radius: 10px;
+    background: #0d1117; color: #e6edf3; text-transform: uppercase;
+  }
+  #enviar { padding: 12px 18px; border: 0; border-radius: 10px; background: #1f6feb; color: #fff; font-weight: 700; cursor: pointer; }
+  #log {
+    margin-top: 14px; background: #010409; border: 1px solid #21262d; border-radius: 10px;
+    padding: 10px; height: 180px; overflow-y: auto; font-family: ui-monospace, monospace;
+    font-size: .78rem; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+  }
+  .ack { color: #3fb950; } .rx { color: #d2a8ff; }
+</style>
+</head>
+<body>
+  <h1>🤖 Kira — Control BLE</h1>
+  <div class="sub">micro:bit v2 por Web Bluetooth (Nordic UART)</div>
+
+  <button id="conectar">🔗 Conectar micro:bit</button>
+  <div id="estado">Desconectado</div>
+
+  <div id="panel" hidden>
+    <h2>Emociones</h2>
+    <div class="grid">
+      <button class="cmd" data-cmd="HAPPY">😊<small>alegría</small></button>
+      <button class="cmd" data-cmd="SAD">😢<small>triste</small></button>
+      <button class="cmd" data-cmd="ANGRY">😠<small>enojo</small></button>
+      <button class="cmd" data-cmd="SURPRISED">😲<small>sorpresa</small></button>
+      <button class="cmd" data-cmd="FEAR">😨<small>miedo</small></button>
+      <button class="cmd" data-cmd="TIRED">🥱<small>cansado</small></button>
+      <button class="cmd" data-cmd="FASTIDIO">🙄<small>fastidio</small></button>
+      <button class="cmd" data-cmd="STOP">🛑<small>stop</small></button>
+    </div>
+
+    <h2>Metrónomo</h2>
+    <div class="grid3">
+      <button class="cmd" data-cmd="METRO:90:4">🎵<small>90 · 4/4</small></button>
+      <button class="cmd" data-cmd="METRO:120:4">🎶<small>120 · 4/4</small></button>
+      <button class="cmd" data-cmd="METRO:90:3">💃<small>90 · vals</small></button>
+      <button class="cmd" data-cmd="METRO:140:0">⚡<small>140 parejo</small></button>
+      <button class="cmd" data-cmd="METRO:60:4">🐢<small>60 lento</small></button>
+      <button class="cmd" data-cmd="METRO:STOP">⏹<small>apagar</small></button>
+    </div>
+
+    <h2>Sensores</h2>
+    <div class="grid3">
+      <button class="cmd" data-cmd="SENSOR:TEMP">🌡️<small>temperatura</small></button>
+      <button class="cmd" data-cmd="SENSOR:LUZ">💡<small>luz</small></button>
+      <button class="cmd" data-cmd="SENSOR:ACCEL">📐<small>movimiento</small></button>
+    </div>
+
+    <h2>Comando libre</h2>
+    <div class="fila">
+      <input id="txt" placeholder="Ej: METRO:120:4  ·  LOADING  ·  TALK">
+      <button id="enviar">Enviar</button>
+    </div>
+
+    <div id="log"></div>
+  </div>
+
+<script>
+const NUS_SERVICIO = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const NUS_ESCRIBIR = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // PC -> placa (estilo codal: RX)
+const NUS_LEER     = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // placa -> nosotros (TX)
+
+let dispositivo = null, caracteristicas = null;
+
+const $ = id => document.getElementById(id);
+const log = (texto, clase) => {
+  const linea = document.createElement("div");
+  if (clase) linea.className = clase;
+  linea.textContent = texto;
+  $("log").appendChild(linea);
+  $("log").scrollTop = 1e9;
+};
+
+async function conectar() {
+  try {
+    $("estado").textContent = "Buscando placa... activa el Bluetooth del cel";
+    log("🔗 Buscando BBC micro:bit...");
+    dispositivo = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "BBC micro:bit" }],
+      optionalServices: [NUS_SERVICIO]
+    });
+
+    dispositivo.addEventListener("gattserverdisconnected", () => {
+      caracteristicas = null;
+      $("estado").textContent = "Desconectado";
+      $("estado").className = "mal";
+      log("❌ Placa desconectada");
+      $("conectar").textContent = "🔗 Conectar micro:bit";
+      $("conectar").disabled = false;
+    });
+
+    $("estado").textContent = "Conectando...";
+    const server = await dispositivo.gatt.connect();
+    const servicio = await server.getPrimaryService(NUS_SERVICIO);
+    const escribir = await servicio.getCharacteristic(NUS_ESCRIBIR);
+    const leer = await servicio.getCharacteristic(NUS_LEER);
+
+    await leer.startNotifications();
+    leer.addEventListener("characteristicvaluechanged", ev => {
+      const texto = new TextDecoder().decode(ev.target.value);
+      for (const parte of texto.split("\n")) {
+        const t = parte.trim();
+        if (t) log("⬅ " + t, t.startsWith("ACK") ? "ack" : "rx");
+      }
+    });
+
+    caracteristicas = escribir;
+    $("estado").textContent = "🟢 Conectado a " + (dispositivo.name || "micro:bit");
+    $("estado").className = "ok";
+    $("conectar").textContent = "🔄 Reconectar";
+    $("conectar").disabled = false;
+    $("panel").hidden = false;
+    log("✅ Conectado — los comandos ya vuelan por aire");
+  } catch (e) {
+    $("estado").textContent = "Error: " + e.message;
+    $("estado").className = "mal";
+    log("⚠ " + e.message);
+  }
+}
+
+async function mandar(comando) {
+  if (!caracteristicas) { log("⚠ Conecta primero la placa"); return; }
+  const texto = comando.toUpperCase().trim();
+  if (!texto) return;
+  try {
+    // fragmentar por si el comando pasa los 20 bytes de un paquete BLE
+    const bytes = new TextEncoder().encode(texto + "\n");
+    for (let i = 0; i < bytes.length; i += 20)
+      await caracteristicas.writeValue(bytes.slice(i, i + 20));
+    log("➡ " + texto);
+  } catch (e) {
+    log("⚠ " + e.message);
+  }
+}
+
+$("conectar").addEventListener("click", conectar);
+$("enviar").addEventListener("click", () => { mandar($("txt").value); $("txt").value = ""; });
+$("txt").addEventListener("keydown", e => { if (e.key === "Enter") { mandar($("txt").value); $("txt").value = ""; } });
+document.querySelectorAll("button.cmd").forEach(b => b.addEventListener("click", () => mandar(b.dataset.cmd)));
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+#!/bin/bash
+# ============================================================================
+#  mb - Lanzador de mb.py con el python del venv del Backend (tiene pyserial)
+#  Uso:  ./mb            (repl)      ./mb --serial happy
+# ============================================================================
+DIR="$(cd "$(dirname "$0")" && pwd)"
+
+PY="$DIR/../Cerebro/Backend/.venv/bin/python"
+[ -x "$PY" ] || PY=python3   # sin venv: usa el del sistema
+
+exec "$PY" "$DIR/mb.py" "$@"
