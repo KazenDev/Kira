@@ -1488,7 +1488,10 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
 
   return (
     // el data-pj activa el MODO del personaje: Kira tiñe todo de rojo (Among Us)
-    <div className="app" data-pj={elegido?.id}>
+    <div
+      className={`app${sidebarColapsada ? ' sidebar-colapsada' : ''}`}
+      data-pj={elegido?.id}
+    >
       {/* El puente BLE vive aquí durante toda la sesión, incluso al volver
           al inicio; su botón visual puede montarse y desmontarse en el menú. */}
       <PuenteBle oculto onEstado={setBleEstado} />
