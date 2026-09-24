@@ -246,6 +246,18 @@ a:hover {
   height: 34px;
 }
 
+/* En la rail angosta no dejamos controles de navegación que se desbordan
+   sobre el header: quedan sólo el toggle y los chats. El header tampoco
+   duplica el botón de volver cuando la rail está plegada. */
+.sidebar.colapsada .btn-inicio,
+.sidebar.colapsada .sidebar-nuevo {
+  display: none;
+}
+
+.app.sidebar-colapsada .chat-header .volver-inicio {
+  display: none;
+}
+
 /* ---------- botón plegar (arriba del sidebar) ---------- */
 .btn-plegar {
   width: 34px;
