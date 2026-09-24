@@ -34,6 +34,8 @@ extern EmocionActual emocionActual;   // definido en Sistema.cpp
 //   SENSOR:LUZ   -> LUZ:120      (0..255)
 //   SENSOR:BOTON -> BOTON:1:0    (A:B, 1=presionado)
 //   SENSOR:ACCEL -> ACCEL:x:y:z:pitch:roll
+//   SENSOR:MIC   -> MIC:nivel:b0:b1:b2:b3:b4:ventanas
+//   SENSOR:BAT   -> BAT:bateria_mV:vin_mV:fuente
 void procesarComando(ManagedString cmd);  // recibe "HAPPY", "SAD", etc.
 // Lee el serial: si llego un comando completo, lo procesa y devuelve true.
 // Lo llaman el bucle principal Y las animaciones largas (para que se

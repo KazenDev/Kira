@@ -31,31 +31,34 @@ MakeCode) por maximo rendimiento:
 - Auto Reset:   1
 
 == PROGRAMA ACTUAL (CODAL C++) ==
-Archivo fuente:  Referencias/codal-microbit-v2-samples/source/main.cpp
-- Carita feliz animada (parpadeo + guino + luz tenue que respira)
-- Aro de carga girando (efecto cometa, 16 posiciones, fluido)
-- Receptor serial de emociones (la IA manda comandos por USB)
+Fuente versionada: Codigo/Principal.cpp + Codigo/Animaciones + Codigo/Funciones
+Build local:       Referencias/codal-microbit-v2-samples/source/main.cpp
+- 8 emociones animadas + transiciones de 60 FPS
+- 10 patrones de loading, incluyendo uno que usa el accelerometro y otro la luz
+- Receptor serial y BLE: la IA manda los mismos comandos por USB o Bluetooth
+- Replica del frame LED para la web
+- Escucha manual con A/B y FFT real del microfono para las animaciones
 
 Comandos serial (linea terminada en \n):
-  HAPPY      -> carita feliz animada
-  SAD        -> carita triste
-  ANGRY      -> carita enojada
-  SURPRISED  -> carita sorprendida
-  HEART      -> corazon
-  LOADING    -> aro de carga girando
-  BLINK      -> parpadeo
-  TEST       -> demo automatica
-  (cualquier otro) -> muestra "?" (error)
-Respuesta: ACK:<COMANDO>
+  HAPPY/SAD/ANGRY/SURPRISED/NEUTRAL/FASTIDIO/MIEDO/CANSADO -> emoción
+  TALK/LOADING/LOAD0..LOAD9/STOP                           ->talk/loading/stop
+  SENSOR:TEMP   -> TEMP:<grados Celsius>
+  SENSOR:LUZ    -> LUZ:<0..255>
+  SENSOR:BOTON  -> BOTON:<A>:<B>
+  SENSOR:ACCEL  -> ACCEL:<x>:<y>:<z>:<pitch>:<roll>
+  SENSOR:MIC    -> MIC:<nivel>:<b0>:<b1>:<b2>:<b3>:<b4>:<ventanas>
+  SENSOR:BAT    -> BAT:<bateria_mV>:<entrada_mV>:<fuente>
+  ESCUCHAR     -> espera manual: primer A graba, segundo A envia, B cancela
+Respuesta: ACK:<COMANDO> y, para sensores, la linea de lectura correspondiente.
 
 == ESTRUCTURA DE CARPETAS (Escritorio/Kira/MicroBit) ==
 MicroBit/
 ├── info_microbit.txt        <- ESTE archivo (info del micro:bit)
-├── Codigo/                  <- NUESTRO CODIGO FUENTE (el src): main.cpp
-│                              y los scripts que creemos (IA, etc.)
+├── Codigo/                  <- NUESTRO CODIGO FUENTE: Principal.cpp,
+│                              Animaciones/ y Funciones/ (sensores)
 └── Referencias/             <- repos de CODAL (consulta local, sin GitHub)
     ├── codal-microbit-v2-samples/   <- EL PROYECTO: lo que compilamos.
-    │                                  Aqui se edita main.cpp y se corre
+    │                                  Se sincroniza Codigo/ y se corre
     │                                  build.py para generar MICROBIT.hex
     ├── codal-core/                   <- LAS APIS PRINCIPALES: Image (caras),
     │                                  ManagedString (texto), Serial (comms),
@@ -70,9 +73,14 @@ MicroBit/
                                          nRF52). Raramente se toca.
 
 == COMPILAR Y FLASHEAR ==
-1. Editar Referencias/codal-microbit-v2-samples/source/main.cpp
-2. cd Referencias/codal-microbit-v2-samples && python3 build.py
-   (la primera vez descarga submódulos, luego es rapido)
+1. Editar Codigo/Principal.cpp, Codigo/Animaciones/ o Codigo/Funciones/
+2. Sincronizar todo Codigo/ al source local y regenerar el build:
+   rsync -a --delete Codigo/ Referencias/codal-microbit-v2-samples/source/
+   rm -f Referencias/codal-microbit-v2-samples/source/Principal.cpp
+   cp Codigo/Principal.cpp Referencias/codal-microbit-v2-samples/source/main.cpp
+   cd Referencias/codal-microbit-v2-samples
+   rm -rf build
+   python3 build.py
 3. Copiar MICROBIT.hex a la unidad MICROBIT (se flashea solo)
    cp MICROBIT.hex /media/zkazen/MICROBIT/MICROBIT.HEX
 

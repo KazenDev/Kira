@@ -1594,6 +1594,16 @@ HERRAMIENTAS: dict[str, dict] = {
         "comando": "SENSOR:ACCEL",
         "prefijo": "ACCEL:",
     },
+    "leer_sonido": {
+        "descripcion": "Mide el sonido relativo del microfono: nivel y cinco bandas (0..100). Es una lectura relativa, no decibeles absolutos.",
+        "comando": "SENSOR:MIC",
+        "prefijo": "MIC:",
+    },
+    "leer_bateria": {
+        "descripcion": "Lee el voltaje aproximado de la bateria y de la entrada del micro:bit, y dice si esta alimentada por USB, bateria o ambas.",
+        "comando": "SENSOR:BAT",
+        "prefijo": "BAT:",
+    },
     "reloj": {
         "descripcion": "Hora y fecha actuales del sistema (no usa el micro:bit).",
         "comando": None,
@@ -1716,6 +1726,35 @@ def formatear_sensor(nombre: str, linea: str) -> str:
                 x, y, z, pitch, roll = partes[:5]
                 return f"acelerómetro: X={x} Y={y} Z={z} mili-g, pitch={pitch}°, roll={roll}°"
             return f"acelerómetro: {valor}"
+        if nombre == "leer_sonido":
+            partes = valor.split(":")
+            if partes and partes[0].upper() == "BUSY":
+                return "sonido: el micrófono está ocupado con una escucha"
+            if partes and partes[0].upper() == "ERR":
+                return "sonido: no se pudo tomar una muestra del micrófono"
+            if len(partes) >= 6:
+                nivel, graves, medios_bajos, medios, medios_altos, agudos = partes[:6]
+                return (
+                    f"sonido: nivel relativo {nivel}/100; espectro "
+                    f"graves={graves}, medios-bajos={medios_bajos}, medios={medios}, "
+                    f"medios-altos={medios_altos}, agudos={agudos}"
+                )
+            return f"sonido: {valor}"
+        if nombre == "leer_bateria":
+            partes = valor.split(":")
+            if len(partes) >= 3:
+                bateria_mv, vin_mv, fuente = partes[:3]
+                nombres_fuente = {
+                    "0": "sin fuente",
+                    "1": "USB",
+                    "2": "batería",
+                    "3": "USB + batería",
+                }
+                fuente_texto = nombres_fuente.get(fuente, f"fuente {fuente}")
+                bateria_texto = f"{bateria_mv} mV" if bateria_mv not in {"0", "-1"} else "no disponible"
+                vin_texto = f"{vin_mv} mV" if vin_mv not in {"0", "-1"} else "no disponible"
+                return f"alimentación: batería {bateria_texto}, entrada {vin_texto}, fuente {fuente_texto}"
+            return f"alimentación: {valor}"
     except Exception:
         pass
     return f"lectura cruda: {linea}"
@@ -2147,6 +2186,15 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
     if linea is None:
         print(f"[TOOL] {nombre}: SIN RESPUESTA en {ms:.0f}ms -> {_por_que_no_contesto()}")
         return {"ok": False, "resultado": f"No pude leer el sensor {nombre}: el micro:bit no respondió (¿está conectado?)."}
+    if linea.startswith("SENSOR:?"):
+        print(f"[TOOL] {nombre}: firmware sin soporte para este sensor -> {linea}")
+        return {
+            "ok": False,
+            "resultado": (
+                f"La placa no reconoce {nombre}; actualizá/flasheá el firmware "
+                "de Kira para habilitar ese sensor."
+            ),
+        }
     print(f"[TOOL] {nombre}: la placa contestó en {ms:.0f}ms: '{linea}'")
     return {"ok": True, "resultado": formatear_sensor(nombre, linea)}
 

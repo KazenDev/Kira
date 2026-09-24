@@ -65,7 +65,10 @@ def test_unitarios():
     check("args distintos -> clave distinta", a != c)
     check("el orden de los args no importa",
           ks.clave_tool({"nombre": "x", "a": 1, "b": 2}) == ks.clave_tool({"nombre": "x", "b": 2, "a": 1}))
-    seriales = ["leer_temperatura", "leer_luz", "leer_botones", "leer_movimiento", "controlar_metronomo"]
+    seriales = [
+        "leer_temperatura", "leer_luz", "leer_botones", "leer_movimiento",
+        "leer_sonido", "leer_bateria", "controlar_metronomo",
+    ]
     check("tools de la placa -> cadena (serial)", all(ks.es_tool_placa(n) for n in seriales),
           str([n for n in seriales if not ks.es_tool_placa(n)]))
     paralelas = ["reloj", "buscar_en_web", "calcular", "leer_url", "guardar_recuerdo", "azar", "leer_estado"]
@@ -123,6 +126,89 @@ def test_unitarios():
     check("dice cuando NO usar", "NO la uses" in cat, cat[:120])
     check("explica el formato lista (multi-tool)", "LISTA" in cat, cat[:120])
     check("habla del dedup", "no la repitas" in cat.lower(), cat[:120])
+
+    print("\n== 4b) sensores onboard: registro, formato y dispatch ==")
+    esperados = {
+        "leer_temperatura": ("SENSOR:TEMP", "TEMP:"),
+        "leer_luz": ("SENSOR:LUZ", "LUZ:"),
+        "leer_botones": ("SENSOR:BOTON", "BOTON:"),
+        "leer_movimiento": ("SENSOR:ACCEL", "ACCEL:"),
+        "leer_sonido": ("SENSOR:MIC", "MIC:"),
+        "leer_bateria": ("SENSOR:BAT", "BAT:"),
+    }
+    check(
+        "los seis sensores tienen comando y prefijo",
+        all(
+            ks.HERRAMIENTAS.get(n, {}).get("comando") == c
+            and ks.HERRAMIENTAS.get(n, {}).get("prefijo") == p
+            for n, (c, p) in esperados.items()
+        ),
+        str({n: ks.HERRAMIENTAS.get(n) for n in esperados}),
+    )
+    check(
+        "los cuatro sensores anteriores tambien formatean",
+        all([
+            "23 grados" in ks.formatear_sensor("leer_temperatura", "TEMP:23"),
+            "120/255" in ks.formatear_sensor("leer_luz", "LUZ:120"),
+            "A=presionado" in ks.formatear_sensor("leer_botones", "BOTON:1:0"),
+            "pitch=3" in ks.formatear_sensor("leer_movimiento", "ACCEL:0:1000:5:3:0"),
+        ]),
+        "formateo de sensores existentes",
+    )
+    check(
+        "el formato de sonido explica que es relativo",
+        "nivel relativo" in ks.formatear_sensor("leer_sonido", "MIC:42:40:20:10:5:2:1"),
+        ks.formatear_sensor("leer_sonido", "MIC:42:40:20:10:5:2:1"),
+    )
+    check(
+        "el formato de bateria identifica la fuente",
+        "batería" in ks.formatear_sensor("leer_bateria", "BAT:2980:3000:2"),
+        ks.formatear_sensor("leer_bateria", "BAT:2980:3000:2"),
+    )
+
+    original_leer_sensor = ks.serial_mgr.leer_sensor
+    llamadas = []
+
+    def sensor_falso(comando, prefijo, timeout=4.0):
+        llamadas.append((comando, prefijo))
+        return {
+            "SENSOR:TEMP": "TEMP:23",
+            "SENSOR:LUZ": "LUZ:120",
+            "SENSOR:BOTON": "BOTON:1:0",
+            "SENSOR:ACCEL": "ACCEL:0:1000:5:3:0",
+            "SENSOR:MIC": "MIC:42:40:20:10:5:2:1",
+            "SENSOR:BAT": "BAT:2980:3000:2",
+        }.get(comando)
+
+    try:
+        ks.serial_mgr.leer_sensor = sensor_falso
+        resultados = {
+            nombre: ks.ejecutar_herramienta(nombre)
+            for nombre in esperados
+        }
+    finally:
+        ks.serial_mgr.leer_sensor = original_leer_sensor
+    check(
+        "los seis sensores llegan por el mismo camino serial/BLE",
+        llamadas == [(c, p) for c, p in esperados.values()],
+        str(llamadas),
+    )
+    check("el resultado de sonido llega a la IA", resultados["leer_sonido"]["ok"] and "espectro" in resultados["leer_sonido"]["resultado"], resultados["leer_sonido"])
+    check("el resultado de bateria llega a la IA", resultados["leer_bateria"]["ok"] and "2980 mV" in resultados["leer_bateria"]["resultado"], resultados["leer_bateria"])
+
+    def sensor_no_soportado(comando, prefijo, timeout=4.0):
+        return "SENSOR:?"
+
+    try:
+        ks.serial_mgr.leer_sensor = sensor_no_soportado
+        r_viejo = ks.ejecutar_herramienta("leer_sonido")
+    finally:
+        ks.serial_mgr.leer_sensor = original_leer_sensor
+    check(
+        "firmware viejo devuelve una explicacion, no un falso OK",
+        r_viejo["ok"] is False and "flasheá" in r_viejo["resultado"],
+        r_viejo,
+    )
 
 
 # ---------------------------------------------------------------------

@@ -49,6 +49,8 @@ describe('dimensionesEscaladas (la foto del celular antes de subirla)', () => {
 describe('labelHerramienta (tool trace: estado NOMBRADO en vez de puntos)', () => {
   it('tools del micro:bit y del cerebro -> frase en español con puntos suspensivos', () => {
     expect(labelHerramienta('leer_temperatura')).toBe('leyendo el termómetro…');
+    expect(labelHerramienta('leer_sonido')).toBe('escuchando el sonido…');
+    expect(labelHerramienta('leer_bateria')).toBe('midiendo la batería…');
     expect(labelHerramienta('buscar_en_web')).toBe('buscando en la web…');
     expect(labelHerramienta('calcular')).toBe('haciendo la cuenta…');
     expect(labelHerramienta('guardar_recuerdo')).toBe('anotándolo en su memoria…');

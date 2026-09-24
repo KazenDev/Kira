@@ -239,3 +239,8 @@ const float *micFftBandas()
 {
     return bandas;
 }
+
+bool micFftActivo()
+{
+    return activo;
+}
