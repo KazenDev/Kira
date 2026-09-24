@@ -619,12 +619,6 @@ svg.girando {
   color: var(--text-1);
   line-height: 1.05;
 }
-.hero h1 .amp {
-  color: var(--text-3);
-  font-weight: 400;
-  margin: 0 6px;
-}
-
 .subtitulo {
   color: var(--text-2);
   font-size: 15px;
@@ -758,11 +752,6 @@ svg.girando {
   color: var(--text-1);
   border-color: var(--accent-soft);
 }
-.led-btn .mb-dot {
-  width: 6px;
-  height: 6px;
-}
-
 /* popover con la réplica del micro:bit */
 .led-popover {
   position: absolute;
@@ -914,12 +903,6 @@ svg.girando {
 .user-bubble .md {
   font-size: 15.5px;
   line-height: 1.6;
-}
-
-/* timestamps FUERA de las burbujas, chicos y discretos */
-.hora {
-  font-size: 11px;
-  color: var(--text-3);
 }
 
 /* ---------- typing indicator (3 puntos + nombre; entrada/salida con Motion) ---------- */
@@ -1807,18 +1790,13 @@ svg.girando {
   .mensajes {
     padding: 14px 10px 8px;
   }
-  .user-bubble,
-  .chat [class*='burbuja'] {
+  .user-bubble {
     max-width: 92%;
   }
 
-  /* header compacto: menos padding, pill mas chica */
+  /* header compacto: menos padding */
   .chat-header {
     gap: 8px;
-  }
-  .chat-header .pill,
-  .chat-header span[class*='estado'] {
-    font-size: 0.65rem;
   }
 
   /* el hero (selector inicial) respira mejor en vertical */
@@ -1857,14 +1835,7 @@ svg.girando {
   to { transform: rotate(360deg); }
 }
 
-/* el orbe-escucha ahora es BOTON: que se sienta tocable */
-button.orbe-escucha {
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-button.orbe-escucha:active {
-  transform: scale(0.985);
-}
+/* El control de escucha actual es un div con .orbe-escucha. */
 
 /* ============ REDISEÑO A PRUEBA DE BALAS ============ */
 

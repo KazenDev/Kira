@@ -6,10 +6,9 @@
 
 @import './tokens.css';
 @import './00-legacy.css';
-@import './01-v3-companion.css';
-@import './02-v4-fluid-chat.css';
+@import './compat-core.css';
 @import './03-camara.css';
-@import './04-v5-graphite.css';
+@import './compat-graphite.css';
 @import './05-microfono.css';
 @import './06-markdown-graphite.css';
 @import './07-producto-real.css';

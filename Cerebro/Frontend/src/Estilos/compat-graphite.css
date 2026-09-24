@@ -1,0 +1,401 @@
+/* ================================================================================
+   COMPATIBILIDAD VISUAL — V5 GRAPHITE
+   Reglas históricas preservadas para no alterar la cascada durante la
+   consolidación. La fuente original vive en Historico/.
+   ============================================================================== */
+
+/* ==============================================================================
+   KIRA — INTERFAZ V5 "GRAPHITE"
+   Capa final (sobre V4 + cámara). Referencia: el design system de ChatGPT
+   (análisis vía EXA + Mobbin). Principios:
+   - Superficies NEUTRAS grafito: canvas #212121, elevación #2a2a2a.
+   - Elevación por HAIRLINE de 1px, no por sombras gigantes ni glow.
+   - Hover = velo blanco al 5%; radio 10px en controles; ritmo 4/8/12/16/24.
+   - El acento del personaje SOLO en acción primaria, links, focus y activo.
+   - CERO gradientes ambientales: eso es lo que hace que algo se vea "slop".
+   - Columna de lectura de 768px (la medida que usa ChatGPT, ~65 caracteres).
+   ============================================================================== */
+
+/* Los tokens globales viven ahora en tokens.css. */
+/* plano: sin el radial de acento que metieron V3/V4 */
+body {
+  background: var(--bg);
+}
+
+/* La capa ambiental anterior se eliminó: el JSX actual no monta .ambiente. */
+
+/* ---------- 1) Sidebar: plano, hairline, sin sombra ---------- */
+.sidebar {
+  background: var(--elev-1);
+  box-shadow: none;
+}
+
+.sidebar-fondo {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.item-chat {
+  border-radius: var(--r-sm);
+}
+
+.item-chat:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* selección con ↑↓ (buscador): velo neutro, sin pisar el acento del activo */
+.item-chat.sel {
+  background: rgba(255, 255, 255, 0.07);
+}
+.item-chat.sel.activo {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* el campo de búsqueda pasa de píldora a rectángulo redondeado (ChatGPT/Notion) */
+.buscador {
+  border-radius: var(--r-sm);
+}
+
+/* resaltado de coincidencias: tinte del acento, no el amarillo del navegador */
+mark {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--text-1);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* ---------- 2) Header: neutro, hairline al scrollear, cero sombra ---------- */
+.chat-header {
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  box-shadow: none;
+}
+
+.chat-header.scrolleo {
+  background: color-mix(in srgb, var(--bg) 97%, transparent);
+  border-bottom-color: var(--border);
+  box-shadow: none;
+}
+
+/* pesos reales: 690/680/650/560 no existen en las fonts del sistema */
+.chat-titulo h2 {
+  font-weight: 600;
+}
+.sidebar-logo h1 {
+  font-weight: 600;
+}
+.item-nombre {
+  font-weight: 500;
+}
+
+.header-acciones > button,
+.header-acciones .icon-btn,
+.header-acciones .led-btn,
+.header-acciones .puente-icono {
+  border-radius: var(--r-sm);
+}
+
+.chat-header .avatar {
+  box-shadow: none;
+}
+
+/* ---------- 3) Conversación: columna de lectura de 768px (la de ChatGPT) ---------- */
+@media (min-width: 861px) {
+  .mensajes > *,
+  .composer,
+  .orbe-escucha,
+  .sugerencias {
+    max-width: 768px;
+  }
+}
+
+/* el turno del asistente NUNCA vuelve a ser card (refuerzo en desktop y cel) */
+.turn-cuerpo {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.turn-cuerpo .md,
+.parcial {
+  font-size: 16px;
+  line-height: 1.65;
+  letter-spacing: 0;
+}
+
+/* avatares de turno: hairline, sin halo de acento ni sombra */
+.turn-avatar,
+.typing-avatar {
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+/* burbuja del usuario: base NEUTRO con tinte de acento (ChatGPT con su accent
+   color hace exactamente esto; antes el base era azul #1b222c = slop) */
+.user-bubble {
+  background: color-mix(in srgb, var(--accent) 15%, var(--elev-2));
+}
+
+/* ---------- 4) Composer: píldora plana, hairline, sin glow ---------- */
+.input-bar {
+  background: var(--bg);
+}
+
+.composer {
+  background: var(--elev-2);
+  border-color: var(--border-strong);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.composer:focus-within {
+  background: var(--elev-2);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.composer .send-btn {
+  border: 0;
+  box-shadow: none;
+}
+
+.composer .send-btn:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
+.orbe-escucha {
+  background: var(--elev-2);
+  border-color: var(--border-strong);
+  box-shadow: none;
+}
+
+.bajar-btn {
+  background: var(--elev-2);
+}
+
+/* ---------- 5) Popovers y modales: superficie sólida, sin glassmorphismo ---------- */
+.led-popover,
+.ajustes-panel,
+.memoria-panel {
+  background: var(--elev-2);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.microbit-board {
+  background: #1b1b1b;
+  border-color: #333;
+}
+
+.foto-chip {
+  background: color-mix(in srgb, var(--elev-2) 96%, transparent);
+}
+
+/* ---------- 6) Hero: stagger de entrada, logo sin caja ni glow ---------- */
+.hero {
+  animation: none;
+}
+.hero > * {
+  /* backwards (no both): al terminar SUELTA el keyframe y el :active del
+     botón Continuar vuelve a poder usar transform */
+  animation: subir-suave 0.55s var(--ease-out) backwards;
+}
+.hero > :nth-child(2) { animation-delay: 0.07s; }
+.hero > :nth-child(3) { animation-delay: 0.14s; }
+.hero > :nth-child(4) { animation-delay: 0.21s; }
+.hero > :nth-child(5) { animation-delay: 0.28s; }
+
+.hero .logo-svg {
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+  color: var(--accent);
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 4.5vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+/* La acción de continuar actual usa .welcome-primary. */
+
+/* ---------- 8) Sugerencias: hairline, sin sombra de "AI card" ---------- */
+.sugerencia:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* ---------- 9) Markdown: bloque de código con cabecera (lenguaje + copiar) ---------- */
+.md .codigo {
+  margin-block: 14px;
+  background: var(--elev-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.md .codigo-barra {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px 6px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+}
+.md .codigo-idioma {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+.md .codigo-copiar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.md .codigo-copiar:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-1);
+}
+.md .codigo pre {
+  margin: 0;
+  padding: 14px 16px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow-x: auto;
+}
+.md .codigo pre code {
+  background: transparent;
+  color: var(--text-1);
+  padding: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+/* el inline code deja el acento: ChatGPT lo usa neutro, el color es de link */
+.md :not(pre) > code {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-1);
+}
+
+/* tema hljs: GitHub Dark suavizado para convivir con el grafito */
+.md .hljs {
+  color: var(--text-1);
+  background: transparent;
+}
+.md .hljs-comment,
+.md .hljs-quote {
+  color: #7d8590;
+  font-style: italic;
+}
+.md .hljs-keyword,
+.md .hljs-selector-tag,
+.md .hljs-literal,
+.md .hljs-type {
+  color: #ff857d;
+}
+.md .hljs-string,
+.md .hljs-regexp,
+.md .hljs-addition {
+  color: #9ecbff;
+}
+.md .hljs-number,
+.md .hljs-symbol,
+.md .hljs-bullet {
+  color: #f2a86f;
+}
+.md .hljs-title,
+.md .hljs-title.function_,
+.md .hljs-section {
+  color: #d3b6ff;
+}
+.md .hljs-attr,
+.md .hljs-attribute,
+.md .hljs-variable,
+.md .hljs-template-variable,
+.md .hljs-property,
+.md .hljs-params {
+  color: #8ecbff;
+}
+.md .hljs-built_in,
+.md .hljs-class .hljs-title {
+  color: #ffc786;
+}
+.md .hljs-name,
+.md .hljs-tag,
+.md .hljs-selector-class,
+.md .hljs-selector-id {
+  color: #7dcf95;
+}
+.md .hljs-meta,
+.md .hljs-doctag {
+  color: #8b949e;
+}
+.md .hljs-emphasis {
+  font-style: italic;
+}
+.md .hljs-strong {
+  font-weight: 600;
+}
+
+/* ---------- 10) Táctil: nada importante vive solo de :hover ---------- */
+@media (hover: none), (pointer: coarse) {
+  /* Las acciones actuales conservan su estado tactile en .msg-acciones-disparador. */
+  /* borrar chat del sidebar con diana táctil real */
+  .item-x {
+    opacity: 1;
+    width: 32px;
+    height: 32px;
+  }
+  /* diana mínima de 44px (Apple HIG) para cámara/mic/enviar */
+  .composer .icon-btn,
+  .composer .send-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* la píldora de tabletas reserva 100px a la izquierda para los botones
+   superpuestos: con dianas de 44px hacen falta unos px más de aire */
+@media (hover: none) and (min-width: 561px), (pointer: coarse) and (min-width: 561px) {
+  .composer {
+    padding-left: 106px;
+  }
+}
+
+@media (max-width: 560px) {
+  /* iOS hace zoom si el input tiene menos de 16px (rompía el layout) */
+  .buscador input {
+    font-size: 16px;
+  }
+  /* sin card no hace falta padding: el texto queda al ras del avatar */
+  .turn-cuerpo {
+    padding: 0;
+    border-radius: 0;
+  }
+}
+
+/* ============ ACESIBILIDAD: el stagger del hero no espera en reduced-motion ============ */
+@media (prefers-reduced-motion: reduce) {
+  .hero > * {
+    animation-delay: 0s !important;
+  }
+}
+
