@@ -100,7 +100,7 @@ No se modifica en esta tanda, por decisión explícita del usuario:
 
 - `kira_server.py` bajó de 3.393 a 3.094 líneas.
 - Nuevo paquete `Cerebro/Backend/app/` con fábrica, contexto y schemas.
-- Los 35 paths API se declaran en los routers de cuentas, sistema, dispositivo, chat y audio.
+- Los 36 paths API se declaran en los routers de cuentas, sistema, dispositivo, chat y audio.
 - `kira_server:app` y todos los paths/métodos siguen iguales.
 - La implementación de chat, memoria, TTS y serial continúa en el runtime legado;
   en esta fase sólo se movió la superficie HTTP y el seam de inyección.

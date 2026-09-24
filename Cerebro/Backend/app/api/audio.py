@@ -1,4 +1,4 @@
-"""TTS, recording, transcription and VAD listening routes."""
+"""TTS, recording, transcription and manual listening routes."""
 
 from __future__ import annotations
 

@@ -197,6 +197,13 @@ async def api_stop(services: BackendContext = Depends(get_backend_context)):
     return {"ok": True}
 
 
+@router.post("/api/cancelar")
+async def api_cancelar(services: BackendContext = Depends(get_backend_context)):
+    # Descarta una captura manual sin convertirla en un AUDIO:END enviable.
+    services.serial_manager().enviar("CANCELAR")
+    return {"ok": True}
+
+
 @router.post("/api/comando")
 async def api_comando(
     body: ComandoRequest,

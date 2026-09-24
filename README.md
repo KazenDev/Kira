@@ -20,6 +20,13 @@ Kira es una IA conversacional con memoria local, micro:bit, TTS y una interfaz w
 
 La primera cuenta creada recibe una copia del snapshot legacy de Kira; el original queda intacto. Cada cuenta tiene memoria, diario, conversaciones, grabaciones y RAG derivados en su propio directorio. Los datos runtime, credenciales, bases SQLite, `.env`, `node_modules`, `.venv` y referencias/binarios externos no se versionan.
 
+## Micro:bit
+
+La escucha del micrófono es manual: el comando `ESCUCHAR` deja la placa
+armada, el primer A abre el micro, el segundo A envía el audio y B lo cancela.
+No se usa VAD para cerrar el turno. El firmware se compila con el proyecto
+CODAL local y se flashea como `MICROBIT.hex`.
+
 ## Verificación
 
 Desde `Cerebro/Backend`:

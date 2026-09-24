@@ -21,6 +21,45 @@
 
 MicroBit uBit;
 
+// Botones de la escucha manual. Se detectan flancos, no niveles, para que
+// mantener A no termine la captura inmediatamente despues de iniciarla.
+static bool botonAAnterior = false;
+static bool botonBAnterior = false;
+
+static void atenderBotonesEscucha()
+{
+    bool a = uBit.buttonA.isPressed();
+    bool b = uBit.buttonB.isPressed();
+    bool pulsoA = a && !botonAAnterior;
+    bool pulsoB = b && !botonBAnterior;
+    botonAAnterior = a;
+    botonBAnterior = b;
+
+    // En metronomo A/B ya tienen su propio control de tempo.
+    if (modoMetro) return;
+
+    if (modoEscuchar) {
+        if (pulsoB) {
+            // B manda siempre: cancela y descarta, incluso si A+B aparecen.
+            escucharCancelar();
+        } else if (pulsoA) {
+            if (escucharMicroActivo()) {
+                // Segundo A: cerrar el stream y enviarlo al backend.
+                escucharDetener();
+            } else {
+                // Primer A después de ESCUCHAR: abrir el micrófono.
+                escucharIniciar();
+            }
+        }
+    } else if (pulsoA) {
+        // Primer A: abrir el microfono, apagar otros modos y mostrar el aro.
+        detenerHablar();
+        detenerLoading();
+        detenerVoz();
+        escucharIniciar();
+    }
+}
+
 // ---------------------------------------------------------------------------
 // MAIN: solo carga y despacha
 // ---------------------------------------------------------------------------
@@ -49,6 +88,7 @@ int main()
     while (1) {
         // Si llego un comando de la IA, lo procesa (ACK inmediato)
         revisarSerial();
+        atenderBotonesEscucha();
 
         // Renderiza la emocion ACTIVA:
         //  - TALK: la boca habla con LA BOCA DE LA EMOCION ACTIVA (los
@@ -77,12 +117,11 @@ int main()
         }
         else if (modoLoading)
             mostrarLoadingBucle();
-        // ESCUCHA GPT: el aro reacciona a tu voz (nivel del sink de
-        // grabacion) y el VAD corta solo al dejar de hablar. El frame y
-        // el VAD van juntos; escucharDetener() los corta a ambos.
+        // ESCUCHA MANUAL: el aro reacciona al nivel real del microfono.
+        // No se llama al VAD: A envia y B cancela mediante el handler de
+        // botones de arriba.
         else if (modoEscuchar) {
             escucharFrame();
-            escucharVad();
         }
         else if (modoVoz)
             mostrarVozBucle();

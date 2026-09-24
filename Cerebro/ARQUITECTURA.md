@@ -69,14 +69,16 @@ segmentación de frases y helpers de TTS.
 - `BleRelayHub`/`RelayBroker`: propiedad, latido, cola, expiración y NACK del
   puente del navegador. Se mantienen los límites históricos del relay.
 - `DeviceState`: estado de conexión, ACK y réplica LED.
-- `consume_audio_capture`: parser puro para `AUDIO:START`/`AUDIO:END`, incluso
-  cuando los markers llegan partidos entre lecturas.
+- `consume_audio_capture`: parser puro para `AUDIO:START`/`AUDIO:END` y
+  `AUDIO:CANCEL`, incluso cuando los markers llegan partidos entre lecturas.
+- La escucha del micro:bit es manual: `ESCUCHAR` arma el modo, A abre y envía,
+  B cancela; no se ejecuta VAD para decidir el fin del turno.
 - Las operaciones de captura, escucha y sensor usan un lock exclusivo para que
   dos chats no pisen la misma respuesta del micro:bit.
 
 ## 3. Contrato HTTP que se conserva
 
-Los 35 paths API siguen registrados con los mismos métodos y shapes principales:
+Los 36 paths API siguen registrados con los mismos métodos y shapes principales:
 
 - `GET /api/personajes`
 - `GET /api/archivos/{nombre}` y `GET /grabaciones/{nombre}` (archivos del usuario autenticado)
@@ -94,6 +96,7 @@ Los 35 paths API siguen registrados con los mismos métodos y shapes principales
 - `/api/loading`, `/voz`, `/talk`, `/calla`, `/emocion`, `/sync`, `/stop`,
   `/comando`
 - `POST /api/transcribir`, `/grabar`, `/escuchar`
+- `POST /api/cancelar` (descarta `AUDIO:CANCEL` sin pasar por transcripción)
 
 Los schemas aceptan campos extra y mantienen la normalización legacy. Las rutas
 que ya devolvían 400/404 para errores controlados conservan esos códigos; no se

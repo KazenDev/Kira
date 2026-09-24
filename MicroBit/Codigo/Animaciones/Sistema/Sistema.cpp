@@ -12,7 +12,7 @@
 #include "Loading/Luz/Luz.h"      // recalibrarLuz() para el comando CALIB
 #include "Transiciones/Transiciones.h"   // efectos entre emociones (60 FPS)
 #include "Grabar/Grabar.h"   // RECORD:<ms> -> audio crudo del microfono por serial
-#include "Escuchar/Escuchar.h" // ESCUCHAR: escucha GPT con VAD (corta solo)
+#include "Escuchar/Escuchar.h" // ESCUCHAR: escucha manual; A envía y B cancela
 #include "Voz/Voz.h"           // VOZ: aro que reacciona al nivel de voz real
 #include "Metronomo/Metronomo.h" // METRO:<bpm>:<acento>: metronomo para musicos
 #include "BleUart/BleUart.h"   // BLE: los mismos comandos por Bluetooth
@@ -133,14 +133,11 @@ void procesarComando(ManagedString cmd)
         // loading: la proxima pasada de animarLuz pedira tapar/iluminar.
         recalibrarLuz();
     }
-    // ESCUCHAR -> ESCUCHA GPT: prende el aro + arranca el stream de audio
-    // en vivo (AUDIO:START, samples a la PC). El VAD (escucharVad, en el
-    // bucle principal) corta SOLO cuando dejas de hablar (silencio 1.5s)
-    // o por timeout. Asi la web muestra el orbe reaccionando y al cortar
-    // se transcribe lo que dijiste.
+    // ESCUCHAR -> ESCUCHA MANUAL: deja la placa armada y muestra el aro.
+    // El primer A abre el micro; el segundo A envía; B cancela.
     else if (cmd == "ESCUCHAR") {
-        metroDetener();   // la escucha necesita el mic y la cara: fuera metro
-        escucharIniciar();
+        metroDetener();
+        escucharArmar();
     }
     // RECORD:<ms> -> GRABADOR: manda el audio crudo del microfono por
     // serial (AUDIO:START, bytes 8-bit a 11kHz, AUDIO:END). Bloquea el
@@ -158,6 +155,17 @@ void procesarComando(ManagedString cmd)
             uBit.sleep(ms);
             grabarDetener();
         }
+    }
+    // CANCELAR: el cancelado manual del frontend (o un comando remoto)
+    // descarta la captura actual sin cerrar un AUDIO:END. La cancelación
+    // física por B llama directamente a escucharCancelar().
+    else if (cmd == "CANCELAR" || cmd == "CANCEL") {
+        if (modoEscuchar)
+            escucharCancelar();
+        detenerHablar();
+        detenerLoading();
+        detenerVoz();
+        metroDetener();
     }
     // SENSOR:* -> herramientas de la IA: leen un sensor REAL y responden
     // por serial con el valor (TEMP:24, LUZ:120, BOTON:1:0, ACCEL:...).

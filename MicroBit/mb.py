@@ -52,6 +52,7 @@ COMANDOS = {
     "metrostop": "METRO:STOP", "metrooff": "METRO:STOP",
     # cortar todo
     "stop": "STOP", "parar": "STOP",
+    "cancelar": "CANCELAR", "cancel": "CANCELAR",
 }
 
 AYUDA = """\
@@ -67,7 +68,7 @@ EN BUCLE (hasta que mandes stop o otra cosa):
   test              demo automatica de todas las emociones
   trans / transall / trans0-2     transiciones de prueba
 SENSORES (lectura, no tocan la cara): temp luz boton accel
-CONTROL:  stop (corta y vuelve a alegria) | salir | ayuda
+CONTROL:  stop (corta y vuelve a alegria) | cancelar (descarta la escucha) | salir | ayuda
 OTRO:     cualquier comando en MAYUSCULAS va tal cual al micro:bit"""
 
 

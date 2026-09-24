@@ -2704,17 +2704,12 @@ async def api_grabar(body: dict):
 
 
 async def api_escuchar():
-    """ESCUCHA GPT (SSE): el micro:bit streamea el audio EN VIVO y el
-    SERVER decide cuando terminaste de hablar con Silero VAD (red neuronal:
-    distingue voz real de ruido, pausas y colas de palabra). Al detectar
-    el fin del turno manda STOP al micro:bit y transcribe. Mientras tanto
-    manda eventos con el NIVEL del audio para que la web pinte el orbe.
+    """ESCUCHA MANUAL (SSE): el micro:bit mantiene el microfono abierto.
 
-    Eventos SSE:
-      data: {"tipo": "nivel", "nivel": 0..~90}   (en vivo)
-      data: {"tipo": "vad", "prob": 0..1}        (en vivo, debug)
-      data: {"tipo": "fin", "transcripcion": ..., "archivo": ...}
-      data: {"tipo": "error", "mensaje": ...}
+    No se ejecuta VAD ni se decide el fin por voz/silencio. El firmware
+    envia ``AUDIO:END`` cuando se pulsa A por segunda vez, o
+    ``AUDIO:CANCEL`` cuando se pulsa B. El timeout de 120 s es sólo una
+    guarda de seguridad para no dejar una conexión colgada.
     """
     loop = asyncio.get_running_loop()
     cola: asyncio.Queue = asyncio.Queue()
@@ -2723,41 +2718,14 @@ async def api_escuchar():
         # thread-safe: el hilo del serial pone el nivel en la cola asyncio
         loop.call_soon_threadsafe(cola.put_nowait, ("nivel", nivel))
 
-    from vad import VADSilero  # import local: el modelo carga lazy 1 vez
-
-    vad = VADSilero()
-    estado = {"stop_enviado": False, "t0": time.monotonic()}
-
-    def cortar(motivo: str):
-        """Termina la escucha YA (manda STOP al micro:bit)."""
-        if estado["stop_enviado"]:
-            return
-        estado["stop_enviado"] = True
-        print(f"[VAD] corte por {motivo}")
-        serial_mgr.enviar("STOP")
-
-    def cb_chunk(chunk: bytes):
-        # corre en el hilo del serial: Silero come los samples en vivo
-        if estado["stop_enviado"]:
-            return
-        try:
-            vad.procesar(chunk)
-        except Exception as e:
-            print(f"[VAD] error (ignorado): {e}")
-        if vad.fin_detectado:
-            cortar("fin del turno (silencio neuronal)")
-            return
-        # guards de tiempo del server (el firmware tiene los suyos)
-        t = (time.monotonic() - estado["t0"]) * 1000.0
-        if not vad.hubo_voz and t >= config.VAD_SIN_VOZ_MAX_MS:
-            cortar("nadie hablo (timeout)")
-        elif t >= config.VAD_ESCUCHA_MAX_MS:
-            cortar("tiempo maximo de escucha")
-
     def trabajo():
-        # BLOQUEANTE: captura hasta AUDIO:END (el SERVER corta via STOP)
-        samples = serial_mgr.escuchar(cb_nivel, cb_chunk)
+        samples = serial_mgr.escuchar(cb_nivel, timeout=120.0)
+        if serial_mgr.ultima_captura_cancelada:
+            return {"cancelado": True}
         if samples is None or len(samples) < 1000:
+            # Limpieza de seguridad si el stream se cortó o venció el timeout;
+            # no es un corte por VAD.
+            serial_mgr.enviar("CANCELAR")
             return {"error": "el micro:bit no respondio la escucha"}
         mp3_path = samples_a_mp3(samples)
         if not mp3_path:
@@ -2774,7 +2742,6 @@ async def api_escuchar():
     async def generador():
         fin_emitido = False
         while True:
-            # drenar los niveles que llegaron mientras tanto
             while not cola.empty():
                 tipo, dato = cola.get_nowait()
                 if tipo == "nivel":
@@ -2786,7 +2753,9 @@ async def api_escuchar():
                         r = tarea.result()
                     except Exception as e:
                         r = {"error": str(e)}
-                    if "error" in r:
+                    if r.get("cancelado"):
+                        yield "data: " + json.dumps({"tipo": "cancelado"}) + "\n\n"
+                    elif "error" in r:
                         yield f"data: {json.dumps({'tipo': 'error', 'mensaje': r['error']})}\n\n"
                     else:
                         yield f"data: {json.dumps({'tipo': 'fin', **r})}\n\n"

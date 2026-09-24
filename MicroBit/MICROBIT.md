@@ -64,7 +64,8 @@ MicroBit/
    que manda el frame real a la PC) → **apaga el micrófono** al boot (CODAL lo
    prende solo; solo la animación Barra lo reactiva).
 2. Bucle infinito: `revisarSerial()` (escucha comandos **sin bloquear** la
-   animación) y renderiza la emoción activa (o boca hablando, o loading).
+   animación), atiende los flancos de A/B para la escucha manual y renderiza
+   la emoción activa (o boca hablando, o loading).
 
 ---
 
@@ -81,11 +82,25 @@ al instante, y después lo que corresponda.
 | `LOAD0` … `LOAD9` | Bucle continuo con UN patrón específico (para probar/preview) |
 | `LOADALL` | Preview de todos los loadings en secuencia |
 | `STOP` | Vuelve a la alegría (con transición) |
+| `CANCELAR` | Descarta la escucha manual sin transcribir (`AUDIO:CANCEL`) |
 | `CALIB` | Recalibra el sensor de luz del patrón 9 |
 | `TEST` | Demo automática (recorre emociones + loadings) |
 | `BLINK` | Parpadeo simple de ojos |
 | `TRANS` / `TRANS0/1/2` / `TRANSALL` | Probar transiciones |
 | `SENSOR:TEMP` / `SENSOR:LUZ` / `SENSOR:BOTON` / `SENSOR:ACCEL` | Lee un sensor REAL y responde `TEMP:24`, `LUZ:120`, `BOTON:1:0`, `ACCEL:x:y:z:pitch:roll` |
+| `ESCUCHAR` | Arma la escucha manual; A abre, A envía y B cancela |
+
+---
+
+## 🎙️ ESCUCHA MANUAL CON A/B
+
+- **Primer A**: abre el micrófono, activa el stream de audio y muestra el aro
+  que reacciona al nivel real de la voz.
+- **Segundo A**: termina el stream y envía `AUDIO:END`; el backend convierte,
+  transcribe y entrega el texto a Kira.
+- **B**: cancela la captura y envía `AUDIO:CANCEL`; el audio se descarta.
+- No se usa VAD ni se corta por silencio: la persona decide exactamente cuándo
+  termina el turno. El comando remoto `ESCUCHAR` comparte este mismo modo.
 
 ---
 

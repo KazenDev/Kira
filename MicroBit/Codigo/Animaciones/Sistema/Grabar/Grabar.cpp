@@ -20,7 +20,7 @@ extern MicroBit uBit;
 
 volatile bool grabandoSerial = false;
 volatile bool replicaLedCallada = false;
-volatile float nivelAudio = 0.0f;   // nivel del chunk (para el VAD de escucha)
+volatile float nivelAudio = 0.0f;   // nivel del chunk (para el aro de escucha)
 
 #define GRABAR_CHUNK 128   // bytes por envio serial (1.1ms a 115200)
 
@@ -49,8 +49,8 @@ class GrabarSink : public DataSink
 
         // Nivel del chunk: desviacion media respecto a la media (cancela
         // el offset DC). Samples 8-bit signed centrados ~0: en silencio el
-        // nivel queda bajo (~2-8), con voz sube (~15-60). El VAD de la
-        // escucha GPT usa esto (el FFT no corre durante la grabacion).
+        // nivel queda bajo (~2-8), con voz sube (~15-60). El aro de
+        // escucha manual usa esto (el FFT no corre durante la grabacion).
         {
             long media = 0;
             for (int i = 0; i < len; i++) media += (int8_t)data[i];
@@ -107,10 +107,8 @@ void grabarIniciar()
     grabandoSerial = true;
 }
 
-void grabarDetener()
+static void grabarCerrar(const char *marcador)
 {
-    if (!grabandoSerial) return;
-
     // 1) Cortar el flujo: el sink deja de mandar samples
     grabandoSerial = false;
     uBit.audio.mic->dataWanted(DATASTREAM_NOT_WANTED);
@@ -127,18 +125,39 @@ void grabarDetener()
         grabador->n = 0;
     }
 
-    // 3) Cerrar el flujo para la PC.
-    // OJO (bug real de CODAL): Serial::send() devuelve DEVICE_SERIAL_IN_USE
-    // si OTRA fibra (el stream del mic) esta a mitad de un envio, y entonces
-    // los bytes se PIERDEN. Por eso el AUDIO:END puede no salir: reintentamos
-    // hasta que el serial quede libre.
+    // 3) Cerrar o cancelar el flujo para la PC. Serial::send() puede estar
+    // ocupado por la fibra del mic; reintentamos hasta que quede libre.
     for (int i = 0; i < 20; i++) {
-        int r = uBit.serial.send("AUDIO:END\n");
+        int r = uBit.serial.send(marcador);
         if (r != DEVICE_SERIAL_IN_USE)
             break;
-        uBit.sleep(25);   // esperar a que termine el envio en curso
+        uBit.sleep(25);
     }
 
     // 4) ReplicaLed ya puede volver a transmitir
     replicaLedCallada = false;
+}
+
+void grabarDetener()
+{
+    if (!grabandoSerial) return;
+    grabarCerrar("AUDIO:END\n");
+}
+
+void grabarCancelar()
+{
+    // Si se cancela justo después de iniciar, el backend todavía espera un
+    // marcador: lo enviamos aunque el sink todavía no haya producido samples.
+    if (!grabandoSerial) {
+        replicaLedCallada = true;
+        for (int i = 0; i < 20; i++) {
+            int r = uBit.serial.send("AUDIO:CANCEL\n");
+            if (r != DEVICE_SERIAL_IN_USE)
+                break;
+            uBit.sleep(25);
+        }
+        replicaLedCallada = false;
+        return;
+    }
+    grabarCerrar("AUDIO:CANCEL\n");
 }

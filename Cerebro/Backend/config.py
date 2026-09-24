@@ -148,10 +148,9 @@ RAG_SEMANTIC_DEDUP = os.getenv("KIRA_RAG_SEMANTIC_DEDUP", "1").strip().lower() n
 }
 RAG_DEDUP_THRESHOLD = float(os.getenv("KIRA_RAG_DEDUP_THRESHOLD", "0.97"))
 
-# ------------------- VAD Silero (corte de la ESCUCHA GPT) -------------------
-# El server corre Silero VAD (red neuronal, ONNX) en vivo sobre el audio que
-# streamea el micro:bit y decide CUANDO terminaste de hablar (mucho mas
-# preciso que el umbral de energia del firmware, que queda solo de respaldo).
+# ------------------- VAD Silero (opcional/legacy) -------------------
+# La escucha del micro:bit es manual: A envía y B cancela. Estas constantes
+# quedan disponibles para herramientas futuras, pero api_escuchar no las usa.
 VAD_MODELO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "silero_vad.onnx")
 VAD_PROB_VOZ = 0.5          # prob >= esto => frame con voz (inicio)
 VAD_PROB_SILENCIO = 0.35    # prob <= esto => silencio real (histeresis)
