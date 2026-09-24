@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">
+  <!-- Fondo beige crema, como el de WhatsApp Web -->
+  <rect width="260" height="260" fill="#efeae2"/>
+  <g stroke="#cfc8ba" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.85">
+
+    <!-- Reloj de bolsillo -->
+    <g transform="translate(34,46)">
+      <circle r="15"/>
+      <path d="M0 -9 V0 L5 3"/>
+      <circle r="1.6" fill="#cfc8ba" stroke="none"/>
+    </g>
+
+    <!-- Estrella -->
+    <g transform="translate(186,60)">
+      <path d="M0 -14 L3.4 -4.6 L13 -4.6 L5.3 1.4 L8 11 L0 5.4 L-8 11 L-5.3 1.4 L-13 -4.6 L-3.4 -4.6 Z"/>
+    </g>
+
+    <!-- Ojo -->
+    <g transform="translate(98,34)">
+      <path d="M-13 0 C-9 -7 9 -7 13 0 C9 7 -9 7 -13 0 Z"/>
+      <circle r="3.4"/>
+    </g>
+
+    <!-- Corazón -->
+    <g transform="translate(118,96)">
+      <path d="M0 12 C-11 3 -13 -4 -7 -7 C-3 -9 0 -5 0 -5 C0 -5 3 -9 7 -7 C13 -4 11 3 0 12 Z"/>
+    </g>
+
+    <!-- Nota musical -->
+    <g transform="translate(228,138)">
+      <path d="M-2 -14 V2"/>
+      <circle cx="-3" cy="4" r="4"/>
+      <circle cx="5" cy="1" r="4"/>
+      <path d="M-2 -14 L8 -12 V-2"/>
+    </g>
+
+    <!-- Nube con rayo -->
+    <g transform="translate(52,140)">
+      <path d="M-14 6 H-8 A9 9 0 0 1 -1 -4 A8 8 0 0 1 12 1 A6 6 0 0 1 14 6 Z"/>
+      <path d="M0 6 L-4 12 H1 L-3 18"/>
+    </g>
+
+    <!-- Flor -->
+    <g transform="translate(142,180)">
+      <circle r="3.2" fill="#cfc8ba" stroke="none"/>
+      <ellipse rx="4" ry="8"/>
+      <ellipse rx="4" ry="8" transform="rotate(72)"/>
+      <ellipse rx="4" ry="8" transform="rotate(144)"/>
+      <ellipse rx="4" ry="8" transform="rotate(216)"/>
+      <ellipse rx="4" ry="8" transform="rotate(288)"/>
+    </g>
+
+    <!-- Cohete -->
+    <g transform="translate(198,180)">
+      <path d="M0 12 C-7 8 -9 0 -6 -8 L0 -14 L6 -8 C9 0 7 8 0 12 Z"/>
+      <circle r="2.4" cy="-4"/>
+      <path d="M-6 12 L-9 16 M6 12 L9 16 M0 12 V17"/>
+    </g>
+
+    <!-- Luna creciente -->
+    <g transform="translate(36,216)">
+      <path d="M0 -13 A13 13 0 1 0 12 8 A10 10 0 0 1 0 -13 Z"/>
+    </g>
+
+    <!-- Cara de gato -->
+    <g transform="translate(188,220)">
+      <path d="M-11 6 L-15 -6 L-6 -1 L0 -4 L6 -1 L15 -6 L11 6 Z"/>
+      <path d="M-11 6 A11 6 0 0 0 11 6"/>
+      <circle cx="-4.5" cy="1.5" r="1.6" fill="#cfc8ba" stroke="none"/>
+      <circle cx="4.5" cy="1.5" r="1.6" fill="#cfc8ba" stroke="none"/>
+      <path d="M-2 4 Q0 6 2 4"/>
+    </g>
+
+    <!-- Papel arrugado / ticket -->
+    <g transform="translate(96,190)">
+      <rect x="-14" y="-16" width="28" height="34" rx="3"/>
+      <path d="M-14 -6 H14 M-14 2 H14"/>
+      <path d="M-8 -16 V-20 M0 -16 V-20 M8 -16 V-20"/>
+    </g>
+
+    <!-- Rayo pequeño -->
+    <g transform="translate(150,40)">
+      <path d="M0 -12 L-7 2 H-1 L-6 12 L7 -2 H1 Z"/>
+    </g>
+
+  </g>
+</svg>

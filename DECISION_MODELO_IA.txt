@@ -1,0 +1,344 @@
+================================================================================
+  KIRA - DECISION DEL MODELO DE IA  (feria de ciencias)
+  Fecha: 02/08/2026
+================================================================================
+
+MODELO ELEGIDO
+--------------------------------------------------------------------------------
+  deepseek-v4-flash  (update 0731, salio el 31/07/2026)
+
+  - Arquitectura: 284B totales, 13B activos por token (MoE) -> RAPIDO
+  - Contexto: 1M tokens nativo, hasta 384K de salida
+  - Precio: $0.14/M input, $0.28/M output (cache hit $0.0028 -> casi gratis)
+  - Post-training 0731: optimizado para agentes, herramientas y JSON
+  - Los alias viejos (deepseek-chat / deepseek-reasoner) se retiraron
+    el 24/07/2026: toda la familia migro a V4.
+
+PROVEEDOR FINAL - NANO GPT  (VERIFICADO CON PRUEBAS REALES 02/08)
+--------------------------------------------------------------------------------
+  - Proveedor: nano-gpt.com (OpenAI-compatible, formato OpenRouter)
+  - Base URL: https://nano-gpt.com/api/v1
+  - Modelo USADO: deepseek/deepseek-v4-flash-0731  (SIN el sufijo :thinking)
+  - API key: sk-nano-... (guardada en config.py cuando se cree)
+  - Saldo: $1.50 cargado por el usuario -> ~25.000 respuestas
+
+  RESULTADOS DE LA PRUEBA REAL (02/08, con el prompt de Kiro):
+  - JSON MODE SI FUNCIONA: response_format json_object respeta
+    el schema y la personalidad perfectamente
+  - La variante :thinking QUEDA DESCARTADA (A/B test 3 rondas):
+      sin thinking : 2-4s, JSON SIEMPRE valido, personalidad intacta
+      con thinking : 7-14s, y FALLA: ronda 1 devolvio content VACIO,
+                     ronda 3 corto el JSON a la mitad (el
+                     razonamiento se come los max_tokens -> el JSON
+                     cortado hace explotar json.loads() en Python)
+    La personalidad sale IGUAL de buena sin thinking: la respuesta
+    triste fue "perro es familia, te entiendo, te banco un rato"
+  - Temperatura 0.3 y 1.3: respetadas, JSON valido en ambas
+  - Costo real medido: ~742 tokens/respuesta -> ~$0.00006 por
+    respuesta (input $0.073/M, output $0.15/M en modo Auto)
+
+  NOTA LATENCIA: el routing Auto a veces elige proveedores lentos
+  (se midio una llamada de 12.7s). Para la feria, si hace falta
+  velocidad, probar forzar proveedor rapido (DeepInfra 1.1s) o
+  aceptar la varianza (2-3s lo normal).
+
+  El plan original (API oficial de DeepSeek) queda como backup:
+  cuando el usuario tenga 2 USD para cargar ahi, la base URL y el
+  modelo cambian pero el codigo es identico (OpenAI-compatible).
+
+POR QUE ESTE MODELO
+--------------------------------------------------------------------------------
+  - Roleplay fuerte (instrucciones flexibles + narrativa viva) -> Kira
+  - JSON mode NATIVO y MEJORADO en el update 0731 -> justo lo que usamos
+  - Function calling nativo (para despues: buscar en internet)
+  - Baratisimo para la feria (fracciones de centavo por conversacion)
+
+================================================================================
+  JSON MODE - OBLIGATORIO EN TODAS LAS RESPUESTAS
+================================================================================
+
+FLAG:
+  response_format: { "type": "json_object" }
+
+REGLAS OBLIGATORIAS (bugs conocidos de DeepSeek):
+  1. La palabra "json" DEBE aparecer en el system prompt + un ejemplo
+     del schema (si no, el modelo puede generar espacios en blanco
+     hasta el limite de tokens -> parece "colgado")
+  2. max_tokens generoso (200-300) para que NUNCA corte el JSON a la
+     mitad (si corta, json.loads() explota)
+  3. Primero SIN streaming: esperamos el JSON completo (1-3s, perfecto
+     para el micro:bit que tarda ~2s en la transicion)
+
+SCHEMA DE SALIDA (una sola bandeja con texto + emocion):
+  {
+    "emotion": "happy" | "sad" | "angry" | "surprised" | "neutral"
+             | "fastidio" | "miedo" | "cansado" | "talk" | "loading" | "stop",
+    "message": "el texto que Kira dice, en espanol rioplatense"
+  }
+
+  Python:
+    - emotion -> comando serial al micro:bit (HAPPY, SAD, TALK...)
+    - message -> lo que se muestra / se escucha
+
+================================================================================
+  TEMPERATURA POR EMOCION  (ESTADO EMOCIONAL PERSISTENTE)
+================================================================================
+
+IDEA: como en la vida real, cada emocion cambia como respondemos:
+      estar enojado te hace predecible (corto y duro), estar feliz
+      te hace creativo y expansivo. La temperatura se elige ANTES de
+      cada llamada, segun la emocion ACTUAL de Kira (la que mando en
+      su ultima respuesta). El modelo NO controla su propia
+      temperatura: Python la elige por el estado emocional.
+
+RANGO VALIDO DE LA API: temperature [0.0 - 2.0], default 1.0
+  - Baja (0.0-0.5) = determinista, predecible, corto
+  - Media (0.7-1.0) = balanceado
+  - Alta (1.2-1.5) = creativo, impredecible, expresivo
+  - NO usar temperature y top_p a la vez (DeepSeek lo desaconseja)
+
+TABLA DEFINITIVA (basada en psicologia del habla + docs de temperatura):
+  La temperatura controla diversidad y longitud implicita:
+  - baja (0.2-0.5) = corto, repetitivo, predecible  (negativas)
+  - media (0.7-1.0) = directo, natural              (neutra)
+  - alta (1.2-1.4) = largo, variado, expresivo      (positivas)
+
+  Feliz      😄  1.3   (mas palabras, vocabulario diverso -> temp alta)
+  Triste     😢  0.6   (menos palabras, repeticion, auto-foco -> media-baja)
+  Enojado    😠  0.3   (frases cortas, imperativos, vocabulario reducido -> MUY baja)
+  Sorprendido😲  1.2   (exclamaciones espontaneas -> alta pero contenida)
+  Neutral    😑  0.9   (directo pero natural -> media)
+  Fastidio   😤  0.4   (cortante, trunca frases, monosilabos -> baja)
+  Miedo      😨  0.5   (hesita, repite, fragmentado -> baja-media)
+  Cansado    😪  0.4   (minimo esfuerzo, frases cortas -> baja)
+  (talk / loading / stop heredan la emocion actual)
+  (el Corazon ❤️ se elimino del proyecto: no se usa)
+
+CAMBIO DINAMICO - TRANSICION SUAVE (RAMP):
+  Cuando Kira cambia de emocion, la temperatura NO salta de golpe:
+  Python la acerca en PASOS hasta el objetivo de la emocion nueva.
+  Ejemplo: feliz(1.3) -> enojada(0.3):
+    respuesta 1: 1.3   (sigue feliz)
+    cambio a enojada -> rampa: 1.1, 0.9, 0.7, 0.5, 0.3
+    (una respuesta por paso, o si el cambio es fuerte, 2 pasos por
+     respuesta - ajustable en vivo en la feria)
+  Por que: en la vida real no te enojas de golpe - la temperatura
+  baja gradualmente igual que se te va calentando la sangre.
+  Un enojado que sigue 1.3 un rato suena raro (muy creativo para
+  estar furioso); un feliz que cae a 0.3 al instante se corta.
+
+FLUJO EN PYTHON (resumen):
+  1. estado = "happy" (inicial)
+  2. antes de llamar: temperature = TABLA[estado]
+  3. llamada a la API con system prompt + historial + json mode
+  4. respuesta JSON: { emotion: NUEVA, message: TEXTO }
+  5. Python: manda emotion al micro:bit por serial + muestra/habla TEXTO
+  6. estado = NUEVA  -> la proxima respuesta usa la temperatura de esa
+  7. repetir
+
+NOTAS:
+  - frequency_penalty / presence_penalty: DEPRECADOS en DeepSeek
+    (se pueden mandar pero no hacen nada)
+  - top_k: no soportado
+  - Despues (fase 2): function calling para buscar en internet,
+    con el patron de 2 pasos (tools primero, JSON al final)
+
+================================================================================
+  PERSONAJES - KIRA Y KIRO  (SON HERMANOS)
+================================================================================
+
+  DOS personajes, cada uno con su nombre, su voz y su personalidad.
+  El publico elige a QUIEN hablarle al inicio (selector de personaje,
+  como elegir personaje en un juego). NO es "elegir una voz":
+  es elegir un companero de charla. El micro:bit (la cara) es el
+  MISMO para los dos: las emociones no cambian, lo que cambia es
+  el system prompt + la voz + el nombre.
+
+  KIRA  👩  (femenina) - LA SENTIMENTAL
+    - Se toma las cosas un poco mas EN SERIO
+    - Empatica, reflexiva, menos bromas que Kiro
+    - No es tan chill como su hermano
+    - Voz: FEMENINA - PENDIENTE de conseguir (clonar 5s o galeria Fish)
+
+  KIRO  👨  (masculino) - EL CHILL
+    - El tipico wey chill: relajado, canchero, hace chistes
+    - Le queda PERFECTO la voz masculina ya clonada y probada
+      (la natural de los mp3: hola_gato, frase_espanola...)
+    - voice_id ya existente: c864cf6dd05f4efb829b42d8b515614b
+
+  COMO SE INTEGRA EN EL CEREBRO:
+    personajes/
+      kira.json   <- nombre, voice_id, system prompt, saludo
+      kiro.json   <- nombre, voice_id, system prompt, saludo
+    El resto del sistema (JSON mode, temperaturas, ramp, serial al
+    micro:bit) es IDENTICO para los dos.
+
+================================================================================
+  TTS - FISH AUDIO S2.1 PRO FREE  (CONFIRMADO GRATIS, $0.00)
+================================================================================
+
+  - Modelo: s2.1-pro-free  (gratis hasta el 31/08/2026, verificado en el
+    panel del usuario: 1.395 bytes usados, $0.00 de costo)
+  - OJO: el modelo pagado s2.1-pro responde 402 (insufficient credit) si
+    la cuenta no tiene saldo de API - usar SIEMPRE s2.1-pro-free
+  - Control de emociones: tags [angry] [cheerful] [sad] [gasp] [whispering]
+    [yawning]... dentro del texto -> la VOZ suena con la misma emocion
+    que la CARA del micro:bit (derivada del campo emotion del JSON)
+  - La voz se obtiene con voice_id (clonada). KIRO ya tiene la suya:
+    c864cf6dd05f4efb829b42d8b515614b. KIRA (femenina) pendiente.
+  - API key de Fish Audio: la del usuario (sin saldo, pero no hace falta
+    con el modelo free)
+
+================================================================================
+  DEPLOY - WINDOWS + EXE UNICO (OPCION B - DECIDIDA 02/08)
+================================================================================
+
+  - Laptop del cole: WINDOWS, con permisos de instalacion
+  - Se compila un UNICO KIRA.exe con PyInstaller: doble clic y listo,
+    nada de instalar Python en el cole
+  - Arquitectura: servidor local (http://localhost:8000) + interfaz web
+    linda en el navegador (se abre sola con webbrowser)
+  - El servidor Python hace todo: DeepSeek (urllib, sin CORS), Fish Audio
+    (sin CORS), serial al micro:bit (pyserial, puerto COM en Windows)
+  - API keys guardadas dentro del servidor (no expuestas al navegador)
+  - En el USB: KIRA.exe + copia del proyecto
+
+  CROSS-PLATFORM (decidido 02/08):
+    - TODO el desarrollo y testing se hace en LINUX (la PC del usuario):
+      el servidor, la interfaz (vite build es identico en cualquier OS),
+      el serial (/dev/ttyACM0) y el TTS funcionan igual
+    - Lo UNICO que NO es cross-platform es PyInstaller: el .exe SOLO se
+      puede compilar EN Windows (no se compila un exe desde Linux)
+    - El puerto serial se detecta solo: Linux /dev/ttyACM*, Windows COM*
+      (serial.tools.list_ports - 1 linea de codigo)
+    - Paso final: compilar KIRA.exe en cualquier PC Windows
+      (laptop del cole o la que sea)
+    - Python PORTABLE (WinPython) = plan B: zip que se descomprime,
+      no instala nada, sirve para compilar el exe en la laptop del cole
+      sin ensuciarla, o para tocar codigo en vivo el dia de la feria
+
+================================================================================
+  CRONOGRAMA - FERIA EN 1 MES  (feria ~inicios de septiembre 2026)
+================================================================================
+
+  Semana 1: Cerebro andando - kira_server.py + config.py + serial
+  Semana 2: Interfaz React linda - chat + selector Kira/Kiro + animaciones
+  Semana 3: Personalidades + voces (Kira femenina) + pruebas con el micro:bit
+  Semana 4: Compilar exe en Windows + probar en la laptop del cole + pulido
+================================================================================
+
+  - Vite + React + TypeScript (plantilla oficial react-ts): el stack
+    estandar para apps interactivas tipo chat
+  - CSS a mano con animaciones (gradientes, blur, transiciones):
+    maximo control, sin Tailwind
+  - CERO CDNs (ni Tailwind CDN, ni Google Fonts): la laptop del cole
+    puede tener firewall o internet inestable - TODO se compila y
+    empaqueta DENTRO del exe. Si dependemos de un CDN, la interfaz
+    se puede romper en plena feria.
+  - Fuentes lindas: descargadas y empaquetadas localmente (si se usan)
+
+  POR QUE NO ASTRO (investigado 02/08):
+    - Astro es para sitios de contenido (blogs, docs, marketing) donde
+      el 90% es texto estatico y solo se "hidratan" islas interactivas
+    - Nuestro chat es 90% INTERACTIVO -> las islas no aportan nada,
+      terminariamos metiendo React DENTRO de Astro como envoltorio
+    - Vite + React plano es la herramienta correcta para una app de chat
+
+  INTEGRACION CON EL EXE (patron probado):
+    - vite.config: base: './' (paths relativos de assets)
+    - kira_server.py: sys._MEIPASS para encontrar la carpeta dist/
+      adentro del exe (patron resource_path())
+    - PyInstaller: --add-data "dist;dist" (Windows usa ; como separador)
+
+================================================================================
+  PERSONALIDADES - DECIDIDO 02/08  (escrito en personajes/*.json)
+================================================================================
+
+  3 decisiones de fondo:
+  1) Kira y Kiro SABEN que son IA en una feria de ciencias
+     (lo dicen con orgullo si les preguntan, pero no insisten)
+  2) Respuestas CORTAS estilo WhatsApp: 1 a 3 frases, nada de novelas
+  3) Se MENCIONAN entre si: "mi hermano diria que...",
+     "Kira dice que soy un pajero" - refuerza que son hermanos
+
+  KIRA  - LA SENTIMENTAL (saludo: "Hola... yo soy Kira. ¿Y vos cómo andás?")
+    Empatica, reflexiva, se toma las cosas en serio pero con calidez.
+    Menos bromas que Kiro, pero cuando hace una, es buena.
+
+  KIRO  - EL CHILL (saludo: "¿Qué onda? Soy Kiro. Pasa, sentate.")
+    Re chill, canchero, jodon. Si el otro esta triste, afloja el chiste.
+    Jode con carino, suave ("bolu"), nada grosero - es una feria.
+
+  Formato de personajes/kira.json y kiro.json:
+    nombre, genero, rol, emoji, voice_id, color, saludo, system_prompt
+    (el system_prompt lleva la REGLA DE ORO: JSON valido + lista de
+     emociones exactas + "sin nada mas que el JSON")
+
+================================================================================
+  CEREBRO CONSTRUIDO Y PROBADO (03/08)
+================================================================================
+
+  Personaje/  -> kira.json + kiro.json (prompts mejorados para TTS:
+                 pausas, puntos suspensivos, sin emojis, numeros en
+                 palabras -> la VOZ suena natural)
+  Backend/    -> kira_server.py (FastAPI asincrono) + config.py
+                 Endpoints: /api/personajes, /api/chat, /api/audio/{id},
+                 /api/talk (boca sincronizada con el audio real),
+                 /api/stop + sirve el Frontend compilado en /
+                 SerialManager: micro:bit en hilo aparte con cola y
+                 reenvio del comando pendiente (no se pierden comandos)
+  Frontend/   -> Vite + React + TS + CSS a mano: selector Kira/Kiro,
+                 chat con burbujas, micro:bit VIRTUAL 5x5 que muestra
+                 la emocion en vivo, indicador escribiendo...
+
+  MEJORAS 03/08 (tarde):
+    - STREAMING de voz REAL: /api/tts-stream/{id} reenvia los chunks de
+      Fish mientras se generan (chunk_length 100, latency balanced).
+      Medido: 1er byte en 0.026s, audio completo en 1.77s -> el
+      navegador arranca a sonar al instante
+    - VERIFICACION REAL del micro:bit: el server LEE los ACK del
+      firmware (/api/status -> conectado, respondiendo, puerto,
+      ultimo_ack). Confirmado en vivo: ACK:LOADING, ACK:HAPPY,
+      ACK:STOP, TRANS:0/1/2 -> el micro:bit esta vivo
+    - AVATARES estilo DeepSeek: ballena SVG (azul Kiro, rosa Kira)
+      reemplazan los emojis genericos
+    - micro:bit VIRTUAL dinamico: cara 'loading' anima los 25 LEDs
+      en onda (como el real) mientras la IA piensa
+    - Labels de emocion POR PERSONAJE: Kiro='sorprendido',
+      Kira='sorprendida' (antes salia 'sorprendida' con Kiro, bug)
+    - HISTORIAL persistente: cada chat se guarda en localStorage
+      por personaje (se recupera al volver) + boton de limpiar
+    - VOZ DE KIRA ASIGNADA: 12a513591613495f97b1d46b2f09736f
+      (el modelo de Fish que paso el usuario 03/08)
+    - Tags de emocion actualizados al formato oficial de Fish:
+      [happy] [sad] [angry] [surprised] [frustrated] [scared] [tired]
+    - run.sh: launcher que detecta si el serial necesita sudo
+      (Linux: grupo dialout) - el usuario ya se agrego al grupo
+
+  PRUEBAS REALES 03/08 (server corriendo en 127.0.0.1:8000):
+    - 13/13 pruebas OK: personajes, chat con IA (emocion detectada),
+      TTS de Fish Audio (audio generado y descargable), ramp de
+      temperatura funcionando (0.9 -> 1.1 -> 1.3), frontend servido
+    - Kira detecto tristeza sola: "Che... te entiendo. ¿Querés
+      contarme qué te pasó?" (emotion=sad)
+    - Kiro se sorprendio solo: "¡¿Qué hacés?!... otra amiga más, eh..."
+      (emotion=surprised)
+    - El TTS de Fish: el parametro model va como HEADER (no en el body)
+      y con la key nueva (sk-fish-...) ya genera audio sin 402
+
+  FIXES APLICADOS (review 03/08):
+    - SerialManager ya no pierde comandos sin micro:bit (cola con
+      timeout + reenvio del pendiente)
+    - audio_cache limitado a 50 (no explota la RAM en un dia de feria)
+    - /api/talk sincroniza la boca con el audio real (onplaying/onended)
+    - historial validado, lifespan moderno (sin on_event deprecado)
+
+================================================================================
+  PENDIENTE PARA DISCUTIR
+================================================================================
+  - VOZ DE KIRA YA ASIGNADA (12a513...): falta PROBAR que suena bien
+    con el prompt de Kira (generar un audio de prueba)
+  - compilar KIRA.exe en Windows (PyInstaller) - Semana 4
+  - si Kira y Kiro comparten la misma tabla de temperaturas o cada
+    uno tiene su base (Kiro mas chill = mas alto? Kira mas seria = mas bajo?)
+================================================================================

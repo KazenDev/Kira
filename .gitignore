@@ -1,0 +1,44 @@
+# Secretos y configuración local
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencias y entornos
+node_modules/
+**/node_modules/
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
+
+# Builds y artefactos generados
+Cerebro/Frontend/dist/
+*.log
+*.7z
+*.tmp
+
+# Datos runtime, cuentas y recordings
+*.sqlite3
+*.sqlite3-*
+*.db
+*.jsonl
+*.mp3
+*.wav
+**/auth.sqlite3*
+**/usuarios/
+**/memoria/
+**/conversaciones/
+**/grabaciones/
+**/*_respaldo_*/
+
+# Referencias/binarios externos muy grandes (no forman parte del código de Kira)
+Cerebro/Referencias/
+MicroBit/Referencias/
+
+# Artefactos de navegador y depuración
+.playwright-mcp/
+.debug_sniff.log

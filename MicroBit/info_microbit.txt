@@ -1,0 +1,92 @@
+=====================================================================
+MICRO:BIT V2 - INFO TECNICA
+Proyecto: Expresiones emocionales con IA (Feria de Ciencias)
+=====================================================================
+
+== LENGUAJE ELEGIDO: CODAL C++ ✅ ==
+Decidimos programar la micro:bit en CODAL C++ (no MicroPython ni
+MakeCode) por maximo rendimiento:
+- 60 FPS de refresco por HARDWARE (PPI + GPIOTE) -> animaciones fluidas
+- Las caras/imagenes viven en FLASH (memoria permanente), casi no
+  tocan la RAM -> caben MUCHAS expresiones sin preocuparse
+- setBrightness() SI existe (el MicroPython de esta build no lo traia)
+- Flash usado por el programa actual: ~28% (queda muchisimo espacio)
+
+== IDENTIFICACION DEL DISPOSITIVO ==
+- Modelo:  BBC micro:bit V2 (2020+)
+- Chip:    Nordic nRF52833 (ARM Cortex-M4F, 64 MHz)
+- RAM:     128 KB
+- Flash:   512 KB
+- USB:     0d28:0204 NXP ARM mbed - "BBC micro:bit CMSIS-DAP"
+- Serial:  9906360200052820e8ebdd3705bf7143000000006e052820
+- URL:     https://microbit.org/device/?id=9906&v=0257
+- Puerto:  /dev/ttyACM0
+
+== FIRMWARE DE INTERFAZ (DAPLink) ==
+- Build:        v0257-gc782a5ba (gcc)
+- Version:      0257 (ESTABLE oficial, ya actualizado)
+- Bootloader:   0257
+- Git SHA:      c782a5ba907377658bc28aa8d132a0fa44543687
+- USB interfaces: MSD, CDC, HID, WebUSB
+- Auto Reset:   1
+
+== PROGRAMA ACTUAL (CODAL C++) ==
+Archivo fuente:  Referencias/codal-microbit-v2-samples/source/main.cpp
+- Carita feliz animada (parpadeo + guino + luz tenue que respira)
+- Aro de carga girando (efecto cometa, 16 posiciones, fluido)
+- Receptor serial de emociones (la IA manda comandos por USB)
+
+Comandos serial (linea terminada en \n):
+  HAPPY      -> carita feliz animada
+  SAD        -> carita triste
+  ANGRY      -> carita enojada
+  SURPRISED  -> carita sorprendida
+  HEART      -> corazon
+  LOADING    -> aro de carga girando
+  BLINK      -> parpadeo
+  TEST       -> demo automatica
+  (cualquier otro) -> muestra "?" (error)
+Respuesta: ACK:<COMANDO>
+
+== ESTRUCTURA DE CARPETAS (Escritorio/Kira/MicroBit) ==
+MicroBit/
+├── info_microbit.txt        <- ESTE archivo (info del micro:bit)
+├── Codigo/                  <- NUESTRO CODIGO FUENTE (el src): main.cpp
+│                              y los scripts que creemos (IA, etc.)
+└── Referencias/             <- repos de CODAL (consulta local, sin GitHub)
+    ├── codal-microbit-v2-samples/   <- EL PROYECTO: lo que compilamos.
+    │                                  Aqui se edita main.cpp y se corre
+    │                                  build.py para generar MICROBIT.hex
+    ├── codal-core/                   <- LAS APIS PRINCIPALES: Image (caras),
+    │                                  ManagedString (texto), Serial (comms),
+    │                                  AnimatedDisplay (motor de animaciones).
+    │                                  Para ver que metodos existen, buscar
+    │                                  en inc/types/ e inc/drivers/
+    ├── codal-nrf52/                  <- DRIVER DEL CHIP nRF52: como la
+    │                                  micro:bit habla con su hardware
+    │                                  (LEDs, serial, timers, BLE)
+    └── codal-microbit-nrf5sdk/       <- SDK DE NORDIC: el codigo base del
+                                         fabricante del chip (registros del
+                                         nRF52). Raramente se toca.
+
+== COMPILAR Y FLASHEAR ==
+1. Editar Referencias/codal-microbit-v2-samples/source/main.cpp
+2. cd Referencias/codal-microbit-v2-samples && python3 build.py
+   (la primera vez descarga submódulos, luego es rapido)
+3. Copiar MICROBIT.hex a la unidad MICROBIT (se flashea solo)
+   cp MICROBIT.hex /media/zkazen/MICROBIT/MICROBIT.HEX
+
+== COMUNICARSE CON LA MICRO:BIT DESDE PYTHON (PC) ==
+import serial, time
+ser = serial.Serial('/dev/ttyACM0', 115200, timeout=2)
+ser.write(b'HAPPY\n')     # manda la emocion
+resp = ser.read(200)      # lee el ACK
+ser.close()
+
+== NOTAS ==
+- El firmware DAPLink 0257 ya estaba actualizado (el .hex de Documentos
+  es la MISMA version, no hace falta reflashearlo).
+- Las caras/animaciones viven en FLASH: RAM casi intacta.
+- Para compilar se necesita: gcc-arm-none-eabi, cmake, python3
+  (ya instalados en esta PC).
+=====================================================================

@@ -1,0 +1,82 @@
+================================================================================
+  CEREBRO - El lado que PIENSA y HABLA de Kira  (feria de ciencias)
+  Fecha: 02/08/2026
+================================================================================
+
+QUE ES ESTA CARPETA
+--------------------------------------------------------------------------------
+  MicroBit/  = LA CARA  (las expresiones fisicas: emociones, loading, TALK)
+  Cerebro/   = EL CEREBRO (el chat, la IA, la personalidad, la pantalla)
+
+  El micro:bit ES la expresion de Kira. Esta carpeta es la mente:
+  recibe lo que la gente escribe, Kira (DeepSeek) piensa, decide que
+  emocion sentir (JSON mode) y le manda el comando al micro:bit por
+  serial (SAD, HAPPY, TALK, LOADING...).
+
+ARQUITECTURA DEL FLUJO (lo que vamos a construir aca):
+--------------------------------------------------------------------------------
+  Persona en la feria
+    -> escribe en la interfaz web (chat en el navegador)
+    -> kira_server.py (servidor local en localhost:8000)
+       -> llama a DeepSeek (deepseek-v4-flash, JSON mode + temperatura)
+       -> recibe { emotion, message }
+       -> emotion -> serial al micro:bit (pyserial): "ANGRY\n"  -> anima
+       -> message -> Fish Audio TTS (s2.1-pro-free) -> suena la VOZ
+    La interfaz es web (HTML/CSS/JS servida por el servidor local):
+    se puede hacer MUY linda y el navegador ya esta en cualquier Windows.
+
+PERSONAJES (hermanos digitales):
+--------------------------------------------------------------------------------
+  KIRA  👩 - LA SENTIMENTAL  (voz femenina, PENDIENTE de conseguir)
+    Se toma las cosas en serio, empatica, menos bromas que Kiro.
+
+  KIRO  👨 - EL CHILL  (voz masculina YA clonada: c864cf6dd05f4efb829b42d8b515614b)
+    Relajado, canchero, hace chistes. La voz natural que ya probamos.
+
+  El publico elige a quien hablarle al inicio. El micro:bit (la cara)
+  es el mismo para los dos: solo cambian system prompt + voz + nombre.
+
+QUE VA A VIVIR ACA (ESTRUCTURA ACTUAL - 03/08):
+--------------------------------------------------------------------------------
+  Personaje/                  -> kira.json y kiro.json (personalidad + prompt
+                                mejorado para TTS: pausas, puntos suspensivos)
+  Backend/                    -> kira_server.py (FastAPI asincrono)
+  │                             + config.py (key Nano GPT, Fish Audio, temps)
+  │                             + .venv (entorno python, no va al exe)
+  └─ Endpoints:
+        GET  /               -> sirve el Frontend compilado (dist/)
+        GET  /api/personajes -> los 2 personajes
+        POST /api/chat       -> { personaje, mensaje } -> { emotion, message, audio_url }
+        GET  /api/audio/{id} -> descarga el audio TTS
+        POST /api/stop       -> corta la animacion del micro:bit
+  Frontend/                   -> Vite + React + TS + CSS a mano
+  │                             (selector Kira/Kiro + chat + micro:bit virtual)
+  └─ dist/ se compila con `npm run build` (ya compilado, 03/08)
+
+FRONTEND (decidido 02/08):
+  - Vite + React + TypeScript + CSS a mano, CERO CDNs
+  - Detalles en ../DECISION_MODELO_IA.txt (seccion FRONTEND)
+
+DEPENDENCIAS
+--------------------------------------------------------------------------------
+  - API key de NANO GPT (nano-gpt.com) - cargado $1.50, VERIFICADO
+    con pruebas reales: JSON mode funciona, modelo deepseek-v4-flash-0731
+    (sin :thinking, 2.3s por respuesta, ~$0.00006 c/u)
+  - API key de Fish Audio (modelo s2.1-pro-free: GRATIS permanente bajo
+    fair use, SIN fecha de vencimiento - verificado 31/08/2026 en la
+    doc oficial y blog de fish.audio. Plan B si lo retiran: el mismo
+    modelo pago "s2.1-pro" a $15/M bytes, cambiar FISH_MODELO en config.py)
+  - Python 3 + pyserial (solo para compilar el exe; en el cole no se instala)
+  - Serial del micro:bit a 115200 baud:
+      desarrollo (Linux): /dev/ttyACM0
+      ferias (Windows): COM port (se detecta solo con list_ports)
+  - Se compila KIRA.exe con PyInstaller: doble clic en la laptop del cole
+    (el .exe SOLO se compila en Windows; todo el desarrollo es en Linux)
+
+NOTAS
+--------------------------------------------------------------------------------
+  - Las decisiones del modelo (JSON mode, temperaturas) estan en
+    ../DECISION_MODELO_IA.txt
+  - Comandos que entiende el micro:bit: HAPPY, SAD, ANGRY, SURPRISED,
+    NEUTRAL, FASTIDIO, MIEDO, CANSADO, TALK, LOADING, STOP, TRANS...
+================================================================================

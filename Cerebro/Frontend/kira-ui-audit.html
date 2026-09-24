@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Auditoría UI — Kira</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #181817;
+      --chrome: #141413;
+      --surface: #201f1e;
+      --surface-2: #272522;
+      --line: rgba(255,255,255,.10);
+      --line-soft: rgba(255,255,255,.06);
+      --text: #e8e6e3;
+      --muted: #aaa69e;
+      --faint: #77736c;
+      --accent: #d96f55;
+      --accent-soft: rgba(217,111,85,.14);
+      --ok: #65b58b;
+      --warning: #d3a85d;
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    html { background: var(--bg); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button { font: inherit; }
+    a { color: #ef9a83; text-underline-offset: 3px; }
+    code {
+      padding: 2px 5px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--text);
+      background: var(--surface);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .88em;
+    }
+
+    .page { width: min(1180px, calc(100% - 36px)); margin: 0 auto; padding: 40px 0 72px; }
+    .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { max-width: 780px; margin: 0; font-size: clamp(30px, 5vw, 52px); line-height: 1.05; letter-spacing: -.035em; }
+    .lede { max-width: 760px; margin: 16px 0 0; color: var(--muted); font-size: 18px; }
+    .meta { margin-top: 14px; color: var(--faint); font-size: 13px; }
+
+    .tabs {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 6px;
+      width: fit-content;
+      max-width: 100%;
+      margin: 30px 0 28px;
+      padding: 5px;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(20,20,19,.96);
+    }
+    .tab {
+      min-height: 36px;
+      padding: 7px 13px;
+      border: 0;
+      border-radius: 8px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab:hover { color: var(--text); background: var(--surface); }
+    .tab[aria-selected="true"] { color: var(--text); background: var(--surface-2); }
+
+    .panel[hidden] { display: none; }
+    .panel { animation: enter .18s ease-out; }
+    @keyframes enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+    .callout {
+      display: grid;
+      grid-template-columns: 4px minmax(0, 1fr);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .callout::before { content: ""; background: var(--accent); }
+    .callout-content { padding: 18px 20px; }
+    .callout strong { display: block; margin-bottom: 4px; font-size: 15px; }
+    .callout p { margin: 0; color: var(--muted); }
+
+    h2 { margin: 38px 0 13px; font-size: 23px; letter-spacing: -.02em; }
+    h3 { margin: 0 0 6px; font-size: 15px; }
+    p { margin: 0; }
+    .section-copy { max-width: 820px; color: var(--muted); }
+
+    .wire-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 24px; }
+    .wire-block { min-width: 0; }
+    .wire-label { margin-bottom: 9px; color: var(--faint); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .wire {
+      display: grid;
+      grid-template-columns: 128px minmax(0, 1fr);
+      height: 330px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #1b1b1a;
+    }
+    .mock-sidebar { display: flex; flex-direction: column; padding: 14px; border-right: 1px solid var(--line); background: var(--chrome); }
+    .mock-brand { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+    .mock-logo { width: 24px; height: 24px; border-radius: 8px; background: var(--accent); }
+    .mock-search { height: 28px; margin-top: 18px; border: 1px solid var(--line); border-radius: 7px; }
+    .mock-chat { height: 42px; margin-top: 14px; border-radius: 7px; background: var(--surface); }
+    .mock-chat.second { margin-top: 8px; background: rgba(255,255,255,.035); }
+    .mock-device { display: flex; align-items: center; gap: 6px; margin-top: auto; color: var(--faint); font-size: 10px; }
+    .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ok); }
+    .mock-main { display: flex; min-width: 0; flex-direction: column; padding: 14px; }
+    .mock-header { min-height: 34px; border-bottom: 1px solid var(--line-soft); }
+    .mock-header-title { font-size: 11px; font-weight: 700; }
+    .mock-header-sub { margin-top: 3px; color: var(--faint); font-size: 9px; }
+    .mock-header-actions { display: flex; gap: 6px; margin-left: auto; }
+    .mock-icon { width: 27px; height: 27px; border: 1px solid var(--line); border-radius: 7px; }
+    .mock-hero { width: 170px; margin: 32px auto 0; text-align: center; }
+    .mock-avatar { width: 42px; height: 42px; margin: 0 auto; border-radius: 13px; background: var(--accent); }
+    .mock-name { width: 72px; height: 17px; margin: 12px auto 0; background: rgba(255,255,255,.15); }
+    .mock-line { height: 8px; margin: 9px auto 0; background: rgba(255,255,255,.07); }
+    .mock-card { width: 205px; height: 143px; margin: 21px auto 0; padding: 15px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); text-align: center; }
+    .mock-card-avatar { width: 33px; height: 33px; margin: 0 auto; border-radius: 10px; background: var(--accent); }
+    .mock-card-title { width: 53px; height: 9px; margin: 11px auto 0; background: rgba(255,255,255,.14); }
+    .mock-badge { width: 82px; height: 15px; margin: 8px auto 0; border-radius: 9px; background: var(--accent-soft); }
+    .mock-card-copy { width: 145px; height: 7px; margin: 12px auto 0; background: rgba(255,255,255,.07); }
+    .mock-card-cta { width: 87px; height: 24px; margin: 14px auto 0; border-radius: 12px; background: var(--accent); }
+    .mock-chips { display: flex; justify-content: center; gap: 6px; margin-top: 15px; }
+    .mock-chip { width: 105px; height: 24px; border: 1px solid var(--line); border-radius: 999px; }
+    .mock-composer-pill { height: 40px; margin-top: auto; border: 1px solid var(--accent); border-radius: 999px; background: rgba(255,255,255,.025); }
+    .mock-answer { width: 76%; margin: 55px auto 0; }
+    .mock-answer-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 9px; }
+    .mock-answer-avatar { width: 24px; height: 24px; border-radius: 8px; background: var(--accent); }
+    .mock-text-lines { display: grid; gap: 8px; padding-top: 3px; }
+    .mock-text-lines span { display: block; height: 8px; background: rgba(255,255,255,.12); }
+    .mock-text-lines span:nth-child(2) { width: 78%; }
+    .mock-text-lines span:nth-child(3) { width: 55%; background: rgba(255,255,255,.07); }
+    .mock-suggestion { margin: 18px auto 0; color: var(--faint); font-size: 9px; text-align: center; }
+    .mock-composer { height: 40px; margin-top: auto; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.025); }
+
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+    .clean-list { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+    .clean-list li { position: relative; padding-left: 18px; color: var(--muted); }
+    .clean-list li::before { content: ""; position: absolute; top: .72em; left: 0; width: 6px; height: 6px; border-radius: 999px; background: var(--faint); }
+    .clean-list.remove li::before { background: var(--accent); }
+
+    .numbered { display: grid; gap: 18px; margin-top: 18px; }
+    .numbered-item { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; align-items: start; }
+    .numbered-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; color: #1b1715; background: var(--accent); font-size: 12px; font-weight: 800; }
+    .numbered-item p { color: var(--muted); }
+
+    .cards-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+    .mini-card { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .mini-card p { color: var(--muted); font-size: 14px; }
+
+    .mobile-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .mobile-item { padding: 13px 14px; border-left: 2px solid var(--line); color: var(--muted); background: rgba(255,255,255,.018); }
+
+    .sources { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; }
+    .source { color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 820px) {
+      .page { width: min(100% - 24px, 720px); padding-top: 26px; }
+      .wire-grid, .two-col, .cards-3 { grid-template-columns: 1fr; }
+      .wire { grid-template-columns: 108px minmax(0, 1fr); }
+      .mock-chat { display: none; }
+      .mock-device { font-size: 8px; }
+      .mobile-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 34px; }
+      .lede { font-size: 16px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">Auditoría de producto</p>
+      <h1>Una IA que vive en una micro:bit.</h1>
+      <p class="lede">Kira no necesita parecer “otra app de IA”. Necesita sentirse como un producto concreto, con una voz, un cuerpo y un contexto propio.</p>
+      <p class="meta">Revisión real del frontend · escritorio 1440 × 900 · móvil 390 × 844 · sin modificar el código de la app</p>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Secciones de la auditoría">
+      <button class="tab" role="tab" aria-selected="true" data-tab="diagnostico">Diagnóstico</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="direccion">Dirección visual</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="implementacion">Implementación</button>
+    </nav>
+
+    <section class="panel" id="diagnostico" role="tabpanel">
+      <div class="callout">
+        <div class="callout-content">
+          <strong>El chat ya está bastante maduro.</strong>
+          <p>El AI slop no está en las respuestas: está en la bienvenida oversized, el exceso de controles, el compositor demasiado enfático y una marca que todavía mezcla Kira con DeepSeek.</p>
+        </div>
+      </div>
+
+      <div class="wire-grid">
+        <article class="wire-block">
+          <p class="wire-label">Estado actual observado</p>
+          <div class="wire" aria-label="Wireframe del estado actual">
+            <aside class="mock-sidebar">
+              <div class="mock-brand"><span class="mock-logo"></span><span>Kira</span></div>
+              <div class="mock-search"></div>
+              <div class="mock-chat"></div>
+              <div class="mock-chat second"></div>
+            </aside>
+            <div class="mock-main">
+              <div class="mock-header"></div>
+              <div class="mock-hero">
+                <div class="mock-avatar"></div>
+                <div class="mock-name"></div>
+                <div class="mock-line" style="width:145px"></div>
+              </div>
+              <div class="mock-card">
+                <div class="mock-card-avatar"></div>
+                <div class="mock-card-title"></div>
+                <div class="mock-badge"></div>
+                <div class="mock-card-copy"></div>
+                <div class="mock-card-cta"></div>
+              </div>
+              <div class="mock-chips"><span class="mock-chip"></span><span class="mock-chip"></span><span class="mock-chip"></span></div>
+              <div class="mock-composer-pill"></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="wire-block">
+          <p class="wire-label">Dirección propuesta</p>
+          <div class="wire" aria-label="Wireframe de la interfaz propuesta">
+            <aside class="mock-sidebar">
+              <div class="mock-brand"><span class="mock-logo"></span><span>Kira</span></div>
+              <div class="mock-search"></div>
+              <div class="mock-chat"></div>
+              <div class="mock-chat second"></div>
+              <div class="mock-device"><span class="dot"></span><span>micro:bit conectada</span></div>
+            </aside>
+            <div class="mock-main">
+              <div class="mock-header" style="display:flex;align-items:center">
+                <div>
+                  <div class="mock-header-title">Conversación con Kira</div>
+                  <div class="mock-header-sub">micro:bit conectada</div>
+                </div>
+                <div class="mock-header-actions"><span class="mock-icon"></span><span class="mock-icon"></span></div>
+              </div>
+              <div class="mock-answer">
+                <div class="mock-answer-row">
+                  <div class="mock-answer-avatar"></div>
+                  <div class="mock-text-lines"><span></span><span></span><span></span></div>
+                </div>
+              </div>
+              <p class="mock-suggestion">Probá preguntarle algo sobre la placa</p>
+              <div class="mock-composer"></div>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <div class="two-col" style="margin-top:38px">
+        <section>
+          <h2 style="margin-top:0">Conservar</h2>
+          <ul class="clean-list">
+            <li>Base grafito plana, sin gradientes ni glow.</li>
+            <li>Respuestas del asistente sin cards ni fondos.</li>
+            <li>Mensaje del usuario con superficie sutil.</li>
+            <li>Réplica real del micro:bit, streaming, TTS y Markdown.</li>
+            <li>Historial persistente y auto-scroll inteligente.</li>
+          </ul>
+        </section>
+        <section>
+          <h2 style="margin-top:0">Quitar o reducir</h2>
+          <ul class="clean-list remove">
+            <li>Tarjeta gigante de Kira y el párrafo que explica toda la arquitectura.</li>
+            <li>“Tocá mi tarjeta”: no hay NFC implementado.</li>
+            <li>“IA que te ayuda en todo…”: genérico y desactualizado.</li>
+            <li>Cuatro iconos equivalentes en el header.</li>
+            <li>Timestamps y acciones visibles en todos los mensajes.</li>
+          </ul>
+        </section>
+      </div>
+
+      <h2>Correcciones móviles obligatorias</h2>
+      <div class="mobile-grid">
+        <div class="mobile-item">El inicio móvil no permite abrir historial, búsqueda ni ajustes.</div>
+        <div class="mobile-item">En menos de 560 px desaparece la ruta visible para volver al inicio.</div>
+        <div class="mobile-item">El drawer puede quedar colapsado aunque no debería.</div>
+        <div class="mobile-item">No hay backdrop, foco ni Escape para cerrar el drawer.</div>
+      </div>
+    </section>
+
+    <section class="panel" id="direccion" role="tabpanel" hidden>
+      <div class="callout">
+        <div class="callout-content">
+          <strong>La idea rectora</strong>
+          <p>Una sola pantalla, una acción principal y un hardware visible. La identidad viene de Kira y la micro:bit, no de decoración genérica.</p>
+        </div>
+      </div>
+
+      <h2>Bienvenida</h2>
+      <p class="section-copy">Eliminar la tarjeta de 390 px, las estadísticas y el selector de personajes. Kira es la única protagonista: avatar, nombre, una frase concreta y el composer listo para usar. “Una IA con voz y emociones que vive en una micro:bit”.</p>
+
+      <h2>Chat</h2>
+      <div class="cards-3">
+        <article class="mini-card"><h3>Jerarquía</h3><p>Título real de la conversación arriba; Kira y el estado de la placa como secundarios.</p></article>
+        <article class="mini-card"><h3>Identidad</h3><p>El micro:bit virtual queda pequeño, visible y expandible. Es la firma del producto.</p></article>
+        <article class="mini-card"><h3>Conversación</h3><p>Mensajes sin cards; acciones discretas y agrupadas; replay de voz como acción propia.</p></article>
+      </div>
+
+      <h2>Composer</h2>
+      <p class="section-copy">Rectángulo de 12–16 px, borde neutro en reposo y acento solo al enfocar o grabar. El contador aparece únicamente cerca del límite. En móvil, cámara y micrófono pueden vivir dentro de un único menú de herramientas.</p>
+
+      <h2>Hardware como estado normal</h2>
+      <div class="two-col" style="margin-top:14px">
+        <article class="mini-card"><h3>Conectada</h3><p>Indicador verde discreto, LED en vivo y acciones de memoria/BLE agrupadas en “Kira y dispositivo”.</p></article>
+        <article class="mini-card"><h3>Desconectada</h3><p>Una acción clara: “Conectar micro:bit”. El chat sigue disponible y un banner explica qué funciones están pausadas.</p></article>
+      </div>
+
+      <h2>Lo aprendido de las referencias</h2>
+      <p class="section-copy">Mobbin, ChatGPT, Gemini, Graphite, OpenAI y NN/G coinciden en algo: no hay que copiar pantallas. Hay que integrar el contexto, mantener una acción primaria, mostrar estados claros, usar sugerencias relevantes y revelar controles gradualmente.</p>
+    </section>
+
+    <section class="panel" id="implementacion" role="tabpanel" hidden>
+      <div class="callout">
+        <div class="callout-content">
+          <strong>Alcance seguro</strong>
+          <p>Casi todo el rediseño puede hacerse sin backend ni cambios de API. No hay que tocar Web Bluetooth, TTS, persistencia o inferencia.</p>
+        </div>
+      </div>
+
+      <h2>Orden recomendado</h2>
+      <div class="numbered">
+        <div class="numbered-item"><span class="numbered-icon">1</span><div><h3>Navegación móvil</h3><p>Drawer desde la bienvenida, regreso a inicio, backdrop, Escape, foco y ancho completo.</p></div></div>
+        <div class="numbered-item"><span class="numbered-icon">2</span><div><h3>Jerarquía principal</h3><p>Welcome single-character, título real, header con máximo dos acciones y hardware más visible.</p></div></div>
+        <div class="numbered-item"><span class="numbered-icon">3</span><div><h3>Composer y mensajes</h3><p>Composer sobrio, densidad móvil reducida, acciones bajo demanda y replay de voz.</p></div></div>
+        <div class="numbered-item"><span class="numbered-icon">4</span><div><h3>Calidad y mantenimiento</h3><p>Consolidar las cuatro capas de CSS, corregir semántica y limpiar copy obsoleto.</p></div></div>
+      </div>
+
+      <h2>Copy y marca</h2>
+      <ul class="clean-list remove">
+        <li>Cambiar “IA que te ayuda en todo…” por una descripción específica de Kira y la micro:bit.</li>
+        <li>Eliminar “Tocá mi tarjeta” hasta que exista NFC real.</li>
+        <li>DeepSeek queda como proveedor técnico, nunca como nombre accesible del avatar.</li>
+        <li>Renombrar internamente el paquete frontend para usar Kira como único nombre.</li>
+      </ul>
+
+      <h2>No tocar</h2>
+      <p class="section-copy"><code>/api/chat/stream</code>, imágenes TTS, audio persistente, claves de localStorage, reconexión BLE, Wake Lock y réplica LED.</p>
+
+      <h2>Validación</h2>
+      <div class="mobile-grid" style="margin-top:12px">
+        <div class="mobile-item">Build TypeScript/Vite limpio.</div>
+        <div class="mobile-item">Welcome y chat en 390 px y 1440 px.</div>
+        <div class="mobile-item">Drawer, modal, Escape y foco verificados.</div>
+        <div class="mobile-item">Streaming, foto, voz, TTS y memoria sin regresiones.</div>
+      </div>
+    </section>
+
+    <footer style="margin-top:42px;padding-top:20px;border-top:1px solid var(--line)">
+      <p class="wire-label">Fuentes consultadas</p>
+      <div class="sources">
+        <a class="source" href="https://mobbin.com/explore/web/screens/chat-bot">Mobbin</a>
+        <a class="source" href="https://www.nngroup.com/articles/ai-chatbots-design-guidelines/">NN/G</a>
+        <a class="source" href="https://www.nngroup.com/articles/prompt-controls-genai/">Prompt controls</a>
+        <a class="source" href="https://graphite.com/features/chat">Graphite Chat</a>
+        <a class="source" href="https://developers.openai.com/apps-sdk/concepts/ui-guidelines">OpenAI UI</a>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    const tabs = [...document.querySelectorAll('.tab')];
+    const panels = [...document.querySelectorAll('.panel')];
+
+    function activate(name) {
+      tabs.forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.tab === name)));
+      panels.forEach((panel) => { panel.hidden = panel.id !== name; });
+      history.replaceState(null, '', '#' + name);
+    }
+
+    tabs.forEach((tab) => tab.addEventListener('click', () => activate(tab.dataset.tab)));
+    const initial = location.hash.slice(1);
+    if (['diagnostico', 'direccion', 'implementacion'].includes(initial)) activate(initial);
+  </script>
+</body>
+</html>
