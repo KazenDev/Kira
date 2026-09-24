@@ -25,18 +25,6 @@ body {
 /* La capa ambiental anterior se eliminó: el JSX actual no monta .ambiente. */
 
 /* ---------- 1) Sidebar: plano, hairline, sin sombra ---------- */
-.sidebar {
-  background: var(--elev-1);
-  box-shadow: none;
-}
-
-.sidebar-fondo {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.item-chat {
-  border-radius: var(--r-sm);
-}
 
 .item-chat:hover {
   background: rgba(255, 255, 255, 0.05);
@@ -51,9 +39,6 @@ body {
 }
 
 /* el campo de búsqueda pasa de píldora a rectángulo redondeado (ChatGPT/Notion) */
-.buscador {
-  border-radius: var(--r-sm);
-}
 
 /* resaltado de coincidencias: tinte del acento, no el amarillo del navegador */
 mark {
@@ -64,21 +49,8 @@ mark {
 }
 
 /* ---------- 2) Header: neutro, hairline al scrollear, cero sombra ---------- */
-.chat-header {
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  box-shadow: none;
-}
-
-.chat-header.scrolleo {
-  background: color-mix(in srgb, var(--bg) 97%, transparent);
-  border-bottom-color: var(--border);
-  box-shadow: none;
-}
 
 /* pesos reales: 690/680/650/560 no existen en las fonts del sistema */
-.chat-titulo h2 {
-  font-weight: 600;
-}
 .sidebar-logo h1 {
   font-weight: 600;
 }
@@ -91,10 +63,6 @@ mark {
 .header-acciones .led-btn,
 .header-acciones .puente-icono {
   border-radius: var(--r-sm);
-}
-
-.chat-header .avatar {
-  box-shadow: none;
 }
 
 /* ---------- 3) Conversación: columna de lectura de 768px (la de ChatGPT) ---------- */
@@ -132,27 +100,11 @@ mark {
 
 /* burbuja del usuario: base NEUTRO con tinte de acento (ChatGPT con su accent
    color hace exactamente esto; antes el base era azul #1b222c = slop) */
-.user-bubble {
-  background: color-mix(in srgb, var(--accent) 15%, var(--elev-2));
-}
 
 /* ---------- 4) Composer: píldora plana, hairline, sin glow ---------- */
-.input-bar {
-  background: var(--bg);
-}
 
 .composer {
-  background: var(--elev-2);
   border-color: var(--border-strong);
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.composer:focus-within {
-  background: var(--elev-2);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .composer .send-btn {
@@ -162,12 +114,6 @@ mark {
 
 .composer .send-btn:hover:not(:disabled) {
   transform: none;
-  box-shadow: none;
-}
-
-.orbe-escucha {
-  background: var(--elev-2);
-  border-color: var(--border-strong);
   box-shadow: none;
 }
 
@@ -187,10 +133,6 @@ mark {
 .microbit-board {
   background: #1b1b1b;
   border-color: #333;
-}
-
-.foto-chip {
-  background: color-mix(in srgb, var(--elev-2) 96%, transparent);
 }
 
 /* ---------- 6) Hero: stagger de entrada, logo sin caja ni glow ---------- */
@@ -288,10 +230,6 @@ mark {
   line-height: 1.6;
 }
 /* el inline code deja el acento: ChatGPT lo usa neutro, el color es de link */
-.md :not(pre) > code {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text-1);
-}
 
 /* tema hljs: GitHub Dark suavizado para convivir con el grafito */
 .md .hljs {
@@ -358,7 +296,6 @@ mark {
   /* Las acciones actuales conservan su estado tactile en .msg-acciones-disparador. */
   /* borrar chat del sidebar con diana táctil real */
   .item-x {
-    opacity: 1;
     width: 32px;
     height: 32px;
   }

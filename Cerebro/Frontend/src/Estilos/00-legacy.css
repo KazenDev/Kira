@@ -19,7 +19,6 @@ body,
 
 body {
   font-family: var(--font);
-  background: var(--bg);
   color: var(--text-1);
   /* NADA de `min-height: 100vh` acá. En el celu 100vh es el viewport GRANDE
      (el de la barra oculta), así que el body quedaba más alto que la pantalla
@@ -77,8 +76,6 @@ a:hover {
 
 /* ---------- accesibilidad: foco visible siempre claro ---------- */
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
   border-radius: 4px;
 }
 
@@ -100,11 +97,7 @@ a:hover {
 /* El acento por personaje vive en tokens.css. */
 /* ---------- SIDEBAR (historial de chats, izquierda) ---------- */
 .sidebar {
-  width: 330px;
-  min-width: 330px;
   height: 100dvh;
-  background: var(--elev-1);
-  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   z-index: 20;
@@ -113,14 +106,6 @@ a:hover {
 }
 
 /* ---------- SIDEBAR PLEGADO (colapsable, solo iconos) ---------- */
-.sidebar.colapsada {
-  width: 62px;
-  min-width: 62px;
-}
-
-.sidebar.colapsada .sidebar-header {
-  padding: 10px 8px;
-}
 
 .sidebar.colapsada .sidebar-logo,
 .sidebar.colapsada .sidebar-filtros,
@@ -148,16 +133,6 @@ a:hover {
     opacity: 1;
     transform: none;
   }
-}
-
-.sidebar.colapsada .item-cuerpo,
-.sidebar.colapsada .item-x {
-  display: none;
-}
-
-.sidebar.colapsada .item-avatar {
-  width: 42px;
-  height: 42px;
 }
 
 .sidebar.colapsada .item-emoji {
@@ -208,36 +183,25 @@ a:hover {
 .sidebar-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 12px 12px 10px;
 }
 
 /* ---------- logo plano (sin gradiente, sin background-clip) ---------- */
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex: 1;
   min-width: 0;
-  padding-left: 4px;
 }
 .sidebar-logo h1 {
-  font-size: 15px;
-  font-weight: 600;
   color: var(--text-1);
-  letter-spacing: -0.01em;
   white-space: nowrap;
 }
 .sidebar-logo p {
-  font-size: 11.5px;
-  color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .sidebar-logo .logo-svg {
-  width: 34px;
-  height: 34px;
   color: var(--accent);
   flex: none;
 }
@@ -269,25 +233,16 @@ a:hover {
 }
 /* ---------- buscador ---------- */
 .sidebar-filtros {
-  padding: 0 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
 .buscador {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--elev-2);
   border: 1px solid transparent;
-  border-radius: var(--r-pill);
-  padding: 7px 14px;
   transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
-}
-.buscador:focus-within {
-  border-color: var(--accent);
-  background: var(--elev-3);
 }
 .buscador-ico {
   color: var(--text-3);
@@ -324,10 +279,8 @@ a:hover {
 .lista-chats {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .lista-vacia {
@@ -339,17 +292,11 @@ a:hover {
 }
 
 .item-chat {
-  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 13px;
   cursor: pointer;
-  border-left: 2px solid transparent;
   transition: background var(--t-med) var(--ease), transform var(--t-fast) var(--ease);
   animation: item-entrar var(--t-med) var(--ease-out) both;
   animation-delay: calc(var(--i, 0) * 45ms);
-  position: relative;
 }
 .item-chat:active {
   transform: scale(0.985);
@@ -387,21 +334,11 @@ a:hover {
     padding: 0 10px;
   }
 }
-
-.item-chat:hover {
-  background: var(--elev-2);
-}
-.item-chat.activo {
-  background: var(--accent-soft);
-  border-left-color: var(--accent);
-}
 .item-chat.activo .item-nombre {
   color: var(--text-1);
 }
 
 .item-avatar {
-  width: 40px;
-  height: 40px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -429,8 +366,6 @@ a:hover {
   gap: 8px;
 }
 .item-nombre {
-  font-size: 13.5px;
-  font-weight: 500;
   color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
@@ -443,19 +378,15 @@ a:hover {
 }
 .item-preview {
   font-size: 12px;
-  color: var(--text-3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .item-x {
-  width: 24px;
-  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   color: var(--text-3);
-  opacity: 0;
   transition: opacity var(--t-fast), background var(--t-fast), color var(--t-fast);
   flex: none;
 }
@@ -473,7 +404,6 @@ a:hover {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px;
   border-top: 1px solid var(--border);
 }
 
@@ -571,7 +501,6 @@ svg.girando {
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
   position: relative;
 }
 
@@ -582,8 +511,6 @@ svg.girando {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
-  padding: 40px 24px;
 }
 /* Centrado SEGURO: justify-content:center + overflow recorta lo de ARRIBA
    y lo vuelve inalcanzable (el bug del inicio cortado en el cel). Con
@@ -597,33 +524,12 @@ svg.girando {
 
 .hero {
   text-align: center;
-  max-width: 600px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  animation: subir-suave var(--t-slow) var(--ease-out) both;
-}
-
-.hero .logo-svg {
-  width: 72px;
-  height: 72px;
-  color: var(--accent);
-  filter: drop-shadow(0 6px 18px var(--accent-soft));
-}
-
-.hero h1 {
-  font-size: 2.6rem;
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  color: var(--text-1);
-  line-height: 1.05;
 }
 .subtitulo {
   color: var(--text-2);
-  font-size: 15px;
-  line-height: 1.7;
-  max-width: 500px;
 }
 
 /* La pantalla de bienvenida actual usa .hero-kira y .welcome-*. */
@@ -650,22 +556,10 @@ svg.girando {
 
 /* ---------- header del chat: limpio, se "prende" (borde+sombra) al scrollear ---------- */
 .chat-header {
-  height: 60px;
-  min-height: 60px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  background: rgba(25, 24, 23, 0.82);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid transparent;
   z-index: 10;
   transition: border-color var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease);
-}
-.chat-header.scrolleo {
-  border-bottom-color: var(--border);
-  box-shadow: var(--shadow-1);
 }
 
 .volver {
@@ -687,20 +581,14 @@ svg.girando {
 }
 
 .chat-header .avatar {
-  width: 36px;
-  height: 36px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   flex: none;
   overflow: hidden;
-  box-shadow: var(--shadow-1);
   transition: box-shadow var(--t-med) var(--ease);
 }
 /* mientras habla, el avatar "respira" un halo suave: detalle vivo */
-.chat-header .avatar.hablando {
-  animation: hablar-pulso 1.3s ease-in-out infinite;
-}
 @keyframes hablar-pulso {
   0%,
   100% {
@@ -716,12 +604,8 @@ svg.girando {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 .chat-titulo h2 {
-  font-size: 15.5px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
   color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
@@ -737,12 +621,8 @@ svg.girando {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
   border-radius: var(--r-pill);
   font-size: 12px;
-  color: var(--text-2);
-  background: var(--elev-2);
   border: 1px solid var(--border);
   transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
   flex: none;
@@ -760,7 +640,6 @@ svg.girando {
   background: var(--elev-2);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  padding: 14px;
   z-index: 30;
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
   /* entrada/salida con Motion (AnimatePresence) */
@@ -781,10 +660,8 @@ svg.girando {
                     escapa al body, el header se va con la página y sobra
                     aire muerto (el bug del hueco + header fantasma en el cel) */
   overflow-y: auto;
-  padding: 28px 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 /* con pocos mensajes, el contenido se pega abajo (sin hueco muerto
    entre el último mensaje y el input) */
@@ -792,7 +669,6 @@ svg.girando {
   margin-top: auto;
 }
 .mensajes > * {
-  max-width: 720px;
   width: 100%;
   margin-left: auto;
   margin-right: auto;
@@ -801,15 +677,8 @@ svg.girando {
 /* --- turno del ASISTENTE: sin burbuja, avatar + texto a ancho completo --- */
 .turn {
   display: flex;
-  gap: 14px;
-  padding: 16px 0;
   animation: msg-in var(--t-med) var(--ease-out);
   position: relative;
-}
-.turn + .turn,
-.user-msg + .turn,
-.turn + .user-msg {
-  margin-top: 6px;
 }
 .turn-avatar {
   width: 32px;
@@ -827,7 +696,6 @@ svg.girando {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
 }
 .turn-cuerpo .md {
   font-size: 16.5px;
@@ -860,22 +728,15 @@ svg.girando {
 
 /* Acciones al hover del mensaje: la estructura actual vive en .msg-acciones-wrap. */
 .turn-pie {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  min-height: 18px;
 }
 .msg-accion {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
   display: grid;
   place-items: center;
   color: var(--text-3);
   transition: background var(--t-fast), color var(--t-fast);
 }
 .msg-accion:hover {
-  background: var(--elev-3);
   color: var(--text-1);
 }
 
@@ -886,31 +747,16 @@ svg.girando {
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
-  padding: 8px 0;
 }
 .user-bubble {
-  background: var(--elev-3);
-  border: 1px solid var(--border);
-  border-radius: 20px;
   border-bottom-right-radius: 7px;
-  padding: 11px 16px;
   color: var(--text-1);
-  font-size: 15.5px;
-  line-height: 1.6;
-  max-width: 72%;
-  box-shadow: var(--shadow-1);
-}
-.user-bubble .md {
-  font-size: 15.5px;
-  line-height: 1.6;
 }
 
 /* ---------- typing indicator (3 puntos + nombre; entrada/salida con Motion) ---------- */
 .typing {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 0 4px;
 }
 .typing-avatar {
   width: 32px;
@@ -935,8 +781,6 @@ svg.girando {
   align-items: center;
 }
 .typing-dots span {
-  width: 6px;
-  height: 6px;
   border-radius: 50%;
   background: var(--accent);
   display: inline-block;
@@ -1104,70 +948,35 @@ svg.girando {
 
 /* ================= COMPOSER (tarjeta moderna: textarea + fila de acciones) ================= */
 .input-bar {
-  padding: 12px 16px 18px;
-  background: linear-gradient(to top, var(--bg) 70%, transparent);
   position: relative;
 }
 
 .composer {
-  display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-width: 768px;
-  margin: 0 auto;
-  background: var(--elev-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-xl);
-  padding: 14px 14px 10px 18px;
-  box-shadow: var(--shadow-1);
   transition: border-color var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease),
     background var(--t-med) var(--ease);
 }
-.composer:focus-within {
-  border-color: var(--accent);
-  background: var(--elev-2);
-  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-2);
-}
 .composer textarea {
-  width: 100%;
   min-width: 0;
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--text-1);
-  font-size: 15.5px;
-  line-height: 1.55;
   resize: none;
-  max-height: 132px;
   overflow-y: auto;
   font-family: inherit;
   transition: height 0.14s var(--ease); /* crece suave al escribir */
-}
-.composer textarea::placeholder {
-  color: var(--text-3);
-}
-
-.composer-acciones {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 /* El hint de atajos ya no reserva aire en la fila (iba invisible con flex:1
    y hasta interceptaba toques en el cel): vive en los title de los botones.
    El espaciador puro colapsa a cero y el enviar queda SIEMPRE al final. */
 .composer-espacio {
-  flex: 1;
-  min-width: 0;
   pointer-events: none;
 }
 
 .icon-btn {
-  width: 36px;
-  height: 36px;
   border-radius: 50%;
   border: 0;
   background: transparent;
-  color: var(--text-2);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -1192,29 +1001,17 @@ svg.girando {
 }
 
 .send-btn {
-  width: 38px;
-  height: 38px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--accent);
-  color: #191817;
-  box-shadow: var(--shadow-1);
   transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease),
     box-shadow var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
   flex: none;
-}
-.send-btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-2);
 }
 .send-btn:active:not(:disabled) {
   transform: translateY(0) scale(0.94);
 }
 .send-btn:disabled {
-  background: var(--elev-3);
-  color: var(--text-3);
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -1230,7 +1027,6 @@ svg.girando {
 /* ---------- botón flotante "bajar al último" (cuando scrolleaste arriba) ---------- */
 .bajar-btn {
   position: absolute;
-  bottom: 106px;
   left: 50%;
   translate: -50% 0;
   width: 38px;
@@ -1238,7 +1034,6 @@ svg.girando {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--elev-2);
   color: var(--text-2);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-2);
@@ -1267,25 +1062,14 @@ svg.girando {
 
 /* ---------- ORBE de escucha GPT (reacciona a tu voz en vivo) ---------- */
 .orbe-escucha {
-  max-width: 768px;
   margin: 0 auto;
-  height: 52px;
-  border-radius: 28px;
-  background: var(--elev-2);
-  border: 1px solid var(--accent-soft);
-  display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 14px;
-  position: relative;
-  overflow: hidden;
 }
 /* La_UI actual dibuja el estado con .orbe-barras y .orbe-estado. */
 
 /* ================= RÉPLICA DEL MICRO:BIT (matriz LED) ================= */
 .microbit-board {
   width: 150px;
-  background: #24241f;
   border: 1px solid #3a3a32;
   border-radius: 10px;
   padding: 12px 14px 10px;
@@ -1356,8 +1140,6 @@ svg.girando {
 .ajustes-fondo {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(4px);
   z-index: 50;
   display: flex;
   align-items: center;
@@ -1369,7 +1151,6 @@ svg.girando {
   max-width: 460px;
   max-height: 85dvh;
   overflow-y: auto;
-  background: var(--elev-1);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   padding: 20px;
@@ -1508,10 +1289,7 @@ svg.girando {
 }
 
 .ajustes-acerca {
-  background: var(--elev-2);
-  border: 1px solid var(--border);
   border-radius: var(--r-md);
-  padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1533,41 +1311,17 @@ svg.girando {
 .md > * + * {
   margin-top: 0.7em;
 }
-.md p {
-  margin: 0;
-}
-.md a {
-  color: var(--accent);
-}
-.md strong {
-  color: var(--text-1);
-  font-weight: 600;
-}
 .md em {
   color: var(--text-1);
-}
-.md ul,
-.md ol {
-  padding-left: 1.5em;
-}
-.md li {
-  margin: 0.25em 0;
-}
-.md li::marker {
-  color: var(--text-3);
 }
 .md code {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 0.88em;
-  background: var(--elev-3);
-  color: var(--accent);
   padding: 0.12em 0.4em;
   border-radius: 5px;
 }
 .md pre {
-  background: var(--elev-1);
   border: 1px solid var(--border);
-  border-radius: var(--r-md);
   padding: 14px;
   overflow-x: auto;
 }
@@ -1579,9 +1333,7 @@ svg.girando {
   line-height: 1.6;
 }
 .md blockquote {
-  border-left: 3px solid var(--accent-soft);
   padding-left: 14px;
-  color: var(--text-2);
 }
 .md table {
   width: 100%;
@@ -1598,10 +1350,6 @@ svg.girando {
   background: var(--elev-2);
   color: var(--text-1);
   font-weight: 600;
-}
-.md hr {
-  border: 0;
-  border-top: 1px solid var(--border);
 }
 .md del {
   color: var(--text-3);
@@ -1626,8 +1374,6 @@ svg.girando {
     bottom: 0;
     transform: translateX(-100%);
     transition: transform var(--t-med) var(--ease);
-    width: 300px;
-    min-width: 300px;
   }
   .sidebar.abierta {
     transform: translateX(0);
@@ -1635,16 +1381,6 @@ svg.girando {
   .sidebar.colapsada {
     width: 62px;
     min-width: 62px;
-  }
-
-  .sidebar.colapsada .item-cuerpo,
-  .sidebar.colapsada .item-x {
-    display: flex;
-  }
-
-  .sidebar.colapsada .item-avatar {
-    width: 52px;
-    height: 52px;
   }
 
   .sidebar.colapsada .item-emoji {
@@ -1658,7 +1394,6 @@ svg.girando {
   .sidebar-fondo {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
     z-index: 15;
     animation: aparecer 0.2s ease both;
   }
@@ -1669,32 +1404,6 @@ svg.girando {
 }
 
 @media (max-width: 560px) {
-  .user-bubble {
-    max-width: 88%;
-  }
-  .chat-header {
-    padding: 0 10px;
-  }
-  .hero h1 {
-    font-size: 2rem;
-  }
-  .turn {
-    gap: 10px;
-  }
-  .turn-avatar,
-  .typing-avatar {
-    width: 28px;
-    height: 28px;
-  }
-  .mensajes {
-    padding: 18px 12px 10px;
-  }
-  .input-bar {
-    padding: 10px 12px 14px;
-  }
-  .composer {
-    padding: 12px 12px 8px 14px;
-  }
   .led-btn span {
     display: none; /* solo el icono en pantallas chicas */
   }
@@ -1748,10 +1457,6 @@ svg.girando {
 /* ============ CELULAR PRIMERO: la feria vive en el telefono ============ */
 @media (max-width: 560px) {
   /* iOS hace zoom si el input tiene menos de 16px */
-  .composer textarea {
-    font-size: 16px;
-    max-height: 120px;
-  }
 
   /* botones con diana de dedo (44px minimo en acciones primarias) */
   .composer-acciones button,
@@ -1762,18 +1467,9 @@ svg.girando {
   /* header móvil: 7 elementos no caben en 360px. Fuera el volver (←):
      en el cel se navega con la hamburguesa → drawer → nuevo chat.
      Acciones del header a 40px (compactas pero tocables). */
-  .chat-header .volver:not(.hamburguesa) {
-    display: none;
-  }
   .chat-header button {
     min-height: 40px;
     min-width: 40px;
-  }
-  .header-acciones {
-    gap: 2px;
-  }
-  .chat-titulo h2 {
-    font-size: 14.5px;
   }
   .mb-status {
     white-space: nowrap;
@@ -1787,35 +1483,15 @@ svg.girando {
   }
 
   /* las burbujas usan todo el ancho util */
-  .mensajes {
-    padding: 14px 10px 8px;
-  }
-  .user-bubble {
-    max-width: 92%;
-  }
 
   /* header compacto: menos padding */
-  .chat-header {
-    gap: 8px;
-  }
 
   /* el hero (selector inicial) respira mejor en vertical */
   .hero {
     padding: 18px 14px;
   }
-  .hero h1 {
-    font-size: 1.6rem;
-  }
 
   /* el textarea crece menos: el teclado no se come todo */
-  .composer {
-    padding: 10px 12px 8px;
-  }
-  .input-bar {
-    /* UNA sola capa abajo: el safe-area del sistema, sin aire doble
-       (antes input-bar + composer sumaban ~50px muertos bajo la caja) */
-    padding: 8px 10px max(4px, env(safe-area-inset-bottom));
-  }
 }
 
 /* --- Puente BLE: estados de resurrección --- */
@@ -1843,25 +1519,11 @@ svg.girando {
 .sugerencias {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  padding: 6px 12px 14px;
 }
 .sugerencia {
-  padding: 9px 15px;
   font-size: 0.82rem;
-  color: var(--text-2);
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-pill);
   cursor: pointer;
   transition: all 0.15s ease;
-  min-height: 40px;
-}
-.sugerencia:hover {
-  color: var(--text-1);
-  border-color: var(--accent);
-  background: var(--accent-soft);
 }
 .sugerencia:active { transform: scale(0.96); }
 
