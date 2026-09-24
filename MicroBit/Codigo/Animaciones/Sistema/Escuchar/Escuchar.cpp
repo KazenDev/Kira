@@ -1,17 +1,14 @@
 /**
- * Escuchar.cpp - MODO ESCUCHA GPT 🎙️🌀
+ * Escuchar.cpp - ESCUCHA MANUAL DEL MICRO:BIT 🎙️🔘
  *
- * El micro:bit escucha en vivo (aro + audio streaming) y streamea TODO el
- * audio a la PC: el CORTE lo decide el SERVER con Silero VAD (red neuronal,
- * mira cada frame y distingue voz real de ruido/pausas) y nos avisa con
- * STOP por serial. Este VAD de energia queda SOLO DE RESPALDO: corta por
- * silencio larguisimo (4s, si el server se murio) o por timeout.
+ * La captura queda abierta hasta que una persona decide terminarla:
  *
- * Niveles (desviacion media del chunk, 8-bit signed):
- *   silencio -> ~2..8
- *   voz      -> ~15..60
- * Umbrales: voz > 10 (sostenido 150ms), respaldo < 7 por 4s.
- * Timeouts: nadie hablo en 8s -> corta vacio. Maximo 30s -> corta igual.
+ *   A -> iniciar o finalizar y enviar (AUDIO:END)
+ *   B -> cancelar sin transcribir (AUDIO:CANCEL)
+ *
+ * El aro sigue la desviacion media de los samples (nivelAudio), calculada
+ * por el sink de Grabar. No hay deteccion de voz ni corte por silencio: el
+ * control es deliberadamente manual.
  */
 #include "Escuchar.h"
 #include "../Grabar/Grabar.h"
@@ -19,26 +16,13 @@
 
 bool modoEscuchar = false;
 
-// Estado del VAD
-static bool     huboVoz = false;      // el usuario ya empezo a hablar?
-static uint64_t ultimoConVoz = 0;     // cuando fue la ultima vez que hubo voz
-static uint64_t inicioEscucha = 0;    // cuando arranco esta sesion
-static int      framesVoz = 0;        // frames seguidos con voz (umbral)
-
-// Umbrales (nivel 0..~90, desviacion media del chunk)
-#define UMBRAL_VOZ    10.0f
-#define UMBRAL_CORTE  7.0f
-#define SILENCIO_CORTE_MS   4000   // RESPALDO: 4s de silencio (el server corta antes)
-#define SIN_VOZ_MAX_MS      8000   // nadie hablo en 8s -> cortar vacio
-#define ESCUCHA_MAX_MS      30000  // maximo total 30s
-
 // ---------------------------------------------------------------------------
-// Aro de la escucha: igual que la variante Aro pero con el nivel del sink
-// (radio 0.3 puntito -> 2.4 pantalla llena, respira en silencio)
+// Aro de escucha: radio 0.3 -> 2.4, reacciona al nivel del microfono y
+// respira suavemente cuando hay silencio.
 // ---------------------------------------------------------------------------
 static void pintarAroEscucha()
 {
-    float n = nivelAudio / 90.0f;          // normalizado 0..1
+    float n = nivelAudio / 90.0f;
     if (n < 0.0f) n = 0.0f;
     if (n > 1.0f) n = 1.0f;
 
@@ -64,24 +48,42 @@ static void pintarAroEscucha()
     }
 }
 
-void escucharIniciar()
+void escucharArmar()
 {
-    if (modoEscuchar) return;   // ya escuchando (idempotente)
-
+    if (modoEscuchar) return;
     modoEscuchar = true;
-    huboVoz = false;
-    framesVoz = 0;
-    inicioEscucha = uBit.systemTime();
-    ultimoConVoz = inicioEscucha;
-
+    nivelAudio = 0.0f;
     uBit.display.setBrightness(180);
     uBit.display.image.clear();
+}
 
-    // Arranca el stream de audio crudo a la PC (AUDIO:START + samples).
-    // El sink de grabacion calcula nivelAudio con cada chunk (para el VAD
-    // y para el aro). NO usamos iniciarVoz/MicFft: el mic solo puede
-    // alimentar un downstream, y el grabador es el que manda el audio.
+bool escucharMicroActivo()
+{
+    return grabandoSerial;
+}
+
+void escucharIniciar()
+{
+    if (grabandoSerial) return;
+
+    // Si la PC ya nos armó con ESCUCHAR, conservamos el aro y solo abrimos
+    // el microfono al primer A. Si se llama directo desde el boton, hace
+    // ambas cosas.
+    if (!modoEscuchar) {
+        modoEscuchar = true;
+        nivelAudio = 0.0f;
+        uBit.display.setBrightness(180);
+        uBit.display.image.clear();
+    }
+
+    // El stream crudo y el aro usan el mismo microfono. No se llama al VAD:
+    // el hardware queda esperando el siguiente flanco de A o B.
     grabarIniciar();
+    if (!grabandoSerial) {
+        // El microfono no pudo arrancar; no dejamos un modo fantasma.
+        modoEscuchar = false;
+        uBit.display.setBrightness(90);
+    }
 }
 
 void escucharDetener()
@@ -89,12 +91,25 @@ void escucharDetener()
     if (!modoEscuchar) return;
 
     modoEscuchar = false;
-
-    // Cierra el stream de audio (AUDIO:END, con retry por si el serial
-    // esta ocupado con el ultimo chunk)
+    nivelAudio = 0.0f;
     grabarDetener();
+    uBit.display.setBrightness(90);
+}
 
-    uBit.display.setBrightness(90);   // vuelve a la luz tenue
+void escucharCancelar()
+{
+    if (!modoEscuchar) return;
+
+    modoEscuchar = false;
+    nivelAudio = 0.0f;
+    grabarCancelar();
+    uBit.display.setBrightness(90);
+}
+
+void escucharVad()
+{
+    // Se conserva la funcion para no romper llamadas viejas del firmware.
+    // El modo manual ya no decide el fin por voz/silencio.
 }
 
 void escucharFrame()
@@ -102,38 +117,4 @@ void escucharFrame()
     if (!modoEscuchar) return;
     pintarAroEscucha();
     uBit.sleep(16);   // ~60 fps
-}
-
-void escucharVad()
-{
-    if (!modoEscuchar) return;
-
-    // Nivel del mic desde el sink de grabacion (actualizado por el stream)
-    float nivel = nivelAudio;
-
-    uint64_t ahora = uBit.systemTime();
-
-    if (nivel > UMBRAL_VOZ) {
-        framesVoz++;
-        // Sostenido 150ms (9 frames a 60fps): un ruidito no cuenta
-        if (framesVoz >= 9) {
-            if (!huboVoz) huboVoz = true;
-            ultimoConVoz = ahora;
-        }
-    } else {
-        framesVoz = 0;
-    }
-
-    // Reglas de corte
-    if (!huboVoz) {
-        // nadie hablo todavia: dar 7s, despues cortar vacio
-        if (ahora - inicioEscucha > SIN_VOZ_MAX_MS)
-            escucharDetener();
-    } else {
-        // ya hubo voz: cortar por silencio sostenido o por timeout max
-        bool silencioLargo = (nivel < UMBRAL_CORTE)
-                             && (ahora - ultimoConVoz > SILENCIO_CORTE_MS);
-        if (silencioLargo || (ahora - inicioEscucha > ESCUCHA_MAX_MS))
-            escucharDetener();
-    }
 }

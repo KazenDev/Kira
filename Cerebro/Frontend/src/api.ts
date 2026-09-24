@@ -505,7 +505,7 @@ export async function enviarMensajeStream(
   }
 }
 
-// Resultado de la ESCUCHA GPT (al terminar de hablar)
+// Resultado de la ESCUCHA MANUAL (al pulsar A por segunda vez)
 export interface ResultadoEscucha {
   transcripcion: string | null;
   archivo: string | null;
@@ -532,13 +532,14 @@ export async function transcribirDesdeCel(blob: Blob): Promise<string | null> {
   return d.transcripcion ?? null;
 }
 
-// ESCUCHA GPT real (SSE): el micro:bit escucha y corta solo al dejar de
-// hablar. onNivel(nivel) se llama en vivo con la fuerza del audio (0..~90)
-// para pintar el orbe; onFin(res) cuando termina TODO (transcripcion + mp3).
+// ESCUCHA MANUAL (SSE): el microfono queda abierto hasta A (enviar) o
+// B (cancelar). onNivel se llama en vivo; onFin recibe la transcripcion y
+// onCancel se llama cuando el firmware descarta la captura.
 export async function escucharVoz(
   onNivel: (nivel: number) => void,
   onFin: (res: ResultadoEscucha) => void,
-  onError: (e: Error) => void
+  onError: (e: Error) => void,
+  onCancel?: () => void,
 ): Promise<void> {
   try {
     const r = await fetchKira('/api/escuchar', { method: 'POST' });
@@ -577,6 +578,9 @@ export async function escucharVoz(
             archivo: datos.archivo ?? null,
             duracion_s: Number(datos.duracion_s ?? 0),
           });
+          return;
+        } else if (datos.tipo === 'cancelado') {
+          onCancel?.();
           return;
         }
       }

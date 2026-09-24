@@ -781,7 +781,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   );
 
   // ---------- VOZ: dos rutas, una sola sesión activa ----------
-  // a) con serial: escucharVoz() + VAD del servidor
+  // a) con serial: escucharVoz() manual; A envía y B cancela en el micro:bit
   // b) sin serial: MediaRecorder del teléfono + transcripción en backend
   const grabadorCel = useRef<MediaRecorder | null>(null);
   const streamCel = useRef<MediaStream | null>(null);
@@ -996,15 +996,21 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         setEscuchando(false);
         escuchandoRef.current = false;
         mostrarErrorTemporal(String(e.message || e));
+      },
+      () => {
+        if (sesionEscucha !== escuchaSesionRef.current) return;
+        setEscuchando(false);
+        escuchandoRef.current = false;
+        setNivelEscucha(0);
       }
     );
   };
 
   // ✕ CANCELAR: tira la grabación sin mandar nada (sirve en AMBAS rutas;
-  // antes, con el micro:bit conectado, no había forma de cortar la escucha).
+  // en el micro:bit también podés cancelar con B).
   const cancelarEscucha = () => {
     cortarEscucha(); // invalida la sesión: el onstop NO transcribe ni envía
-    postSilencioso('/api/stop'); // la carita del micro:bit vuelve a la calma
+    postSilencioso('/api/cancelar'); // descarta el audio; no intenta transcribirlo
   };
 
   const cambiarSonido = (v: boolean) => {

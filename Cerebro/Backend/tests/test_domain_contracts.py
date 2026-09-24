@@ -34,6 +34,14 @@ def test_audio_parser_keeps_partial_markers() -> None:
     assert not audio and not complete
     phase, buffer, audio, complete = consume_audio_capture(phase, buffer, b"T\nabc")
     assert phase == "audio" and audio == b"abc"
+    phase, buffer, audio, complete = consume_audio_capture(
+        "esperando_start", b"", b"AUDIO:CANCEL\n"
+    )
+    assert phase == "cancelado" and audio == b"" and complete
+    phase, buffer, audio, complete = consume_audio_capture(
+        "audio", b"", b"xyzAUDIO:CANCEL\n"
+    )
+    assert phase == "cancelado" and audio == b"" and complete
 
 
 def test_relay_broker_does_not_duplicate_nack() -> None:

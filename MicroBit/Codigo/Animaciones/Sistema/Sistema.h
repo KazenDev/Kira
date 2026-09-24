@@ -26,9 +26,9 @@ extern EmocionActual emocionActual;   // definido en Sistema.cpp
 // "TALK" (habla hasta que llegue otra emocion o STOP), "LOADING"
 // (patron de carga ALEATORIO), "LOADALL" (preview de todos los patrones),
 // "BLINK", "TEST" (demo), "TRANS" (transicion aleatoria de prueba),
-// "TRANSALL" (preview de las 3 transiciones) y "STOP" (vuelve a la
-// alegria en reposo). Cada cambio de EMOCION reproduce una TRANSICION
-// aleatoria (60 FPS) antes de dibujar la cara nueva.
+// "TRANSALL" (preview de las 3 transiciones), "CANCELAR" (descarta la
+// escucha manual) y "STOP" (vuelve a la alegria en reposo). La escucha
+// manual se controla con A (abrir/enviar) y B (cancelar).
 // SENSORES (tool calling de la IA, lecturas puras que no tocan la cara):
 //   SENSOR:TEMP  -> TEMP:24      (grados Celsius)
 //   SENSOR:LUZ   -> LUZ:120      (0..255)

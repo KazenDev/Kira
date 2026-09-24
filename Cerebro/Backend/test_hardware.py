@@ -35,10 +35,28 @@ def test_audio_parser() -> None:
     phase, buffer, audio, complete = consume_audio_capture(phase, buffer, b"T\nabc")
     check(phase == "audio" and audio == b"abc", "el remanente de START se procesa una vez", (phase, audio))
 
-    phase, buffer, audio, complete = consume_audio_capture(phase, buffer, b"defAUDIO:EN")
+    phase, buffer, audio, complete = consume_audio_capture(
+        "esperando_start", b"", b"AUDIO:CANCEL\n"
+    )
+    check(
+        phase == "cancelado" and audio == b"" and complete,
+        "CANCEL antes de START cancela la espera",
+        (phase, audio, complete),
+    )
+
+    phase, buffer, audio, complete = consume_audio_capture("audio", b"", b"defAUDIO:EN")
     check(audio == b"def" and not complete, "audio antes de END incompleto", (audio, complete))
     phase, buffer, audio, complete = consume_audio_capture(phase, buffer, b"D\n")
     check(audio == b"" and complete, "END completes la captura", (audio, complete))
+
+    phase, buffer, audio, complete = consume_audio_capture(
+        "audio", b"", b"xyzAUDIO:CANCEL\n"
+    )
+    check(
+        phase == "cancelado" and audio == b"" and complete,
+        "CANCEL descarta la captura",
+        (phase, audio, complete),
+    )
 
 
 def test_device_state() -> None:

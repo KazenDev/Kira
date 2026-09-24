@@ -11,6 +11,8 @@
  *                        AUDIO:START\n
  *                        <bytes crudos 8-bit signed a 11kHz>
  *                        AUDIO:END\n
+ *   ESCUCHAR/BTN A -> captura manual; el segundo A manda AUDIO:END
+ *   B / CANCELAR   -> descarta y manda AUDIO:CANCEL\n
  *                    (el ACK del comando llega ANTES del AUDIO:START)
  *
  * NOTA de calidad: el micro:bit v2 muestrea a 11kHz/8-bit -> suena a
@@ -27,7 +29,7 @@
 extern volatile bool grabandoSerial;
 
 // Nivel de audio del chunk actual (desviacion media, 0..~90). Lo calcula
-// el sink con los samples que ya recibe: el VAD de la escucha GPT lo usa
+// el sink con los samples que ya recibe: el aro de escucha manual lo usa
 // en vez del FFT (que no corre durante la grabacion).
 extern volatile float nivelAudio;
 
@@ -41,5 +43,9 @@ void grabarIniciar();
 // Corta el flujo: vacia el buffer, apaga el mic (corriente incluida)
 // y manda AUDIO:END para que la PC cierre el archivo.
 void grabarDetener();
+
+// Cancela el flujo sin cerrar un archivo usable: apaga el mic y manda
+// AUDIO:CANCEL para que el backend descarte la captura.
+void grabarCancelar();
 
 #endif // GRABAR_H

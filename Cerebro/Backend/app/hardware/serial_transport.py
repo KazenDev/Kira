@@ -34,6 +34,7 @@ class SerialTransport:
         # GRABACION de audio: modo binario (sin parsear lineas).
         # dict con datos, evento, fase ('esperando_start'|'audio'), buf
         self._captura: dict | None = None
+        self._ultima_captura_cancelada = False
         # Relay BLE extraído. Los aliases siguientes mantienen compatibilidad
         # con diagnóstico y tests legacy.
         self.relay = RelayBroker(lock=self._lock)
@@ -122,6 +123,10 @@ class SerialTransport:
     @pendiente.setter
     def pendiente(self, value: str) -> None:
         self.state.pending = value
+
+    @property
+    def ultima_captura_cancelada(self) -> bool:
+        return self._ultima_captura_cancelada
 
     @property
     def patron_leds(self) -> str | None:
@@ -321,6 +326,11 @@ class SerialTransport:
         )
         cap["fase"] = phase
         cap["buf"] = buffer
+        if phase == "cancelado":
+            cap["cancelado"] = True
+            cap["datos"].clear()
+            cap["evento"].set()
+            return
         if complete:
             cap["evento"].set()
 
@@ -409,11 +419,15 @@ class SerialTransport:
                     "buf": b"",
                     "cb_nivel": callback_nivel,
                     "cb_chunk": callback_chunk,
+                    "cancelado": False,
                 }
+            self._ultima_captura_cancelada = False
             self.enviar("ESCUCHAR")
             if not evento.wait(timeout):
                 return None
-            return bytes(datos)
+            cancelada = bool(cap.get("cancelado"))
+            self._ultima_captura_cancelada = cancelada
+            return None if cancelada else bytes(datos)
         finally:
             with self._lock:
                 self._captura = None
@@ -432,7 +446,9 @@ class SerialTransport:
                     "evento": evento,
                     "fase": "esperando_start",
                     "buf": b"",
+                    "cancelado": False,
                 }
+            self._ultima_captura_cancelada = False
             self.enviar(f"RECORD:{duracion_ms}")
             if not evento.wait(timeout):
                 return None
