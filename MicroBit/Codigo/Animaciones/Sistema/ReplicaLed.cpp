@@ -52,9 +52,16 @@ static void fibraReplica()
         bool cambio = primera || memcmp(anterior, buf + 4, 25) != 0;
 
         if (cambio) {
-            uBit.serial.send((uint8_t *)buf, (int)n);
-            memcpy(anterior, buf + 4, 25);
-            primera = false;
+            // El frame LED es TELEMETRIA: si el UART esta ocupado (lo esta el
+            // ACK de un comando, que es prioridad), se pierde y esta bien. No
+            // se reintenta porque pelear por el UART hacia perder ACKs, que
+            // si son protocolo. Ademas la replica es adaptativa: como la
+            // imagen no cambio, el proximo frame reintenta solo al proximo
+            // cambio de imagen.
+            if (uBit.serial.send((uint8_t *)buf, (int)n) != DEVICE_SERIAL_IN_USE) {
+                memcpy(anterior, buf + 4, 25);
+                primera = false;
+            }
             uBit.sleep(50);   // ~20fps mientras hay movimiento
         } else {
             uBit.sleep(400);  // reposo: silencio, sin parpadeo de la luz
