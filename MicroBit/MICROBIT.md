@@ -180,6 +180,346 @@ transmite (deja de parpadear el LED amarillo de actividad).
 
 ---
 
+## 😄 PATRON DE FRAME (emociones)
+
+Las emociones se animan con el **patrón de frame**: `animarX()` muestra **un
+frame (~16 ms)** y vuelve. El bucle de `Principal.cpp` la llama ~60 veces por
+segundo y **el estado de la animación vive en `systemTime()`**, no en una cadena
+de `sleep()`.
+
+```cpp
+// Alegria.cpp, esquema
+if (revisarSerial()) return;                 // chequeo en CADA frame
+unsigned short t = (uBit.systemTime() - faseBase) % CICLO_MS;
+// ... derivar ojos y brillo de t, escribir solo lo que cambio ...
+uBit.sleep(16);
+```
+
+El ciclo de cada emoción es una **tabla de segmentos** (`CICLO[]` con `desde`,
+`hasta`, `curva`) en vez de una secuencia de funciones: agregar una fase es
+agregar una fila. La tabla vive en FLASH, no en RAM (~42 bytes por emoción).
+
+**Por qué importa** (medido, ver abajo):
+
+- La versión anterior era una secuencia de ~170 `sleep()` con el progreso
+  *dentro* de los `sleep`. La fase "respirar" eran **1,29 s sin un solo
+  `revisarSerial()`**: si la IA mandaba un comando ahí, la cara no se enteraba
+  hasta 1,3 s después.
+- Con el estado en el reloj la animación es una **función pura del tiempo**, así
+  que **interrumpir es gratis**: el frame siguiente ya calculó el estado nuevo.
+- Las curvas son continuas (un seno evaluado por frame) en vez de 13 escalones
+  de brillo sostenidos 22 ms cada uno.
+- El parpadeo dejó de ser en serie: el original cerraba el ojo izquierdo y
+  240 ms después el derecho (1,08 s de "parpadeo"). Ahora los dos salen del
+  mismo número.
+
+Mismo patrón que ya usaba el metrónomo (`metroFrame()`), por eso queda
+consistente con el resto de la firmware y no es una excepción.
+
+**Las 8 de 8 migradas.** Ranking medido (`sh Bench/run_emociones.sh`):
+
+| emoción | ciclo | fps | checkpoints | escrituras | **ventana muerta** |
+|---|---|---|---|---|---|
+| Alegría | 6160 ms | 49,5 | 385 | 140 | **0 ms** (era 1290) |
+| Triste | 6768 ms | 44,3 | 423 | 323 | **0 ms** (era 1415) |
+| Cansado | 4336 ms | **77,5** | 271 | 291 | **0 ms** (era 995) |
+| Miedo | 2224 ms | 54,9 | 139 | 96 | **0 ms** (era 670) |
+| Enojado | 4576 ms | 33,2 | 286 | **44** | **0 ms** (era 948) |
+| Sorprendido | 2640 ms | 27,3 | 165 | 81 | **0 ms** (era 725) |
+| Neutral | 3888 ms | 46,0 | 243 | 127 | **0 ms** (era 810) |
+| Fastidio | 1632 ms | 40,4 | 102 | 29 | **0 ms** (era 650) |
+
+### Fastidio: la asimetría está en los OJOS
+
+Sin azar, y de nuevo **sin cambiar ni un tiempo**, porque los gestos ya
+estaban bien y hay respaldo:
+
+- **La cara de reojo**: los ojos van en (0,1) y (3,1), **asimétricos a
+  propósito**. El desprecio se define por asimetría (*"a half-smirk, one side
+  raised... subtle and asymmetric"*) y *"echar los ojos hacia atrás es el gesto
+  clásico del comportamiento desdeñoso"*. Un fastidio simétrico se vería
+  robótico.
+- **El parpadeo duro** (cierre instantáneo, 130 ms) es un *"full blink de
+  énfasis"*: las guías lo describen como "reset, emphasis", y el *"tight
+  blink"* como determinación — de ahí el "aguanta la calma".
+- **La ceja que tiembla por el borde interno** es un build lento, que es
+  exactamente lo que recomiendan frente al "se llena de golpe".
+- **El "tsk"** es una microexpresión fugaz, como manda la guía: el desprecio
+  *"se manifiesta como una microexpresión fugaz, de una fracción de
+  segundo"*.
+
+### Lo que las ocho dan en conjunto
+
+- **Reactividad: de 650-1415 ms a 0 ms en las ocho.** Sin excepción.
+- **Fluidez: sube solo cuando el paso original era más largo que un frame**
+  (40-45 ms → ×2 a ×3; 30-35 ms → ×1,7; 18-30 ms → nada que ganar). No es una
+  regresión cuando no sube: es que no había escalera que arreglar.
+- **Escrituras al framebuffer: bajan** en seis de las ocho, porque la cara ya
+  no se repinta en cada pasada.
+- **`__aeabi_idiv` en toda la firmware: 0.** Ninguna animación paga divisiones
+  enteras por software.
+
+### Neutral: los gestos ya estaban bien, y hay respaldo
+
+No se cambió **ni un tiempo**. Los dos gestos tienen sustento:
+
+- **El peek** (se apagan los párpados exteriores y quedan las pupilas, con
+  420 ms de mirada fija): *"el párpado superior hace la mayor parte del
+  movimiento y el inferior la sigue"*, *"usar **parpadeos a medio cerrar**
+  para personajes informales"*, y *"una mirada sostenida con pocos parpadeos
+  transmite concentración o foco intenso"*. Es un medio parpadeo, no un
+  parpadeo.
+- **El "meh"** (solo se mueve el labio izquierdo, el derecho queda quieto): es
+  **asimetría**, y hay evidencia de que funciona — *"incluir uno o una
+  combinación de movimientos asimétricos de ceja, boca o párpado aumenta la
+  credibilidad, atractivo y naturalidad percibidos"*, y *"las caras puramente
+  simétricas pueden haber contribuido a que el personaje virtual parezca
+  artificial"*. Un neutral simétrico es justo lo que hace que una cara se vea
+  robótica. La misma literatura aclara que la asimetría rinde sobre todo en
+  emociones complejas/ambivalentes: un "meh" es exactamente eso.
+
+Verificado en la placa: aparecen los tres estados, y el del "meh" tiene **un
+solo píxel encendido del lado izquierdo**.
+
+Su fps subió **26,8 → 46,0** porque sus pasos eran de 30-35 ms, más del doble
+de un frame: había escalera real que arreglar.
+
+### Sorprendido: el único con CICLO VARIABLE
+
+El pulso de asombro sale cada 2-3 ciclos, así que el ciclo **no tiene duración
+fija**: 2630 ms con pulso, 1880 ms sin él. Con un único ciclo fijo de 2630, dos
+de cada tres ciclos tendrían 750 ms de cara quieta de más — un 40% más lento, y
+el ritmo se notaría.
+
+Se resolvió carrying un **ancla absoluta del ciclo corriente** (`inicioCiclo`)
+que se avanza en cada wrap, en vez de calcular la fase con un módulo desde un
+ancla fija. Sin división, sin drift, y sin el pulso desfasado.
+
+> **Lo que costó encontrar**: la primera versión alternaba
+> `(ahora - faseBase) % 2630` y `(ahora - faseBase) % 1880`. Compilaba, el bench
+> en el host daba bien, y en la placa daba **54 "ciclos" en 80 s con duraciones
+> de 50 ms a 2,6 s**. Dos módulos de período distinto latiguean entre sí: los
+> límites de ciclo caen donde caiga. **El bench de host no lo detectó porque
+> siempre midió el ciclo con pulso**; lo delató la medición end-to-end en la
+> placa. Corregido y verificado: 23 ciclos de 1880, 13 de 2630, cero raros, un
+> pulso cada 2,6 ciclos.
+
+**Lo que se dejó intacto**: los ojos quedan 280 ms mirando fijo. Las guías de
+animación de sorpresa dicen que "puede haber un momento de quietud mientras el
+personaje procesa lo que está pasando" y que "una reacción auténtica pasa muy
+rápido, en apenas unos frames" — el hold *es* la sorpresa. Y el pulso queda por
+escalones, porque un startle es involuntario y abrupto: una rampa suave se
+leería como una transición normal.
+
+### Enojado: la escalada de las cejas
+
+La fase más larga eran las cejas: **1.110 ms sin un solo `revisarSerial()`**,
+la mayor de las ocho. Ahora 0.
+
+Dos cosas que se dejaron **a propósito**, porque ya estaban bien:
+
+- **Las 3 oleadas de cejas se aceleran** (400 / 370 / 340 ms). Eso ya es una
+  escalada, y la escalada es lo que hace creíble un enojo: *"no solo
+  intensifica el estallido final, también lo hace más creíble porque el
+  espectador siente la progresión emocional"*.
+- **El parpadeo brusco se queda por escalones** (255, 127, 0). Un golpe tiene
+  que resolver en pocos frames; estirarlo le quita potencia.
+
+Una que **se propuso** y quedó conmutable en `ARC_CEJA`: el original encendía
+las dos cejas interiores *de golpe*. Las guías de animación de cejas dicen que
+el movimiento va **en arco**: la exterior adelanta y la interior la sigue con
+unos 40 ms de retraso. Con `ARC_CEJA = 0` queda igual que el original; con
+`0.036` la derecha sigue a la izquierda. Verificado en la placa: se ven los
+dos estados intermedios (`##..#` y `#..##`).
+
+### El patrón da siempre lo mismo: reactividad
+
+Después de cinco migraciones, el patrón de las cifras es clarísimo:
+
+| | fps antes → después | latencia |
+|---|---|---|
+| Alegría | 25,2 → 49,5 | 1290 → 0 |
+| Cansado | 25,9 → 77,5 | 995 → 0 |
+| Miedo | 56,1 → 54,9 | 670 → 0 |
+| Enojado | 33,7 → 33,2 | 948 → 0 |
+
+**La fluidez solo sube cuando los pasos originales eran más largos que un
+frame** (40-50 ms en Alegría y Cansado). Cuando ya eran de 18-30 ms (Miedo,
+Enojado) el fps se queda igual… y no es una regresión: es que no había
+fluidez que ganar. **Lo que siempre mejora es la reactividad, sin excepción**,
+y las escrituras al framebuffer bajan (Enojado 71 → 44) porque la cara ya no se
+repinta en cada pasada.
+
+### Miedo: el latido y el temblor
+
+Segunda emoción con azar (la primera fue Triste). Acá el azar es un solo punto:
+el temblor del cuerpo, `85 + uBit.random(70)`. Se resolvió igual que en Triste,
+con `pseudo()` (hash sin estado, ~15 ciclos contra los ~100 del LFSR).
+
+El "pum-pum" quedó **por escalones a propósito**: un latido es un golpe, no una
+curva, y el segundo latido más corto y más tenue es el "dub" del "lub-dub"
+— que es justo lo que ya hacía el original (160/50 ms y 140/40 ms).
+
+> **Pendiente de tu ojo, a una línea**: el temblor se re-ranura cada
+> `TEMBLO_MS = 30`, o sea ~33 Hz. Las guías de movimiento sitúan el
+> "temblor/espiro" entre **5 y 15 Hz** (período 0,07–0,2 s): por arriba de eso
+> un brillo que salta al azar empieza a leerse como **parpadeo** y no como
+> cuerpo temblando. Si cuando lo mires te parece que centellea en vez de
+> temblar, subí `TEMBLO_MS` a `100` (10 Hz, en plena banda). Está en
+> `Miedo.cpp`, con la nota al lado. No se cambió por decisión propia: es diseño
+> visual del personaje.
+
+Ojo con Miedo en los números: **el fps bajó apenas** (56,1 → 54,9). No es una
+regresión: Miedo ya era la más fluida de las ocho (pasos de 30–50 ms), así que
+no había fluidez que ganar. Lo que se ganó fue **reactividad**: 670 ms → 0.
+
+### Cansado: el caso mecánico (la referencia para las 3 que faltan)
+
+Sin azar: todo sale de la tabla de segmentos y de la fase. Fue el que mejor
+salió de las tres migraciones, **25,9 → 77,5 fps** y **995 ms → 0 ms** de
+ventana muerta.
+
+Dos cosas que se decidir acá con criterio, no por intuición:
+
+- **No se le puso easing encima.** En un bucle ambiental la propia fase **ya**
+  es la curva; aplicar easing encima se pelea con ella. Las guías de easing
+  para pixel art lo dicen así: *"los bucles deben derivar de la fase, no de
+  estado con easing"*.
+- **Los tiempos del bostezo no se tocaron.** Un bostezo real se hace con abrir
+  lento + hold largo + cerrar lento, y un emote de yawn de verdad usa
+  `hold 400 / tween 600 easeOut / wait 500 / tween 500 easeIn`. Lo que había
+  (180 ms abrir / 400 ms abierto / 180 ms cerrar) ya era correcto.
+
+Nota: el `gap máximo sin cambio` de Cansado quedó en 400 ms, y **no es un
+defecto**: es el hold del bostezo, que existe justamente para que se lea como
+un bostezo y no como un parpadeo de la boca.
+
+### Triste: el caso difícil (el del azar)
+
+Es la única de las ocho con comportamiento aleatorio, y eso choca de frente con
+el patrón de frame. El original usaba `uBit.random()` en dos sitios: el temblor
+del labio (42 llamadas por pasada) y la lágrima.
+
+**El problema con `codal::random()`**: es un LFSR de Schneier con
+`static uint32_t random_value` **global compartido** (`CodalCompat.cpp:33`) que
+también usa `hacerTransicion()` para elegir la transición. O sea que el valor
+del temblor **dependía de cuántos números se habían sacado antes en toda la
+firmware**. No es una función del tiempo, así que con el patrón de frame no
+alcanzaba.
+
+Cómo se resolvió:
+
+- **El temblor** sale de un hash del tiempo (`pseudo()`), no del RNG. Mismo
+  instante → mismo temblor, así que se puede saltar a cualquier punto de la
+  animación y sigue saliendo bien. Y sale **más barato**: ~15 ciclos (dos
+  multiplicaciones single-cycle del M0) contra los ~100 del LFSR con rechazo.
+  La técnica se llama *ruido pseudoaleatorio sin estado, sembrado por el
+  índice de frame*.
+- **La lágrima** sí es una decisión de calendario, no visual, así que puede
+  quedar como estado: un contador que baja **una vez por ciclo** (cuando la
+  fase da la vuelta), no una vez por frame. Con 60 frames por ciclo, bajarlo
+  por frame haría caer una lágrima **por segundo**. Medido en la placa: una
+  cada ~5 ciclos; el original decía cada 4-7.
+
+La cara de Triste se rastrea con los **25 píxeles**, no solo los 7 de la cara:
+la lágrima pasa por la mejilla y pisa píxeles de la boca, así que un rastreo
+parcial mentiría. Cuesta ~1,5 ms de CPU por ciclo de 6,8 s (0,02%): se paga por
+robustez, porque es lo que hace que la cara se auto-repare si un loading se
+detiene o un comando desconocido imprime `?` encima.
+
+> **Trampa de CODAL**: `uBit.serial.printf()` **solo soporta `%d` y `%s`**
+> (`Serial.cpp:425`). Con `%lu` el contador de debug `T<n>` salía vacío, sin
+> ningún error de compilación.
+
+### Verificar
+
+```bash
+# 1) en el host, contra el shim: la version vieja (sacada de git) vs. la que
+#    se flashea
+sh MicroBit/Bench/run.sh                  # Alegria
+sh MicroBit/Bench/run_triste.sh           # Triste (incluye el reloj de lagrima)
+sh MicroBit/Bench/run_transiciones.sh     # las 3 transiciones
+sh MicroBit/Bench/run_emociones.sh        # ranking de las 8
+
+# 2) en la placa real, con el firmware ya flasheado
+python3 MicroBit/prueba_latencia.py
+```
+
+La segunda es la que importa: mide el tiempo entre que sale un comando por USB
+y que la placa lo acusa, barriendo el ciclo de la animación.
+
+### Las transiciones (arregladas)
+
+Las tres (Morfosis, Cortina, Fundido) duran ~2,0 s y eran **completamente
+sordas**: no llamaban `revisarSerial()` ni una vez. Con la IA hablando en una
+feria, cada cambio de emoción dejaba la placa muda 2 segundos. Medido antes:
+**1984-2080 ms** de peor latencia, y mandando cambios cada 0,8 s los comandos
+se apilaban (de 16 ACKs solo llegaron 2).
+
+| | duración | chequeos de serial | peor latencia |
+|---|---|---|---|
+| Morfosis | 2016 ms | 1 → 127 | **1984 ms → 0 ms** |
+| Cortina | 2112 ms | 1 → 135 | **2080 ms → 0 ms** |
+| Fundido | 2016 ms | 1 → 129 | **1984 ms → 0 ms** |
+
+Costo: un `readUntil()` por frame, ~0,03 ms. Son 0,27 ms en toda la transición
+(0,014%). La duración **no cambia**: es el mismo efecto visual.
+
+**El guard de no-anidamiento es obligatorio, no una optimización.** El chequeo
+por frame trae un riesgo: si un comando llega en medio de una transición,
+`revisarSerial()` lo procesa *desde adentro del frame*, y si ese comando es
+otro cambio de emoción llama a `hacerTransicion()`... otra vez. El código corre
+en la pila del proceso principal, no en una fibra: medido en el `.obj`,
+`transicionMorfosis` reserva **572 bytes** de pila y la pila útil es ~2 KB. Tres
+niveles anidados desbordan la pila. `hacerTransicion()` anota el destino
+pendiente y vuelve; el director lo pinta al terminar.
+
+Verificado con una avalancha de 24 cambios de emoción seguidos: la placa
+sigue viva, responde y no deja píxeles sueltos.
+
+```bash
+python3 MicroBit/prueba_transiciones.py    # avalancha + pixeles sueltos
+sh MicroBit/Bench/run_transiciones.sh      # A/B en el host (vieja vs nueva)
+```
+
+**Lo que se descartó con medición** (no por intuición):
+
+- **Divisiones enteras**: se sospechó que Morfosis pagaba ~4000 llamadas a
+  `__aeabi_idiv` (el M0+ no tiene divisor por hardware). Al desensamblar el
+  `.obj` real: **0 llamadas**. Y **0 en toda la firmware compilada**: con `-O2`
+  GCC prueba el rango del dividendo y convierte la división en
+  multiplicación+shift. El retardo precalculado queda como código más limpio,
+  no como aceleración. Ver `Bench/div_codegen_arm.c` para el caso donde sí
+  aparece la llamada.
+- **El `clear()` de Morfosis**: 6600 bytes por transición, pero son 0,5 ms de
+  `memclr` en 2 segundos. No vale la pena tocarlo.
+
+**Lo que sí se corrigió, aparte del serial**: Cortina escribía la columna
+central **dos veces** por píxel (220 escrituras de regalo) y Fundido hacía 126
+llamadas a `setBrightness` de las cuales 13 **no cambiaban nada visible** (el
+quantum del PWM es `0,8169 × brillo`, así que avanza de a saltos de ~1,22
+unidades) — y cada llamada es una división por software. Al abortar un Fundido
+a mitad hay que **restaurar el brillo a 90**, o la cara queda a media luz.
+
+**Nota de calibración**: los comentarios decían "72 frames" y "~1,2 s". La
+realidad es 126/132 frames y ~2,0 s. Corregido.
+
+### Lo que falta migrar
+
+- **Ninguna animación.** Las 8 emociones y las 3 transiciones usan patrón de
+  frame.
+- **La réplica LED no puede mostrar el brillo**: compara
+  `getPixelValue(x,y) > 0`, o sea solo on/off. Todo lo que se anima con el PWM
+  global de `setBrightness` (la respiración, el latido, el temblor, el "tsk",
+  la lágrima al atenuarse) **no se ve en el espejo de la web**, aunque en la
+  placa real sí se vea. Es la limitación más visible que queda, y no es del
+  firmware: es que el replicador manda 1 bit por píxel.
+
+> El display refresca a **60 Hz** (`NRF52_LED_MATRIX_FREQUENCY`), así que los
+> 16 ms de cada frame ya son el techo: más rápido no se ve, solo gasta.
+
+---
+
 ## 🛠️ COMPILAR Y FLASHEAR
 
 ```bash
@@ -199,8 +539,67 @@ cp MICROBIT.hex /media/zkazen/MICROBIT/
 ```
 
 ⚠️ **Si el micro:bit deja de responder ACK** (transmite LEDs pero no confirma
-comandos): es basura en el buffer RX del UART. Solución: **re-flashear el hex**
-(resetea el UART por completo).
+comandos): era basura en el buffer RX del UART. **Ya está arreglado en el
+firmware** (ver abajo); re-flashear el hex era solo un parche que limpiaba el
+UART sin tocar la causa.
+
+### RX sano y ACKs que no se pierden (arreglado)
+
+Dos bugs reales que se persistieron durante mucho tiempo con "re-flashear y ver
+si se arregla":
+
+**1. Basura en el RX.** `Serial::readUntil()` en modo `ASYNC` devuelve cadena
+vacía y **no avanza `rxBuffTail`** cuando todavía no encuentra el `\n`
+(`Serial.cpp:786`). Los bytes que llegan sin newline se quedan en el buffer
+**para siempre** y se pegan al comando siguiente:
+
+```
+STOP -> ACK:^\xf7\xf7\x94\xffSTOP     (debería ser ACK:STOP)
+```
+
+El backend nunca matcheaba ese ACK → timeout. Y el backend también se
+defendía por su lado (`serial_transport.py:278`, "descartar la basura del
+boot"): los dos parcheando la misma causa. Ahora el firmware:
+
+- **`rxLimpiar()`**: una línea con bytes de control no es un comando. Se queda
+  solo lo imprimible (0x20–0x7E), lo que también se come el `\r` de Windows. Si
+  la línea era basura, **no se ejecuta nada y no se manda un ACK mentiroso**:
+  avisa `RX:BASURA:Limpio=<cmd>`.
+- **`rxDescartarSiVencio()`**: un parcial que lleva 2 s esperando su `\n` ya no
+  va a llegar. Se tira entero y avisa `RX:PARCIAL:Descartados <n>`. El mismo
+  corte de 2 s que ya usaba la fibra BLE (`BleUart.cpp:175`), así que las dos
+  rutas se comportan igual.
+
+**2. ACKs que se perdían por colisión de TX (la causa real del "deja de
+responder").** `Serial::send()` es **no bloqueante**: si otra fibra está
+transmitiendo devuelve `DEVICE_SERIAL_IN_USE` y **descarta el mensaje en
+silencio** (`Serial.cpp:376`). La fibra de `ReplicaLed` manda un frame `LED:`
+cada 50 ms **sin mirar el retorno**, así que el ACK se perdía *justo cuando la
+cara más se movía* — que es cuando la IA está hablando. Por eso el síntoma
+parecía intermitente y se "arreglaba" re-flasheando.
+
+- `responder()` ahora reintenta (`enviarSerial()`): 20 intentos de 2 ms.
+- `ReplicaLed` hace lo contrario a propósito: si el UART está ocupado, **se
+  saltea el frame** sin reintentar. La réplica es telemetría; el ACK es
+  protocolo. Reintentar la réplica le robaría el UART al ACK.
+- Si el UART se pierde del todo, el mensaje se manda por BLE (`TX:OCUPADO:`).
+
+**Prueba en vivo** (con la placa conectada):
+
+```bash
+python3 MicroBit/prueba_rx.py
+```
+
+Cubre comando limpio, parcial sin `\n`, línea con bytes de control, y que el
+estado envenenado se cure solo. Ojo al escribir tests contra esta placa: el
+retransmisor LED satura el puerto, así que hay que **leer por deadline**, no
+`read(N)` (se bloquea hasta juntar N bytes y el test miente).
+
+**Quirck conocido del transporte, NO es del firmware:** un byte `0x00` en el
+cable hace que el transporte entregue **2 bytes fantasma** y se trague el
+comando siguiente. El firmware no los ve, así que no hay nada que sanear. Lo
+que sí se verificó es que el estado envenenado ahora **se cura solo a los 2 s**
+(antes era permanente).
 
 ---
 
