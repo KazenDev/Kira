@@ -27,10 +27,38 @@ EmocionActual emocionActual = EM_ALEGRIA;
 // conectado (los ACKs y las lecturas de sensor llegan por donde sea que
 // vino el comando).
 // ---------------------------------------------------------------------------
+
+// Serial::send() es NO BLOQUEANTE y DESCARTA el mensaje si otra fibra esta
+// transmitiendo: devuelve DEVICE_SERIAL_IN_USE y el texto se pierde
+// (Serial.cpp:376). La fibra de ReplicaLed manda un frame LED cada 50 ms sin
+// mirar el resultado, asi que el ACK se perdia justo cuando la cara mas se
+// movia - que es cuando la IA esta hablando. Por eso MICROBIT.md decia que
+// "la placa deja de responder ACK" y la unica cura era re-flashear: no era
+// basura en el RX, era una colision de TX. Grabar.cpp ya reintentaba por su
+// cuenta (Grabar.cpp:120); el ACK no. Ahora si.
+//
+// El mensaje que se manda es corto y el frame LED son 29 bytes a 115200
+// (~2,5 ms), asi que 20 intentos de 2 ms alcanzan de sobra. Si aun asi no
+// entra, se avisa por BLE (que va por radio y no compite con el UART).
+static int enviarSerial(ManagedString texto)
+{
+    for (int i = 0; i < 20; i++) {
+        int r = uBit.serial.send(texto);
+        if (r != DEVICE_SERIAL_IN_USE)
+            return r;
+        uBit.sleep(2);
+    }
+    return DEVICE_SERIAL_IN_USE;
+}
+
 static void responder(ManagedString texto)
 {
-    uBit.serial.send(texto);
-    bleEnviar(texto);
+    if (enviarSerial(texto) == DEVICE_SERIAL_IN_USE) {
+        // Perdido el UART: al menos que le llegue al celular por radio.
+        bleEnviar(ManagedString("TX:OCUPADO:") + texto);
+    } else {
+        bleEnviar(texto);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +68,17 @@ void demoAutomatica()
 {
     for (int i = 0; i < 2; i++) {
         // La demo tambien usa las TRANSICIONES entre emociones (60 FPS)
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
+        //
+        // Alegria ahora es una FUNCION DE FRAME (una llamada = un frame), asi
+        // que para que la demo la deje respirar hay que correrla un rato, no
+        // llamarla una sola vez. Las otras 7 emociones siguen siendo
+        // secuencias con sleeps y conservan la llamada simple.
+        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA;
+        {
+            uint32_t hasta = uBit.systemTime() + 1300;
+            while (uBit.systemTime() < hasta) animarAlegria();
+        }
+        uBit.sleep(300);
         hacerTransicion(EM_TRISTE); emocionActual = EM_TRISTE; animarTriste();
         hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
         hacerTransicion(EM_ENOJADO); emocionActual = EM_ENOJADO; animarEnojado();
@@ -63,6 +101,102 @@ void demoAutomatica()
 }
 
 // ---------------------------------------------------------------------------
+// RX SANO: basura en el buffer del UART
+//
+// POR QUE hace falta. Serial::readUntil() en modo ASYNC (Serial.cpp:786)
+// devuelve una cadena vacia y NO avanza rxBuffTail cuando todavia no
+// encuentra el delimitador. Traducido: los bytes que llegan sin "\n" se
+// quedan en el buffer PARA SIEMPRE y se pegan al comando siguiente. Un solo
+// byte basura -un reset a mitad de un comando, un host que se cerro sin
+// mandar el \n- contaminaba el ACK y la placa contestaba:
+//
+//     ACK:^\\\xf7\xf7\x94\xffSTOP        (deberia ser  ACK:STOP)
+//
+// El backend nunca matcheaba ese ACK, se caia el timeout, y el unico
+// "arreglo" documentado era re-flashear la placa (limpia el UART de y por
+// todo). El backend tambien se defendia por su lado con un parche equivalente
+// ("descartar la basura del boot", serial_transport.py:278). Los dos lados
+// parcheando la misma causa: el arreglo va ACA, en la fuente.
+//
+// QUE HACE. Dos cosas, y la segunda es la que de verdad importa:
+//   1) rxLimpiar(): una linea con bytes de control no es un comando. Se
+//      queda solo lo imprimible, y si no queda nada no se ejecuta nada.
+//   2) rxDescartarSiVencio(): un parcial que lleva mucho tiempo esperando su
+//      "\n" ya no va a llegar. Se tira entero.
+//
+// ASIAMBOS CANALES SE PARECEN. La fibra BLE ya hacia exactamente esto, con
+// el mismo corte de 2 s (BleUart.cpp:175). La ruta USB no tenia nada. Ahora
+// las dos se comportan igual, que es la misma logica que ya aplicaron para
+// que un solo despachador atienda los dos canales.
+// ---------------------------------------------------------------------------
+
+// El mismo corte que usa la fibra BLE: si en 2 s no llego el "\n", fue un
+// comando partido y no uno lento.
+static const unsigned long RX_VENCIDO_MS = 2000;
+static bool rxHayParcial = false;
+static unsigned long rxParcialDesde = 0;
+
+// El delimitador se construye UNA vez. readUntil() lo recibe por valor, pero
+// el copy ctor de ManagedString solo hace ptr->incr() (ManagedString.cpp:266):
+// no hay malloc. Antes se construia ManagedString("\n") en cada llamada, y ese
+// constructor SI hace malloc (ManagedString.cpp:78) - un malloc+free por
+// llamada, en un buffer de RAM que comparte con el stack de BLE.
+static ManagedString &delimitadorRx()
+{
+    static ManagedString d("\n");
+    return d;
+}
+
+// Tira un parcial que lleva demasiado tiempo esperando su delimitador.
+static void rxDescartarSiVencio()
+{
+    if (uBit.serial.rxBufferedSize() <= 0) {
+        rxHayParcial = false;
+        return;
+    }
+
+    unsigned long ahora = uBit.systemTime();
+    if (!rxHayParcial) {
+        rxHayParcial = true;
+        rxParcialDesde = ahora;
+        return;
+    }
+
+    if ((int32_t)(ahora - rxParcialDesde) >= (int32_t)RX_VENCIDO_MS) {
+        int bytes = uBit.serial.rxBufferedSize();
+        // clearRxBuffer() hace rxBuffTail = rxBuffHead (Serial.cpp:1070):
+        // descarta TODO lo pendiente, parcial incluido.
+        uBit.serial.clearRxBuffer();
+        rxHayParcial = false;
+        enviarSerial(ManagedString("RX:PARCIAL:Descartados ") + ManagedString(bytes)
+                     + ManagedString("\n"));
+    }
+}
+
+// Deja solo lo imprimible (0x20..0x7E). Esto tambien se come el "\r" de
+// Windows que antes se quitaba a mano, y descarta los bytes de control que
+// CODAL no genera (0x00..0x1F y 0x7F) mas los >= 0x80, que en un char con
+// signo llegan negativos. Devuelve la linea limpia y avisa si hubo basura.
+static ManagedString rxLimpiar(ManagedString cmd, bool &habiaBasura)
+{
+    char buf[64];
+    int n = 0;
+    habiaBasura = false;
+
+    for (int i = 0; i < cmd.length(); i++) {
+        char c = cmd.charAt(i);
+        if (c >= 0x20 && c <= 0x7E) {
+            if (n < (int)sizeof(buf) - 1)
+                buf[n++] = c;
+        } else {
+            habiaBasura = true;
+        }
+    }
+    buf[n] = 0;
+    return ManagedString(buf, n);
+}
+
+// ---------------------------------------------------------------------------
 // Lee el serial: si llego un comando completo, lo procesa y devuelve true.
 // ---------------------------------------------------------------------------
 bool revisarSerial()
@@ -77,19 +211,40 @@ bool revisarSerial()
         procesarComando(pendienteBle);
         return true;
     }
-    ManagedString line = uBit.serial.readUntil(ManagedString("\n"), ASYNC);
+    ManagedString line = uBit.serial.readUntil(delimitadorRx(), ASYNC);
     if (line.length() > 0) {
+        rxHayParcial = false;   // una linea completa: no queda parcial suelto
         procesarComando(line);
         return true;
     }
+
+    // No hay linea completa. Si quedo data suelta y ya es vieja, se tira:
+    // un parcial sin "\n" se quedaria pegado al proximo comando para siempre.
+    rxDescartarSiVencio();
     return false;
 }
 
 void procesarComando(ManagedString cmd)
 {
-    // Quita \r (Windows) del final si viene (readUntil con \n lo deja)
-    if (cmd.length() > 0 && cmd.charAt(cmd.length() - 1) == '\r')
-        cmd = cmd.substring(0, cmd.length() - 1);
+    // RX SANO: una linea con bytes de control no es un comando. Se queda solo
+    // lo imprimible (esto tambien se come el "\r" de Windows). Si la linea
+    // era basura, NO se ejecuta nada y NO se manda un ACK mentiroso: el
+    // comando que la IA mando nunca llego entero, asi que su ACK seria falso.
+    bool habiaBasura = false;
+    ManagedString limpio = rxLimpiar(cmd, habiaBasura);
+
+    if (limpio.length() == 0) {
+        enviarSerial(ManagedString("RX:VACIO:SinComando\n"));
+        return;
+    }
+
+    if (habiaBasura) {
+        // Diagnostico por USB (la fibra BLE ya entrega lineas limpias, asi
+        // que si esto salta venia del serial de la PC).
+        enviarSerial(ManagedString("RX:BASURA:Limpio=") + limpio + ManagedString("\n"));
+    }
+
+    cmd = limpio;
 
     // ACK INMEDIATO a la IA: confirma que el comando llego, ANTES de
     // correr la animacion (que puede tardar 2-6s). Asi la IA siempre
