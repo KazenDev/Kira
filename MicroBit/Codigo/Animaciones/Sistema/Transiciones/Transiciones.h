@@ -15,9 +15,19 @@
  *
  * Comandos de prueba: "TRANS" (una random) y "TRANSALL" (preview).
  *
- * TODO a 60 FPS reales: cada frame = uBit.sleep(16) (1/60 s).
- * Cada transicion dura ~1.2s (72 frames) y termina dejando el primer
- * frame de la emocion destino dibujado (la animacion sigue desde ahi).
+ * TODO a 60 FPS reales: cada frame = uBit.sleep(16) (1/60 s). El display
+ * refresca a 60 Hz (NRF52_LED_MATRIX_FREQUENCY), asi que 16 ms es el techo:
+ * mas rapido no se ve, solo gasta.
+ *
+ * Cada transicion dura ~2,0 s (126 frames; Cortina son 132). OJO: antes de
+ * que se les agregara el chequeo de serial por frame eran COMPLETAMENTE
+ * SORDAS: 2,0 s sin mirar el puerto, con la IA mandando comandos que la
+ * placa no leia. Medido: 1984 ms de peor latencia. Ahora es un frame (16 ms).
+ *
+ * NO SE ANIDAN: si un comando llega durante una transicion, el destino se
+ * guarda y se aplica al terminar, en vez de llamar a otra transicion desde
+ * adentro (Morfosis reserva 580 bytes de pila y la pila util es ~2 KB). Ver
+ * el guard en Transiciones.cpp.
  */
 #ifndef TRANSICIONES_H
 #define TRANSICIONES_H
