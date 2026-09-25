@@ -1,197 +1,372 @@
 /**
  * Triste.cpp - La emocion TRISTE 😢 (en reposo)
  *
- * BULE INFINITO SIN REINICIOS: la cara NUNCA se borra de la pantalla.
- * Boca INVERTIDA (frown) y micro-movimientos LENTOS y PESADOS:
+ * ─────────────────────────────────────────────────────────────────────────
+ * PATRON DE FRAME: una llamada = un frame (~60 fps), el estado en el reloj
+ * ─────────────────────────────────────────────────────────────────────────
  *
- *   1. Respira lento: el brillo sube/baja despacio y mas tenue que
- *      la alegria (la tristeza es apagada)
- *   2. Parpadeo PESADO: los ojos se cierran lento y quedan cerrados
- *      un momento (como ojos cansados), dos veces por pasada
- *   3. La boca tiembla un poquito: el medio del labio tiembla al azar
- *      (el labio a punto de llorar)
- *   4. De vez en cuando (cada 4-7 pasadas, impredecible) cae una
- *      LAGRIMA: se junta bajo un ojo (al azar izq/der), brilla como
- *      agua y baja por la mejilla con estela hasta el menton
+ * Antes era una SECUENCIA de ~105 sleep() con 7 checkpoints en 6 segundos. La
+ * fase "respira lenta" son 1,46 s SIN un solo revisarSerial(), y como aparece
+ * DOS veces por pasada, la ventana sorda era de 1.415 ms: la peor de las ocho
+ * emociones, mas que la alegria tenia antes de migrarla (1.290 ms). Medido con
+ * Bench/bench_emociones.cpp.
  *
- * Misma arquitectura que la alegria: UNA pasada por llamada, el bucle
- * infinito vive en Principal.cpp que revisa el serial entre pasadas.
+ * Ahora el estado vive en systemTime(): la animacion es una funcion pura del
+ * tiempo, el comando de la IA se nota en el frame siguiente y las curvas son
+ * continuas en vez de escalones. Mismo patron que Alegria y que el metronomo.
+ *
+ * LO QUE HACE MAS DIFICIL ESTO: la tristeza es la unica con AZAR. El
+ * original usaba el RNG de CODAL en dos sitios:
+ *
+ *   - la boca tiembla: 42 llamadas a uBit.random() por pasada
+ *   - la lagrima: de que ojo cae, y cada cuanto cae (cada 4-7 pasadas)
+ *
+ * Eso NO es una funcion del tiempo. codal::random() es un LFSR con
+ * `static uint32_t random_value` GLOBAL COMPARTIDO (CodalCompat.cpp:33) que
+ * tambien usa hacerTransicion() para elegir la transicion: el valor del
+ * temblor dependia de cuantos numeros se habian sacado antes en toda la
+ * firmware. Con el patron de frame eso no sirve: hay que poder saltar a
+ * cualquier instante y que la cara siga saliendo bien.
+ *
+ * Como se resuelve:
+ *   - EL TEMBLOR sale de un hash del tiempo (pseudo()), no del RNG. Es una
+ *     funcion pura: mismo instante, mismo temblor. Y sale MAS BARATO: ~15
+ *     ciclos contra ~100, porque son dos multiplicaciones de un solo ciclo
+ *     (el M0 no tiene multiplicador de alta media, pero el de 32x32->32 es
+ *     single cycle) en vez de un LFSR con rechazo.
+ *   - LA LAGRIMA si es una decision de calendario, no visual, asi que puede
+ *     quedar como estado: un contador que baja UNA VEZ POR CICLO (cuando la
+ *     fase da la vuelta), no una vez por pasada. Se conserva el "cada 4-7
+ *     pasadas" del original.
  */
 #include "Triste.h"
 #include "../../Sistema/Sistema.h"
+// cosf() para las curvas. Explicito aunque CODAL ya arrastre math.h.
+#include <math.h>
 
 // ---------------------------------------------------------------------------
-// Posiciones de la cara en la matriz 5x5 (x, y) - mismas que la alegria
+// Posiciones de la cara en la matriz 5x5 (x, y)
 // ---------------------------------------------------------------------------
 static const uint8_t OJO_IZQ[2] = {1, 1};
 static const uint8_t OJO_DER[2] = {3, 1};
 
 // Boca INVERTIDA (frown): medio (1,3)(2,3)(3,3) + esquinas (0,4)(4,4)
-// (las esquinas MAS BAJAS que el medio = la curva al reves que la alegria)
 static const uint8_t BOCA[5][2] = {
     {0,4}, {4,4}, {1,3}, {2,3}, {3,3}
 };
 
-// ---------------------------------------------------------------------------
-// Helpers de transicion suave (fade por pasos) - mismos que la alegria
-// ---------------------------------------------------------------------------
+#define BRILLO_REPOSO  80      // la tristeza es mas tenue que la alegria (90)
 
-// Fija un pixel directamente
-static void setPixel(const uint8_t* p, int v)
+// ---------------------------------------------------------------------------
+// pseudo(): hash entero SIN ESTADO, con semilla.
+//
+// Es lo que permite que el temblor del labio sea "aleatorio" y al mismo
+// tiempo una funcion pura del reloj. Es la tecnica estandar para esto (se la
+// conoce como FPS-R: ruido pseudoaleatorio sin estado, sembrado por el indice
+// de frame; en vez de acordarse del pasado, solo del instante actual).
+//
+// Dos multiplicaciones, que en el Cortex-M0 son de un solo ciclo, y un par de
+// desplazamientos: ~15 ciclos en total, contra los ~100 de codal::random().
+// ---------------------------------------------------------------------------
+static unsigned int pseudo(unsigned int x)
 {
-    uBit.display.image.setPixelValue(p[0], p[1], v);
+    x ^= x >> 16;
+    x *= 0x7feb352dU;
+    x ^= x >> 15;
+    x *= 0x846ca68bU;
+    x ^= x >> 16;
+    return x;
 }
 
 // ---------------------------------------------------------------------------
-// La cara base: se dibuja UNA vez y se queda (nunca se borra en el bucle)
+// EL CICLO COMO TABLA
+//
+// Los tramos son los del guion original, para que el cambio sea de fluidez y
+// no de contenido. El hueco de la lagrima (760 ms) esta SIEMPRE en la tabla:
+// en los ciclos donde no toca lagrima, ese tramo es simplemente quietud (la
+// cara sigue respirando). Asi el ciclo es de duracion FIJA y la fase se
+// puede calcular con un modulo.
 // ---------------------------------------------------------------------------
-void mostrarCaraTriste()   // publica: el primer frame (para las transiciones)
+enum Curva
 {
-    uBit.display.setBrightness(80);   // mas tenue que la alegria (90)
+    C_PLANO = 0,    // todo quieto
+    C_RESP_LENTA,   // respira lento: rampa 45->100->45 + 200 ms quieto
+    C_PARP_PESADO,  // cierra lento, queda cerrado, abre lento
+    C_TIEMBLA,      // la boca tiembla (el labio a punto de llorar)
+    C_LAGRIMA       // cae una lagrima (solo en los ciclos que toca)
+};
+
+struct Segmento
+{
+    unsigned short desde;
+    unsigned short hasta;
+    unsigned char  curva;
+};
+
+static const Segmento CICLO[] = {
+    {   0, 1460, C_RESP_LENTA  },
+    {1460, 2560, C_PARP_PESADO },
+    {2560, 2740, C_PLANO      },
+    {2740, 3440, C_TIEMBLA    },
+    {3440, 4900, C_RESP_LENTA  },
+    {4900, 6000, C_PARP_PESADO },
+    {6000, 6760, C_LAGRIMA    },
+};
+static const int NCICLOS = sizeof(CICLO) / sizeof(CICLO[0]);
+static const unsigned short CICLO_MS = 6760;
+
+// Proporciones internas de cada curva (derivadas de los tiempos del original)
+//   respira lenta : 630 ms arriba, 630 ms abajo, 200 ms quieto  (de 1460)
+//   parpadeo pesado: 350 cierra, 280 cerrado, 350 abre, 120 quieto (de 1100)
+#define RESP_SUBE     0.4315f
+#define RESP_BAJA     0.8630f
+#define PARP_CIERRA   0.3182f
+#define PARP_CERRADO  0.5727f
+#define PARP_ABRE     0.8909f
+
+// ---------------------------------------------------------------------------
+// Estado: el reloj, el indice de ciclo y lo ultimo que escribimos.
+// Se rastrean LOS 25 PIXELS, no solo los 7 de la cara: la lagrima pasa por la
+// mejilla y pisa pixeles de la boca, asi que un rastreo parcial mentiria.
+// ---------------------------------------------------------------------------
+static unsigned long faseBase = 0;       // systemTime() del inicio del ciclo
+static unsigned long ultimoCiclo = 0;    // indice del ciclo en curso
+static unsigned long faseVista = 0;      // fase del frame anterior (detecta wrap)
+static bool          baseDibujada = false;
+static bool          avisoEnviado = false;
+
+static uint8_t esperado[25];             // lo que CREEMOS que hay en pantalla
+static int     ultimoBrillo = -1;
+static int     ultimoOjoIzq = -1;
+static int     ultimoOjoDer = -1;
+
+// La lagrima: decision de CALENDARIO, no visual. Este contador baja una vez
+// por ciclo (no una vez por frame) y conserva el "cada 4-7 pasadas" original.
+// OJO: si bajara en cada frame, con 60 frames por ciclo caeria una lagrima
+// POR SEGUNDO.
+static int  hastaLagrima = 4;
+static bool lagrimaEnEsteCiclo = false;
+
+// ---------------------------------------------------------------------------
+// Escribe un pixel Y registra lo que se escribio, para que caraIntacta()
+// pueda compararlo despues. Todo dibujo pasa por aca.
+// ---------------------------------------------------------------------------
+static void setPixelTrazado(int x, int y, int v)
+{
+    if (x < 0 || x > 4 || y < 0 || y > 4) return;
+    if (uBit.display.image.setPixelValue(x, y, (uint8_t)v) == 0)
+        esperado[y * 5 + x] = (uint8_t)v;
+}
+
+// ---------------------------------------------------------------------------
+// La cara base
+// ---------------------------------------------------------------------------
+static void dibujarBase()
+{
     uBit.display.image.clear();
+    for (int i = 0; i < 25; i++) esperado[i] = 0;
 
-    // Ojos
-    setPixel(OJO_IZQ, 255);
-    setPixel(OJO_DER, 255);
-
-    // Boca invertida (frown)
+    setPixelTrazado(OJO_IZQ[0], OJO_IZQ[1], 255);
+    setPixelTrazado(OJO_DER[0], OJO_DER[1], 255);
     for (int i = 0; i < 5; i++)
-        setPixel(BOCA[i], 255);
+        setPixelTrazado(BOCA[i][0], BOCA[i][1], 255);
+
+    ultimoOjoIzq = 255;
+    ultimoOjoDer = 255;
+    baseDibujada = true;
 }
 
-static void dibujarCaraBase()
+// ¿La cara sigue siendo la nuestra? 25 lecturas de un byte (~1 us), se paga
+// en cada frame. Antes esto lo resolvia repintando la cara entera en cada
+// pasada; ahora se comprueba y solo se repinta si hace falta, que es lo que
+// pasaba cuando un loading se detenia o un comando desconocido imprimia "?"
+// en la pantalla. Tambien es la red de seguridad si una lagrima se aborta a
+// mitad y deja la mejilla manchada.
+static bool caraIntacta()
 {
-    mostrarCaraTriste();
+    for (int y = 0; y < 5; y++)
+        for (int x = 0; x < 5; x++)
+            if (uBit.display.image.getPixelValue(x, y) != esperado[y * 5 + x])
+                return false;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
-// FASE 1+3: respira LENTA (brillo sube/baja despacio y tenue)
+// Las curvas
 // ---------------------------------------------------------------------------
-static void respiraLenta()
+
+// Respira LENTA: RAMPA LINEAL, no seno. El original hacian escalones de 4
+// unidades cada 45 ms; un triangulo lineal se ve igual de bien (en un panel de
+// 5x5 la curva no aporta nada visible) y ademas coincide con el guion.
+static int brilloRespira(float p)
 {
-    for (int b = 45; b <= 100; b += 4) {
-        uBit.display.setBrightness(b);
-        uBit.sleep(45);
-    }
-    for (int b = 100; b >= 45; b -= 4) {
-        uBit.display.setBrightness(b);
-        uBit.sleep(45);
-    }
-    uBit.display.setBrightness(80);
-    uBit.sleep(200);
+    if (p < RESP_SUBE)  return 45 + (int)((100 - 45) * p / RESP_SUBE);
+    if (p < RESP_BAJA)  return 100 - (int)((100 - 45) * (p - RESP_SUBE)
+                                           / (RESP_BAJA - RESP_SUBE));
+    return BRILLO_REPOSO;
 }
 
-// ---------------------------------------------------------------------------
-// FASE 2+4: parpadeo PESADO (se cierran lento y quedan cerrados un momento)
-// ---------------------------------------------------------------------------
-static void parpadeoPesado()
+// Parpadeo PESADO: los DOS ojos con el MISMO valor (el original los movia
+// juntos a proposito: en serie se veria desincronizado). Cierra lento, queda
+// cerrado un rato, abre lento.
+static int ojosPesados(float p)
 {
-    // AMBOS ojos se mueven JUNTOS paso a paso (si se hicieran
-    // secuenciales se veria como parpadeo desincronizado)
-    for (int s = 0; s <= 6; s++) {
-        int b = 255 - (255 * s) / 6;   // se cierran lento
-        setPixel(OJO_IZQ, b);
-        setPixel(OJO_DER, b);
-        uBit.sleep(50);
-    }
-    uBit.sleep(280);                     // cerrados un rato (cansados)
-    for (int s = 0; s <= 6; s++) {
-        int b = (255 * s) / 6;           // se abren lento
-        setPixel(OJO_IZQ, b);
-        setPixel(OJO_DER, b);
-        uBit.sleep(50);
-    }
-    uBit.sleep(120);
+    if (p < PARP_CIERRA)  return 255 - (int)(255 * p / PARP_CIERRA);
+    if (p < PARP_CERRADO) return 0;
+    if (p < PARP_ABRE)    return (int)(255 * (p - PARP_CERRADO)
+                                       / (PARP_ABRE - PARP_CERRADO));
+    return 255;
 }
 
 // ---------------------------------------------------------------------------
-// FASE 3: la boca tiembla un poquito (el labio a punto de llorar)
+// La LAGRIMA
+//
+// 4 sub-tramos, con los mismos tiempos que el original:
+//   juntarse bajo el ojo (210 ms) + destello (160) + caida (300) + borrar (90)
+//
+// De que ojo cae sale de pseudo(ciclo), o sea que es el MISMO ojo durante
+// todo el ciclo (no parpadea de un lado al otro en cada frame) y es
+// diferente en cada ciclo.
 // ---------------------------------------------------------------------------
-static void bocaTiembla()
+static void dibujarLagrima(float p, unsigned long ciclo)
 {
-    // el MEDIO de la boca tiembla al azar; las esquinas quedan firmes
-    for (int i = 0; i < 14; i++) {              // ~0.7s
-        uBit.display.image.setPixelValue(1, 3, 200 + uBit.random(55));
-        uBit.display.image.setPixelValue(2, 3, 190 + uBit.random(65));
-        uBit.display.image.setPixelValue(3, 3, 200 + uBit.random(55));
-        uBit.sleep(50);
+    int ex = (pseudo(ciclo) & 1) ? 3 : 1;
+
+    if (p < 0.4884f) {                       // 370/760: se junta + destello
+        if (p < 0.2763f)                     // 210/760
+            setPixelTrazado(ex, 2, (int)(220 * p / 0.2763f));
+        else if (p < 0.3553f)                // 90/760: el destello
+            setPixelTrazado(ex, 2, 110);
+        else
+            setPixelTrazado(ex, 2, 235);
+        return;
     }
-    // restaura la boca completa
-    for (int i = 0; i < 5; i++)
-        setPixel(BOCA[i], 255);
+
+    if (p < 0.8816f) {                       // 300/760: cae por la mejilla
+        if (p < 0.6711f) {                   // 140/760
+            setPixelTrazado(ex, 2, 90);
+            setPixelTrazado(ex, 3, 240);
+        } else {
+            setPixelTrazado(ex, 3, 90);
+            setPixelTrazado(ex, 4, 240);
+        }
+        return;
+    }
+
+    // 90/760 al final: se apaga y limpia la estela. OJO: (ex,3) y (ex,4) son
+    // pixeles de la BOCA (x=1 o 3), asi que hay que devolverlos a 255 o la
+    // cara queda con un agujero en el labio.
+    setPixelTrazado(ex, 4, 0);
+    setPixelTrazado(ex, 2, 0);
+    setPixelTrazado(BOCA[2][0], BOCA[2][1], 255);
+    setPixelTrazado(BOCA[4][0], BOCA[4][1], 255);
 }
 
 // ---------------------------------------------------------------------------
-// FASE EXTRA: la LAGRIMA (de vez en cuando). Se junta bajo un ojo al azar,
-// brilla como el agua y baja por la mejilla con estela hasta el menton.
+// El primer frame, para las TRANSICIONES y CALLA. Ancla el ciclo.
 // ---------------------------------------------------------------------------
-static void lagrima()
+void mostrarCaraTriste()
 {
-    int ex = uBit.random(2) ? 3 : 1;   // de cual ojo cae (izq o der)
-    uBit.serial.send("LAGRIMA\n");    // debug: confirmar por serial
-
-    // 1) Se junta bajo el ojo (fade in + destello de agua)
-    for (int s = 0; s <= 5; s++) {
-        uBit.display.image.setPixelValue(ex, 2, 220 * s / 5);
-        uBit.sleep(35);
-    }
-    uBit.display.image.setPixelValue(ex, 2, 110);   // destello
-    uBit.sleep(90);
-    uBit.display.image.setPixelValue(ex, 2, 235);
-    uBit.sleep(70);
-
-    // 2) Cae: la gota avanza y deja estela (dos pixeles a la vez)
-    uBit.display.image.setPixelValue(ex, 2, 90);
-    uBit.display.image.setPixelValue(ex, 3, 240);
-    uBit.sleep(140);
-    uBit.display.image.setPixelValue(ex, 3, 90);
-    uBit.display.image.setPixelValue(ex, 4, 240);   // llega al menton
-    uBit.sleep(160);
-
-    // 3) Se apaga y limpia la estela
-    uBit.display.image.setPixelValue(ex, 4, 0);
-    uBit.sleep(90);
-    uBit.display.image.setPixelValue(ex, 2, 0);
-    uBit.display.image.setPixelValue(ex, 3, 0);
-
-    // restaura la boca (la lagrima paso por la curva del labio)
-    for (int i = 0; i < 5; i++)
-        setPixel(BOCA[i], 255);
+    uBit.display.setBrightness(BRILLO_REPOSO);
+    dibujarBase();
+    ultimoBrillo = BRILLO_REPOSO;
+    faseBase = uBit.systemTime();
+    faseVista = 0;
+    ultimoCiclo = 0;
+    avisoEnviado = false;
+    lagrimaEnEsteCiclo = false;
 }
 
 // ---------------------------------------------------------------------------
-// La animacion de tristeza: UNA pasada del bucle.
-// Cada 4-7 pasadas (impredecible) cae la lagrima.
+// UN FRAME. La llama el bucle principal ~60 veces por segundo.
 // ---------------------------------------------------------------------------
-static int hastaLagrima = 4;   // pasadas restantes para la lagrima
-static int pasada = 0;         // contador de pasadas (debug)
-
 void animarTriste()
 {
-    // Si llego un comando serial, NO dibuja encima: deja que el bucle
-    // principal procese la nueva emocion en su siguiente pasada.
-    if (revisarSerial()) return;
-    uBit.serial.printf("T%d\n", ++pasada);   // debug: cada pasada
-
-    // La cara base se dibuja UNA vez (idempotente)
-    dibujarCaraBase();
     if (revisarSerial()) return;
 
-    respiraLenta();      // 1: respira lento
-    if (revisarSerial()) return;
-    parpadeoPesado();    // 2: parpadeo pesado
-    uBit.sleep(180);
-    if (revisarSerial()) return;
-    bocaTiembla();       // 3: la boca tiembla
-    if (revisarSerial()) return;
-    respiraLenta();      // 4: respira otra vez
-    if (revisarSerial()) return;
-    parpadeoPesado();    // 5: otro parpadeo pesado
-    if (revisarSerial()) return;
+    // La primera vez (o si otra cosa toco la pantalla) se dibuja la base.
+    if (!baseDibujada || !caraIntacta())
+        dibujarBase();
 
-    // 6: de vez en cuando, la lagrima cae (impredecible)
-    if (--hastaLagrima <= 0) {
-        lagrima();
-        hastaLagrima = 4 + uBit.random(4);   // 4-7 pasadas
+    unsigned long ahora = uBit.systemTime();
+    unsigned long transcurrido = ahora - faseBase;
+    unsigned long ciclo = transcurrido / CICLO_MS;
+    unsigned short t = (unsigned short)(transcurrido % CICLO_MS);
+
+    // --- La fase dio la vuelta: aqui se decide si este ciclo lleva lagrima --
+    if (t < faseVista) {
+        lagrimaEnEsteCiclo = (--hastaLagrima <= 0);
+        if (lagrimaEnEsteCiclo) {
+            avisoEnviado = false;                          // esta puede avisar
+            hastaLagrima = 4 + (int)(pseudo(ciclo) % 4);   // 4-7 ciclos
+        }
     }
+    faseVista = t;
+
+    if (ciclo != ultimoCiclo) {
+        ultimoCiclo = ciclo;
+        // OJO: el printf de CODAL solo soporta %d y %s (Serial.cpp:425), NO
+        // %lu. Con %lu el contador de debug salia vacio.
+        uBit.serial.printf("T%d\n", (int)(ciclo % 1000));
+    }
+
+    // Localiza el segmento (7 entradas: busqueda lineal, sin RAM extra).
+    const Segmento *seg = &CICLO[NCICLOS - 1];
+    for (int i = 0; i < NCICLOS; i++) {
+        if (t >= CICLO[i].desde && t < CICLO[i].hasta) { seg = &CICLO[i]; break; }
+    }
+    float p = (float)(t - seg->desde) / (float)(seg->hasta - seg->desde);
+
+    // --- Ojos: mismo valor para los dos (el original los movia juntos) ---
+    int ojos = (seg->curva == C_PARP_PESADO) ? ojosPesados(p) : 255;
+    if (ojos != ultimoOjoIzq) {
+        setPixelTrazado(OJO_IZQ[0], OJO_IZQ[1], ojos);
+        ultimoOjoIzq = ojos;
+    }
+    if (ojos != ultimoOjoDer) {
+        setPixelTrazado(OJO_DER[0], OJO_DER[1], ojos);
+        ultimoOjoDer = ojos;
+    }
+
+    // --- Brillo global: solo la respiracion lo mueve ---
+    int brillo = (seg->curva == C_RESP_LENTA) ? brilloRespira(p) : BRILLO_REPOSO;
+    // Zona muerta: el quantum del PWM avanza de a saltos de ~1,22 unidades
+    // (quantum = 0.8169 * brillo), asi que 1-2 unidades no se ven. Y
+    // setBrightness() en el M0+ hace una division entera por software.
+    if (brillo - ultimoBrillo >= 3 || ultimoBrillo - brillo >= 3) {
+        uBit.display.setBrightness(brillo);
+        ultimoBrillo = brillo;
+    }
+
+    // --- La boca: tiembla, o la lagrima la pisa ---
+    if (seg->curva == C_TIEMBLA) {
+        // El temblor se re-ranura cada ~50 ms, como el original (que
+        // dormia 50 ms por paso). El valor sale del hash del tiempo: mismo
+        // instante, mismo temblor, sin estado.
+        unsigned int semilla = pseudo(ciclo * 1000u + (unsigned int)(t / 50));
+        int medio = 190 + (int)(semilla % 66);      // 190..255
+        int izq   = 200 + (int)((semilla >> 8) % 56);
+        setPixelTrazado(1, 3, izq);
+        setPixelTrazado(2, 3, medio);
+        setPixelTrazado(3, 3, izq);
+        // Las esquinas quedan firmes (como en el original).
+    } else {
+        // Boca en reposo. Se escribe SOLO si hace falta: durante la lagrima
+        // este bloque corre antes y la lagrima lo pisa, y al terminar el
+        // tramo la lagrima devuelve los pixeles que toco.
+        if (esperado[3 * 5 + 1] != 255) setPixelTrazado(1, 3, 255);
+        if (esperado[3 * 5 + 2] != 255) setPixelTrazado(2, 3, 255);
+        if (esperado[3 * 5 + 3] != 255) setPixelTrazado(3, 3, 255);
+    }
+
+    // --- La lagrima: solo en los ciclos que le tocan ---
+    if (seg->curva == C_LAGRIMA && lagrimaEnEsteCiclo) {
+        if (!avisoEnviado) {
+            uBit.serial.send("LAGRIMA\n");     // debug: confirmar por serial
+            avisoEnviado = true;
+        }
+        dibujarLagrima(p, ciclo);
+    }
+
+    uBit.sleep(16);   // ~60 fps
 }
