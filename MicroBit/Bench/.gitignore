@@ -1,0 +1,12 @@
+# Los ejecutables los genera cada run_*.sh. No van al repo: son binarios
+# de x86 de ~27 KB que solo sirven en la maquina donde se compilaron.
+bench_alegria
+bench_cansado
+bench_emociones
+bench_enojado
+bench_fastidio
+bench_miedo
+bench_neutral
+bench_sorprendido
+bench_transiciones
+bench_triste
