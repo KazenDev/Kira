@@ -1,5 +1,5 @@
 /**
- * Morfosis.cpp - Transicion MORFOSIS 🧬 (60 FPS, ~2s = 125 frames)
+ * Morfosis.cpp - Transicion MORFOSIS 🧬 (60 FPS, 126 frames = ~2.0s)
  *
  * IDEA DEL USUARIO: los pixeles de la cara ACTUAL no se apagan y ya.
  * Cada pixel VIAJA hasta su destino en la cara NUEVA (el primer
@@ -14,7 +14,7 @@
  *   2. Dibujo la cara destino (primer frame) y la leo -> lista B
  *   3. Restauro la pantalla actual
  *   4. Emparejo cada pixel A con el pixel B MAS CERCANO (greedy)
- *   5. Animo 72 frames: cada pareja interpola posicion con retardo
+ *   5. Animo 126 frames: cada pareja interpola posicion con retardo
  *      escalonado (cascada); los sin pareja se apagan; los B que
  *      sobran nacen con fade en la ultima mitad
  *   6. Dibujo la cara destino completa (final limpio)
@@ -97,8 +97,56 @@ void transicionMorfosis(EmocionActual destino)
     for (int i = 0; i < nA; i++)
         if (parejaA[i] >= 0) nParejas++;
 
-    // 5) Animo los 72 frames a 60 FPS
+    const int dur = FRAMES / 2;      // 62 frames de viaje
+    const int medio = dur / 2;       // 31
+
+    // Los retardos se calculan UNA VEZ, aca afuera del bucle de frames.
+    // El retardo de una pareja depende solo de su ORDEN y de cuantas parejas
+    // hay: ninguno de los dos cambia entre frames, asi que recalcularlo
+    // adentro era trabajo repetido 126 veces por pareja.
+    //
+    // OJO, lo que NO se gana aqui: la division. Se midio el .obj compilado
+    // de esta transicion y tiene CERO llamadas a __aeabi_idiv: con -O2, GCC
+    // prueba el rango del dividendo (t viene de f-retardo, acotado) y
+    // convierte la division en multiplicacion+shift. Ademas toda la
+    // firmware compila con cero __aeabi_idiv. Esto queda como codigo mas
+    // limpio, no como una aceleracion.
+    // `static` a proposito, NO por descuido. Con 25 ints son 100 bytes, y
+    // medido en el .obj el frame de esta funcion pasaba de 580 a 676 bytes de
+    // PILA. La pila util de la placa es ~2 KB y la transicion corre en el
+    // hilo principal, asi que la pila es el recurso escaso; la RAM sobra
+    // (10,8 KB usados de 128 KB).
+    //
+    // Es seguro porque el guard de Transiciones.cpp garantiza que esta
+    // funcion NUNCA se re-entra: si llega un comando durante una transicion,
+    // el destino se guarda y se aplica al terminar, no se anida. Si alguna
+    // vez se saca ese guard, esto hay que volver a ponerlo en la pila.
+    static int retardo[MAX_PX];
+    {
+        int orden = 0;
+        for (int i = 0; i < nA; i++) {
+            if (parejaA[i] < 0) { retardo[i] = 0; continue; }
+            retardo[i] = nParejas > 0 ? (dur * orden) / nParejas : 0;
+            orden++;
+        }
+    }
+
+    // 5) Animo los FRAMES a 60 FPS
     for (int f = 0; f <= FRAMES; f++) {
+        // ── LA VENTANA MUERTA ──────────────────────────────────────────
+        // Esta transicion duraba 2,0 s COMPLETAMENTE sorda: no miraba el
+        // serial ni una vez, asi que si la IA mandaba un comando en medio, la
+        // cara recien se enteraba cuando la transicion terminaba (peor caso
+        // medido: 1984 ms). Con un chequeo por frame se entera en 16 ms y
+        // esta transicion se aborta sola.
+        //
+        // Costo del chequeo: un readUntil() por frame, ~140 ciclos = 0,03 ms.
+        // Son 0,27 ms en toda la transicion: 0,014% de los 2 s. Barato.
+        //
+        // NO se llama a hacerTransicion() desde aca (eso anidaria
+        // transiciones y desborda la pila): ver el guard de Transiciones.cpp.
+        if (revisarSerial()) return;
+
         uBit.display.image.clear();
 
         // 5a) Las parejas VIAJAN (cascada: cada una sale un poquito
@@ -108,11 +156,8 @@ void transicionMorfosis(EmocionActual destino)
             if (parejaA[i] < 0) continue;
             int j = parejaA[i];
 
-            // Retardo escalonado: la pareja "orden" arranca en
-            // (FRAMES/2)*orden/nParejas y viaja durante FRAMES/2 frames
-            int retardo = nParejas > 0 ? (FRAMES / 2) * orden / nParejas : 0;
-            int dur = FRAMES / 2;
-            int t = f - retardo;               // frames desde que salio
+            // Retardo escalonado: precalculado arriba, no se recalcula.
+            int t = f - retardo[i];        // frames desde que salio
             if (t < 0) {
                 // todavia no salio: sigue en su lugar original
                 uBit.display.image.setPixelValue(A[i].x, A[i].y, 255);
@@ -123,8 +168,10 @@ void transicionMorfosis(EmocionActual destino)
                 // en camino: interpolacion de posicion + brillo
                 int px = A[i].x + ((B[j].x - A[i].x) * t) / dur;
                 int py = A[i].y + ((B[j].y - A[i].y) * t) / dur;
-                // brillo: sube al partir y baja al llegar (cometa)
-                int medio = dur / 2;
+                // brillo: sube al partir y baja al llegar (cometa).
+                // `medio` esta declarado arriba del bucle de frames: el
+                // original lo recalculaba aqui adentro, en cada pixel de cada
+                // frame, y ademas tapaba al de afuera (variable sombreada).
                 int br = (t <= medio)
                     ? 60 + (195 * t) / medio        // despega
                     : 255 - (150 * (t - medio)) / (dur - medio);
@@ -137,7 +184,7 @@ void transicionMorfosis(EmocionActual destino)
         //     primera mitad
         for (int i = 0; i < nA; i++) {
             if (parejaA[i] >= 0) continue;
-            int br = 255 - (255 * f) / (FRAMES / 2);
+            int br = 255 - (255 * f) / dur;
             if (br > 0)
                 uBit.display.image.setPixelValue(A[i].x, A[i].y, br);
         }
@@ -146,9 +193,9 @@ void transicionMorfosis(EmocionActual destino)
         //     segunda mitad (aparecen en su posicion final)
         for (int j = 0; j < nB; j++) {
             if (usadoB[j]) continue;
-            int t = f - FRAMES / 2;
+            int t = f - dur;
             if (t < 0) continue;
-            int br = (255 * t) / (FRAMES / 2);
+            int br = (255 * t) / dur;
             uBit.display.image.setPixelValue(B[j].x, B[j].y, br);
         }
 
