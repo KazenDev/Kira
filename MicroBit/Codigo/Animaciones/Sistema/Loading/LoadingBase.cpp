@@ -16,6 +16,7 @@
 // ---------------------------------------------------------------------------
 static unsigned long loteHasta = 0;
 static bool loteVigente = false;
+bool loteExento = false;
 
 void loteIniciar()
 {
@@ -25,6 +26,7 @@ void loteIniciar()
 
 static bool loteTerminado()
 {
+    if (loteExento) return false;   // el patron exonestó (ver LoadingBase.h)
     if (!loteVigente) return false;
     return (int32_t)(uBit.systemTime() - loteHasta) >= 0;
 }

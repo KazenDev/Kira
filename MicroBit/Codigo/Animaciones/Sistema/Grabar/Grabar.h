@@ -33,7 +33,12 @@ extern volatile bool grabandoSerial;
 // en vez del FFT (que no corre durante la grabacion).
 extern volatile float nivelAudio;
 
-// ReplicaLed consulta esto para callar el serial durante la grabacion
+// ReplicaLed consulta esto para callar el serial durante la grabacion.
+// OJO: esto es SOLO la causa "grabacion". La otra causa es REPLICA:OFF (ReplicaLed.h)
+// y las dos se combinan con OR, no se pisan: si la app pidio silencio y
+// despues alguien graba, al terminar la grabacion NO se reactiva la replica
+// sola. Un unico bool no alcanza, porque cada capa lo bajaria al terminar su
+// turno y se llevaria por delante la peticion de la otra.
 extern volatile bool replicaLedCallada;
 
 // Arranca el flujo: prende el mic, manda AUDIO:START y transmite crudo.

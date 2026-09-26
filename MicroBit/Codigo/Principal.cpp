@@ -26,7 +26,11 @@ MicroBit uBit;
 static bool botonAAnterior = false;
 static bool botonBAnterior = false;
 
-static void atenderBotonesEscucha()
+// NO es static: los golpes dramaticos de un disparo que se exentan del lote
+// (ver LOTE_EXENTO en LoadingBase.h) tienen que atender A/B el mismo, o el
+// costo de exentarse serian botones muertos. La llama el bucle principal
+// una vez por frame Y la llaman los golpes largos frame por frame.
+void atenderBotonesEscucha()
 {
     bool a = uBit.buttonA.isPressed();
     bool b = uBit.buttonB.isPressed();
