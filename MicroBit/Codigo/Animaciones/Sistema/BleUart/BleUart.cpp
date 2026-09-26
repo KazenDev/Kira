@@ -47,6 +47,12 @@ static MicroBitUARTService *bleUart = NULL;
 // Para avisar UNA vez por enlace si el celular no habilito las notificaciones
 static bool avisadoSinSuscriptor = false;
 
+// El desborde del buffer RX del BLE. Antes este evento lo emitia
+// MicroBitUARTService pero NADIE lo escuchaba, asi que se perdian bytes en
+// silencio. Se declara aca (y no junto al handler) porque la fibra lectora lo
+// resetea al detectar un enlace nuevo.
+static bool avisadoRxFull = false;
+
 /** ¿Hay un celular conectado AHORA? Se lo preguntamos al SoftDevice, no al
  * flag de los eventos (que puede quedar mintiendo tras una reconexion: ver
  * la nota de arriba). El propio MicroBitUARTService usa esto internamente:
@@ -199,6 +205,7 @@ static void fibraBle()
             // no escucha": con una rafaga se avisa una vez, no 8.
             avisadoDescarte = false;
             descartadosBle = 0;
+            avisadoRxFull = false;
             if (bleUart->rxBufferedSize() > 0)
                 bleUart->read(bleUart->rxBufferedSize(), ASYNC);
             uBit.serial.send("BLE: enlace vivo (estado real)\n");
@@ -236,15 +243,53 @@ static void fibraBle()
 }
 
 // ---------------------------------------------------------------------------
+// El buffer RX del BLE es el cuello de botella REAL (mas que la cola)
+//
+// onDataWritten (MicroBitUARTService.cpp:158) mete los bytes uno por uno, y si
+// el buffer esta lleno hace:
+//
+//     else MicroBitEvent(MICROBIT_UART_S_EVT_RX_FULL);   // se PIERDE el byte
+//
+// O sea: antes de llegar a la cola de 8 lineas, los bytes ya se descartan
+// solos. Con 32+1 = 33 bytes de buffer solo entran 3-4 comandos, y ademas el
+// celu manda 20 bytes por paquete ATT (MTU 23 por defecto), asi que un
+// comando largo como "MIC:nivel:b0..b4:ventanas" ocupa DOS paquetes.
+//
+// Nordic recomienda agrandar este buffer justamente para envios por lotes (su
+// ejemplo pasa de 40 a 80). Con 96 entran 8-16 comandos, que cubre la
+// rafaga de reconexion de la app con holgura.
+//
+// COSTO: MicroBitUARTService reserva
+//   malloc(rxBufferSize + txBufferSize + 2*MICROBIT_UART_S_ATTRSIZE)  (linea 85)
+// con ATTSIZE = 20. Antes eran 33+33+40 = 106 bytes; ahora 97+33+40 = 170.
+// Son +64 bytes de heap, de los ~2 KB libres en el peor caso. El buffer de TX
+// se deja en 32: por ahi solo salen ACKs y respuestas de sensor (cortas), y su
+// desborde YA se diagnosticaba (el "el celu no escucha" de mas abajo).
+//
+// Si alguna vez se ve "BLE: RX lleno" en el log, la app esta mandando rafegas
+// que ni con 96 alcanzan: ahi la solucion es la MTU o throttlear en la app,
+// no agrandar mas (el heap es el limite duro).
+#define BLE_RX_BUF 96
+#define BLE_TX_BUF 32
+
+// El desborde del buffer RX: se avisa UNA vez por enlace.
+static void alRxLleno(MicroBitEvent)
+{
+    if (avisadoRxFull) return;
+    avisadoRxFull = true;
+    uBit.serial.send("BLE: RX lleno, se perdieron bytes (app manda rafegas)\n");
+}
+
+// ---------------------------------------------------------------------------
 // Inicio: servicio + eventos + fibra (una sola vez, desde main)
 // ---------------------------------------------------------------------------
 void iniciarBleUart()
 {
-    // rx/tx de 32 bytes: sobra para comandos como "METRO:120:4\n" (12 bytes)
-    bleUart = new MicroBitUARTService(*uBit.ble, 32, 32);
+    bleUart = new MicroBitUARTService(*uBit.ble, BLE_RX_BUF, BLE_TX_BUF);
 
-    uBit.messageBus.listen(MICROBIT_ID_BLE, MICROBIT_BLE_EVT_CONNECTED,    alConectar);
-    uBit.messageBus.listen(MICROBIT_ID_BLE, MICROBIT_BLE_EVT_DISCONNECTED, alDesconectar);
+    uBit.messageBus.listen(MICROBIT_ID_BLE,      MICROBIT_BLE_EVT_CONNECTED,    alConectar);
+    uBit.messageBus.listen(MICROBIT_ID_BLE,      MICROBIT_BLE_EVT_DISCONNECTED, alDesconectar);
+    uBit.messageBus.listen(MICROBIT_ID_BLE_UART, MICROBIT_UART_S_EVT_RX_FULL,  alRxLleno);
 
     create_fiber(fibraBle);
 }
