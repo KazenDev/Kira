@@ -504,16 +504,95 @@ a mitad hay que **restaurar el brillo a 90**, o la cara queda a media luz.
 **Nota de calibración**: los comentarios decían "72 frames" y "~1,2 s". La
 realidad es 126/132 frames y ~2,0 s. Corregido.
 
-### Lo que falta migrar
+#### Las bocas de TALK (4 de 8 migradas)
 
-- **Ninguna animación.** Las 8 emociones y las 3 transiciones usan patrón de
-  frame.
+`Codigo/Animaciones/Emociones/*/Hablar*.cpp` son las bocas de lip-sync. Se
+escaparon del análisis de las emociones por una razón concreta: usan
+**`fiber_sleep()` en vez de `uBit.sleep()`**, así que un grep de "sleep" no las
+encuentra.
+
+Y el problema era el más serio del proyecto, porque `Principal.cpp` le da
+**prioridad a TALK sobre la animación de la emoción**:
+
+```cpp
+if (modoHablar) { animarBocaCansado(); }   // primero esto
+else if (...)   { animarCansado(); ... }   // la emoción solo si NO habla
+```
+
+O sea que **mientras la IA habla, la boca es todo lo que corre en el hilo
+principal**. Y eran secuencias de `fiber_sleep()` sin un solo checkpoint:
+
+| boca | antes | estado |
+|---|---|---|
+| Cansado | 1350 ms | **0 ms** |
+| Miedo | 1165 ms | **0 ms** |
+| Fastidio | 974 ms | — |
+| Neutral | 820 ms | — |
+| Alegría | 820 ms | **0 ms** |
+| Triste | 880 ms | **0 ms** |
+| Enojado | 665 ms | — |
+| Sorprendido | 690 ms | — |
+
+Las cuatro migradas son exactamente las cuatro peores. Verificado en la placa
+con TALK activo: **24/24 ACKs y 12-19 ms de peor latencia** (con TALK en el
+bucle viejo, hasta 1350 ms).
+
+Dos cosas que conviene saber:
+
+- **La fibra de los ojos no se toca.** Usa `fiber_sleep()` (que cede la CPU),
+  rompe el loop en cuanto `modoHablar` es false, se libera sola, y no procesa
+  comandos. Además, en una fibra el estado **no** tiene que ser función del
+  reloj: un loop de fibra ya es una máquina de estados con su propio ritmo, así
+  que ahí `uBit.random()` está perfecto. Lo que necesitaba ser función del
+  reloj era la boca, porque corre en el hilo principal.
+- **La boca no lleva checkpoint propio, a propósito.** El bucle principal ya
+  hace `revisarSerial()` antes de la cadena de render, así que con la boca
+  devolviendo cada 16 ms el puerto se chequea a 60 Hz solo. Agregar otro sería
+  trabajo redundante. Y `uBit.sleep()` **es** `fiber_sleep()`
+  (`CodalDevice.cpp:30`), así que las emociones y las bocas ceden la CPU igual.
+
+**Los cuatro guiones ya estaban bien, y hay respaldo:**
+
+- **Cansado (2,2 sílabas/s)**: su tic de 460 ms es el más largo de las ocho
+  bocas y está por debajo del rango normal de habla (4 sílabas/s, medido entre
+  3,3 y 5,9). Eso es lo que hace que el "siii... ya voy..." se lea. Encima el
+  brillo tope es 200 en vez de 255: más lento **y** más tenue, las dos cosas en
+  el mismo sentido. *Pendiente de tu ojo, en `PAUSA_ENTRE_TICS_MS`*: la
+  literatura del habla lenta dice que no es solo más lento, sino "articular
+  lentamente con un **mayor número de pausas** e hiperarticulación". Esta boca
+  tiene la primera parte pero no las otras dos: los tres tics van pegados y con
+  amplitud reducida. Con la constante en 0 queda como siempre; a 250 aparecen
+  las pausas.
+- **Miedo (guion compuesto, 1180 ms)**: es la única con guion de 5 pasos en vez
+  de oscilador libre, y tiene las tres alteraciones canónicas de la tartamudez
+  —"el flujo se interrumpe por **bloqueos, repeticiones o prolongaciones**"— en
+  orden: los dos tics cortos son las repeticiones, la pausa de 150 ms el
+  bloqueo, y el tic de 120 ms la prolongación, que va **al final** porque es la
+  palabra que por fin sale trabada. Y un detalle fino: durante el bloqueo la
+  boca queda **abierta a 255**, no cerrada; es el intento de decir la palabra
+  antes de que se trabe, así que el bloqueo es el pico de la frase.
+- **Triste**: abre la mandíbula **hacia abajo** (el píxel central del frown
+  deja su fila y aparece el de abajo). Es lo estándar: "la mandíbula dirige el
+  movimiento... baja en las vocales abiertas", y el ritmo lento con hold evita
+  la "boca de máquina de escribir" que las guías marcan como amateur.
+- **Alegría**: los dientes a 255, el tic más corto (280 ms = 3,6 sílabas/s,
+  ritmo normal).
+
+```bash
+sh MicroBit/Bench/run_bocas.sh      # A/B en el host (vieja vs. nueva)
+python3 MicroBit/prueba_talk.py     # en la placa: arranca, se mueve, para, sale
+```
+
+## Lo que falta migrar
+
+- **4 bocas de TALK** (Enojado, Sorprendido, Neutral, Fastidio) — todas
+  mecánicas: mismo tic libre que Alegría/Triste/Cansado.
 - **La réplica LED no puede mostrar el brillo**: compara
   `getPixelValue(x,y) > 0`, o sea solo on/off. Todo lo que se anima con el PWM
   global de `setBrightness` (la respiración, el latido, el temblor, el "tsk",
   la lágrima al atenuarse) **no se ve en el espejo de la web**, aunque en la
-  placa real sí se vea. Es la limitación más visible que queda, y no es del
-  firmware: es que el replicador manda 1 bit por píxel.
+  placa real sí se vea. No es del firmware: es que el replicador manda 1 bit
+  por píxel.
 
 > El display refresca a **60 Hz** (`NRF52_LED_MATRIX_FREQUENCY`), así que los
 > 16 ms de cada frame ya son el techo: más rápido no se ve, solo gasta.
