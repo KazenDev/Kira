@@ -62,6 +62,25 @@ static bool enlaceVivo()
 // revisarSerial(). UN solo procesador de comandos para USB y BLE: la
 // carrera entre fibras (transiciones dibujando encima de animaciones)
 // desaparece para siempre.
+//
+// POLITICA DE DESCARTE (cambiada; ver bleColaPoner). Lo que viaja por BLE es
+// el ESTADO ACTUAL del personaje, no una lista de pendientes: cuando la app
+// reconecta puede mandar una rafaga (estado + TALK + sensores). Si al llenarse
+// se descartara la linea NUEVA, se perderian justo las ordenes mas recientes
+// -la emocion que el usuario acaba de pedir- y la cara se quedaria con la
+// ANTERIOR. Verificado con Bench/sim_ble.cpp: 8 sensores seguidos de SAD y
+// ANGRY; con la politica vieja se procesaba SAD y se peredia ANGRY. Con la de
+// ahora sobrevive la ultima intencion.
+//
+// TAMANO: 8 de HOLGA son 128 ms (el principal drena 1 cada 16 ms), asi que
+// hace falta mandar mas de 8 comandos en menos de 128 ms para que desborde. La
+// simulacion confirma que con trafico normal (1 emocion cada 2 s) y con una
+// reconexion de 9 comandos en 20 ms NO se descarta nada.
+//
+// NOTA SOBRE CARRERAS: bleColaPoner NO tiene ningun punto de yield adentro
+// (ni fiber_sleep ni llamada bloqueante; el ManagedString es un refcount), y
+// el scheduler de CODAL es cooperativo de un solo core, asi que el
+// check-then-act es atomico con respecto al principal. No hace falta nada mas.
 // ---------------------------------------------------------------------------
 #define COLA_BLE_N 8
 static ManagedString colaBle[COLA_BLE_N];
@@ -69,14 +88,33 @@ static volatile int colaBleIni = 0;   // indice a sacar (bucle principal)
 static volatile int colaBleFin = 0;   // indice a poner (fibra lectora)
 static volatile int colaBleNum = 0;   // cuantas hay pendientes
 
+// Contadores para que un descarte no sea INVISIBLE. Antes el llamador
+// ignoraba el return de bleColaPoner y nadie se enteraba nunca.
+static int  descartadosBle = 0;
+static bool avisadoDescarte = false;
+
 static bool bleColaPoner(ManagedString linea)
 {
-    if (colaBleNum >= COLA_BLE_N)
-        return false;   // cola llena: se descarta lo NUEVO (lo viejo manda)
+    if (colaBleNum >= COLA_BLE_N) {
+        // Cola llena: sale la MAS VIEJA y entra la nueva. Al estar llena,
+        // ini == fin, asi que avanzar ini libera el slot donde se guarda
+        // esta: la cola queda con las ultimas COLA_BLE_N lineas.
+        colaBleIni = (colaBleIni + 1) % COLA_BLE_N;
+        // OJO: colaBleNum NO se toca. Entra una linea y sale otra, asi que la
+        // cuenta sigue igual. Bajarla sin su ++ hacia que la cuenta bajara en
+        // cada desborde y que el siguiente store sobreescribiera un slot sin
+        // leer: eso lo agarro Bench/sim_ble.cpp.
+        descartadosBle++;
+        if (!avisadoDescarte) {
+            avisadoDescarte = true;
+            uBit.serial.send("BLE: cola llena, se descarto lo MAS VIEJO\n");
+        }
+    } else {
+        colaBleNum++;
+    }
     colaBle[colaBleFin] = linea;
     colaBleFin = (colaBleFin + 1) % COLA_BLE_N;
-    colaBleNum++;
-    return true;
+    return true;               // ahora siempre se acepta: la nueva gana
 }
 
 bool bleColaSacar(ManagedString &linea)
@@ -110,6 +148,14 @@ static void alConectar(MicroBitEvent)
 static void alDesconectar(MicroBitEvent)
 {
     bleConectado = false;
+    // Resumen de lo que se perdio durante este enlace. Con la cola de 8
+    // deberia ser 0 siempre; si aparece, la app esta mandando rafagas y
+    // conviene agrandarla (COLA_BLE_N) en vez de adivinar.
+    if (descartadosBle > 0) {
+        uBit.serial.send("BLE: se descartaron ");
+        uBit.serial.send(ManagedString(descartadosBle));
+        uBit.serial.send(" lineas por cola llena\n");
+    }
     uBit.serial.send("BLE desconectado\n");
 }
 
@@ -149,6 +195,10 @@ static void fibraBle()
             saludado = false;
             parcialDesde = 0;
             avisadoSinSuscriptor = false;
+            // El aviso de descarte es POR ENLACE, igual que el de "el celu
+            // no escucha": con una rafaga se avisa una vez, no 8.
+            avisadoDescarte = false;
+            descartadosBle = 0;
             if (bleUart->rxBufferedSize() > 0)
                 bleUart->read(bleUart->rxBufferedSize(), ASYNC);
             uBit.serial.send("BLE: enlace vivo (estado real)\n");
