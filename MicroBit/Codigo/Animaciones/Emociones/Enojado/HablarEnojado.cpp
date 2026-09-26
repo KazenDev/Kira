@@ -1,61 +1,137 @@
 /**
- * HablarEnojado.cpp - La boca del ENOJADO que HABLA (gruñido)
- * ASINCRONO con FIBERS
+ * HablarEnojado.cpp - La boca del ENOJADO que HABLA (el gruñido)
  *
- * Lo activa la IA con "TALK" cuando la emocion activa es ENOJADO.
- * La cara base es la misma que Enojado.cpp (cejas fruncidas + boca
- * con dientes) y la boca GRUÑE: el hueco de la mandibula (2,4) se
- * abre y cierra RAPIDO a ritmo de habla enojada.
+ * ─────────────────────────────────────────────────────────────────────────
+ * PATRON DE FRAME (la boca): un tramo del tic por frame, el estado en el reloj
+ * ─────────────────────────────────────────────────────────────────────────
  *
- * ARQUITECTURA DE FIBRAS (igual que la alegria/tristeza):
- *   - El bucle principal (Principal.cpp) mueve la mandibula
- *   - UNA FIBRA (create_fiber) parpadea los ojos EN PARALELO con
- *     parpadeo BRUSCO e impredecible
- *   fiber_sleep() cede la CPU -> las dos animaciones corren a la vez.
- *   La boca toca la fila 3-4; los ojos tocan (1,1) y (3,1).
- *   No se pisan -> sin condiciones de carrera.
+ * ANTES esta boca era una cadena de fiber_sleep() y el bucle principal se
+ * comia 680 ms SIN mirar el serial (medido: 665 ms de ventana sorda), la mas
+ * corta de las ocho.
  *
- * modoHablar es el MISMO global de la alegria (Alegria/Hablar.h):
- * cualquier comando que no sea TALK lo apaga y TODAS las fibras mueren.
+ * Ahora animarBocaEnojada() es una FUNCION DE FRAME: un frame (~16 ms) del tic
+ * y vuelve. El estado vive en systemTime(), asi que el comando de la IA se nota
+ * en el frame siguiente. Ultima de las ocho bocas en migrarse.
+ *
+ * ── EL RITMAS: EL MAS RAPIDO DE LAS OCHO BOCAS ──────────────────────────
+ * Con un tic de 170 ms son 5,9 silabas/s, el techo del rango normal de habla
+ * (medido entre 3,3 y 5,9). Y encaja con el principio de arousal: "las
+ * emociones con arousal alto, como el enfado y la alegria, se relacionan con
+ * una velocidad de habla mas rapida", y el estudio lo confirma: "la velocidad
+ * en la tristeza fue significativamente mas lenta que en el enfado y la
+ * alegria".
+ *
+ * Un matiz honesto: esa convencion NO es unanime. Hay un estudio de habla
+ * espontanea en portugues que encontro el enfado MAS LENTO que el neutral, y
+ * otro hallo que en habla clara reducir el ritmo aumenta el juicio de enfado.
+ * Los dos acknowledge que contradicen la mayoria de la literatura. Asi que
+ * esto es "consistente con la convencion dominante", no "demostrado".
+ *
+ * Ademas, con 5,9 syl/s esta en el TECHO de lo plausible: no tiene para donde
+ * subir sin caer en la caricatura. Si quisieras mas enfado, el camino no seria
+ * un tic mas corto sino MAS AMPLITUD o una pausa antes de la palabra.
+ *
+ * ── LA BOCA ES UN SOLO PIXEL: la mandibula ──────────────────────────────
+ * (2,4) es el hueco de los dientes. Se abre y se cierra = la mandibula que
+ * aprieta. Los 6 pixeles de la boca quedan siempre encendidos (dientes
+ * apretados), igual que en el original.
+ *
+ * OJO al testear esto: (2,4) lo escribe TAMBIEN la emocion en reposo, que
+ * tiene su propia "mandibula aprieta" pulsando el mismo pixel. Asi que por
+ * serial no se puede separar un resto de TALK del movimiento de la emocion
+ * (ver prueba_talk.py, caso ENOJADO).
+ *
+ * ── POR QUE LA BOCA NO NECESITA SU PROPIO revisarSerial() ───────────────
+ * El bucle principal ya hace, en este orden:
+ *     revisarSerial();
+ *     atenderBotonesEscucha();
+ *     if (modoHablar) animarBocaEnojada();
+ * Con la boca devolviendo cada 16 ms, el chequeo del puerto queda a 60 Hz.
+ *
+ * ── LA FIBRA DE LOS OJOS NO SE TOCA ──────────────────────────────────────
+ * Ya esta bien: fiber_sleep() cede la CPU, rompe el loop en cuanto modoHablar
+ * es false, se libera sola y no procesa comandos. La separacion de pixeles se
+ * mantiene: la boca toca (2,4), la fibra los ojos y las cejas.
  */
 #include "HablarEnojado.h"
 #include "../Alegria/Hablar.h"   // modoHablar (compartido)
 
 // ---------------------------------------------------------------------------
 // Posiciones (mismas que Enojado.cpp)
-// ---------------------------------------------------------------------------
+static const uint8_t CEJA_IZQ[2] = {0, 0};
+static const uint8_t CEJA_IZQ_F[2] = {1, 0};   // interior: se frunce al hablar
+static const uint8_t CEJA_DER[2] = {4, 0};
+static const uint8_t CEJA_DER_F[2] = {3, 0};
+
 static const uint8_t OJO_IZQ[2] = {1, 1};
 static const uint8_t OJO_DER[2] = {3, 1};
 
-// Cejas + extension al fruncirse
-static const uint8_t CEJA_IZQ[2] = {0, 0};
-static const uint8_t CEJA_DER[2] = {4, 0};
-static const uint8_t CEJA_IZQ_F[2] = {1, 0};
-static const uint8_t CEJA_DER_F[2] = {3, 0};
+// La mandibula: el hueco de los dientes, (2,4)
+static const uint8_t MANDIBULA[2] = {2, 4};
 
-// Boca con dientes (mandibula con hueco abierto en (2,4))
-static const uint8_t BOCA[7][2] = {
-    {1,3}, {2,3}, {3,3}, {0,4}, {1,4}, {3,4}, {4,4}
+// Los 6 pixeles de la boca con dientes: SIEMPRE encendidos mientras habla
+static const uint8_t BOCA[6][2] = {
+    {1,3}, {2,3}, {3,3}, {0,4}, {1,4}, {3,4}
 };
 
 // ---------------------------------------------------------------------------
-// Helpers
+// EL TIC COMO TABLA
+//
+// Un gruñido: la mandibula baja de a poco, queda, sube y queda.
+// 30 + 60 + 30 + 50 = 170 ms. OJO: abrir y cerrar duran LO MISMO (30 ms), al
+// reves de Sorprendido, donde la apertura era un 33% mas rapida. Eso tambien
+// tiene sentido: el gruñido es simetrico, no un gaspo.
 // ---------------------------------------------------------------------------
-
-static void setPixel(const uint8_t* p, int v)
+enum Tramo
 {
-    uBit.display.image.setPixelValue(p[0], p[1], v);
+    T_ABRE = 0,
+    T_ABIERTA,
+    T_CIERRA,
+    T_CERRADA
+};
+
+struct Segmento
+{
+    unsigned short desde;
+    unsigned short hasta;
+    unsigned char  tramo;
+};
+
+static const Segmento TIC[] = {
+    {  0,  30, T_ABRE   },   // 30 ms
+    { 30,  90, T_ABIERTA },   // 60 ms
+    { 90, 120, T_CIERRA  },   // 30 ms
+    {120, 170, T_CERRADA },   // 50 ms
+};
+static const int NTRAMOS = sizeof(TIC) / sizeof(TIC[0]);
+static const unsigned short TIC_MS = 170;
+
+static unsigned long faseBase = 0;
+static int ultimoGrunido = -1;
+
+// El brillo de la mandibula en este instante del tramo.
+static int valorEn(unsigned char tramo, float p)
+{
+    switch (tramo)
+    {
+        case T_ABRE:    return (int)(255 * p / 0.1765f);
+        case T_ABIERTA:  return 255;
+        case T_CIERRA:  return 255 - (int)(255 * p / 0.1765f);
+        default:         return 0;
+    }
 }
 
-// Parpadeo BRUSCO y sincronizado: ambos ojos se mueven JUNTOS paso a
-// paso (secuenciales se veria desincronizado). Checa modoHablar en cada
-// paso: si llega otra emocion, la fibra MUERE en el acto.
+// ---------------------------------------------------------------------------
+// FIBRA: parpadeos en paralelo (SIN CAMBIOS: ya cede la CPU, rompe el loop
+// sola y no procesa comandos)
+// ---------------------------------------------------------------------------
+
 static void cerrarOjosEnojados(bool izq, bool der, int steps, int delayMs)
 {
     for (int s = 0; s <= steps && modoHablar; s++) {
         int b = 255 - (255 * s) / steps;
-        if (izq) setPixel(OJO_IZQ, b);
-        if (der) setPixel(OJO_DER, b);
+        if (izq) uBit.display.image.setPixelValue(OJO_IZQ[0], OJO_IZQ[1], b);
+        if (der) uBit.display.image.setPixelValue(OJO_DER[0], OJO_DER[1], b);
         fiber_sleep(delayMs);
     }
 }
@@ -64,60 +140,36 @@ static void abrirOjosEnojados(bool izq, bool der, int steps, int delayMs)
 {
     for (int s = 0; s <= steps && modoHablar; s++) {
         int b = (255 * s) / steps;
-        if (izq) setPixel(OJO_IZQ, b);
-        if (der) setPixel(OJO_DER, b);
+        if (izq) uBit.display.image.setPixelValue(OJO_IZQ[0], OJO_IZQ[1], b);
+        if (der) uBit.display.image.setPixelValue(OJO_DER[0], OJO_DER[1], b);
         fiber_sleep(delayMs);
     }
 }
 
 // ---------------------------------------------------------------------------
-// FIBRA: parpadeo BRUSCO e impredecible mientras modoHablar siga activo
-// (el enojado casi no parpadea: esperas cortas 0.8-2.5s, blinks rapidos)
+// FIBRA: parpadeo BRUSCO e impredecible (SIN CAMBIOS: ya cede la CPU, rompe
+// el loop sola y no procesa comandos).
+// El enojado casi no parpadea: esperas cortas de 0.8 a 2.5 s.
 // ---------------------------------------------------------------------------
 
 static void fiberParpadeoEnojado(void)
 {
     while (modoHablar) {
-        // 1) Decidir QUE parpadea: ~80% ambos, ~10% guino izq, ~10% guino der
+        // ~80% ambos, ~10% guino izquierdo, ~10% guino derecho
         int r = uBit.random(100);
         bool izq = true, der = true;
-        if (r >= 90)      { izq = false; }   // guino derecho
-        else if (r >= 80) { der = false; }   // guino izquierdo
+        if (r >= 90)      { izq = false; }
+        else if (r >= 80) { der = false; }
 
-        // 2) Parpadeo BRUSCO: cerrar ~40ms, cerrado ~70ms, abrir ~40ms
-        cerrarOjosEnojados(izq, der, 2, 20);
-        fiber_sleep(70);
-        abrirOjosEnojados(izq, der, 2, 20);
+        cerrarOjosEnojados(izq, der, 2, 20);   // ~40 ms
+        fiber_sleep(70);                         // cerrado ~70 ms
+        abrirOjosEnojados(izq, der, 2, 20);    // ~40 ms
 
-        // 3) Espera ALEATORIA al siguiente parpadeo: 0.8s a 2.5s
-        int espera = 800 + uBit.random(1700);
+        int espera = 800 + uBit.random(1700);    // 0.8 s a 2.5 s
         for (int i = 0; i < espera / 100 && modoHablar; i++)
             fiber_sleep(100);
     }
-
-    // Sale del loop (modoHablar ya es false) -> la fibra se libera sola
     release_fiber();
-}
-
-// ---------------------------------------------------------------------------
-// La boca GRUÑE: la mandibula se abre y cierra RAPIDO (fades cortos)
-// ---------------------------------------------------------------------------
-
-// Un "tic" de gruñido: el hueco (2,4) se abre y cierra a ritmo enojado
-static void ticBocaEnojada()
-{
-    // abrir: la mandibula baja (2,4 se enciende)
-    for (int s = 0; s <= 1; s++) {
-        uBit.display.image.setPixelValue(2, 4, 255 * s);
-        fiber_sleep(15);
-    }
-    fiber_sleep(60);
-    // cerrar: la mandibula sube (2,4 se apaga, dientes apretados)
-    for (int s = 0; s <= 1; s++) {
-        uBit.display.image.setPixelValue(2, 4, 255 - 255 * s);
-        fiber_sleep(15);
-    }
-    fiber_sleep(50);
 }
 
 // ---------------------------------------------------------------------------
@@ -127,15 +179,14 @@ static void dibujarCaraEnojada()
 {
     uBit.display.setBrightness(95);
     uBit.display.image.clear();
-    setPixel(CEJA_IZQ, 255);
-    setPixel(CEJA_DER, 255);
-    setPixel(CEJA_IZQ_F, 255);
-    setPixel(CEJA_DER_F, 255);   // cejas bien fruncidas al hablar
-    setPixel(OJO_IZQ, 255);
-    setPixel(OJO_DER, 255);
-    // Boca con dientes SIEMPRE encendida (nunca se apaga mientras habla)
-    for (int i = 0; i < 7; i++)
-        setPixel(BOCA[i], 255);
+    uBit.display.image.setPixelValue(CEJA_IZQ[0], CEJA_IZQ[1], 255);
+    uBit.display.image.setPixelValue(CEJA_DER[0], CEJA_DER[1], 255);
+    uBit.display.image.setPixelValue(CEJA_IZQ_F[0], CEJA_IZQ_F[1], 255);
+    uBit.display.image.setPixelValue(CEJA_DER_F[0], CEJA_DER_F[1], 255);
+    uBit.display.image.setPixelValue(OJO_IZQ[0], OJO_IZQ[1], 255);
+    uBit.display.image.setPixelValue(OJO_DER[0], OJO_DER[1], 255);
+    for (int i = 0; i < 6; i++)
+        uBit.display.image.setPixelValue(BOCA[i][0], BOCA[i][1], 255);
 }
 
 // ---------------------------------------------------------------------------
@@ -151,14 +202,32 @@ void iniciarHablarEnojado()
     modoHablar = true;
     dibujarCaraEnojada();
     uBit.serial.send("TALK-ANG\n");   // debug: confirmar el dispatch
+    faseBase = uBit.systemTime();     // el tic arranca ahora
+    ultimoGrunido = -1;              // fuerza la primera escritura
     create_fiber(fiberParpadeoEnojado);
 }
 
-// Una pasada de la boca gruñendo (la llama el bucle principal)
+// UN frame del gruñido. La llama el bucle principal ~60 veces por segundo
+// mientras modoHablar siga activo.
 void animarBocaEnojada()
 {
-    ticBocaEnojada();
-    ticBocaEnojada();
-    ticBocaEnojada();   // ~3 tics por pasada -> ritmo de gruñido
-    ticBocaEnojada();   // el enojado habla MAS rapido (4 tics)
+    unsigned long t = (uBit.systemTime() - faseBase) % TIC_MS;
+
+    // Localiza el tramo (4 entradas: busqueda lineal, sin RAM extra).
+    const Segmento *seg = &TIC[NTRAMOS - 1];
+    for (int i = 0; i < NTRAMOS; i++) {
+        if (t >= TIC[i].desde && t < TIC[i].hasta) { seg = &TIC[i]; break; }
+    }
+    float p = (float)(t - seg->desde) / (float)(seg->hasta - seg->desde);
+
+    int v = valorEn(seg->tramo, p);
+    if (v != ultimoGrunido) {
+        uBit.display.image.setPixelValue(MANDIBULA[0], MANDIBULA[1], (uint8_t)v);
+        ultimoGrunido = v;
+    }
+
+    // fiber_sleep() y uBit.sleep() son la MISMA llamada (CodalDevice.cpp:30
+    // -> fiber_sleep). Cede la CPU a la fibra de los ojos, al replicador del
+    // LED y al stack de BLE. 16 ms = el techo del display (60 Hz).
+    fiber_sleep(16);
 }
