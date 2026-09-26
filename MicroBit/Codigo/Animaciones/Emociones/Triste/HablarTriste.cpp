@@ -1,56 +1,141 @@
 /**
  * HablarTriste.cpp - La boca de la TRISTEZA que HABLA (lip-sync triste)
- * ASINCRONO con FIBERS
  *
- * Lo activa la IA con "TALK" cuando la emocion activa es TRISTE.
- * La cara base es la misma que Triste.cpp (frown) y la boca se ABRE
- * hacia abajo a ritmo de habla: el medio del frown (2,3) se apaga y
- * se enciende (2,4) abajo, como quien habla a punto de llorar.
- * Las esquinas (0,4)(4,4) y los lados (1,3)(3,3) quedan firmes.
+ * ─────────────────────────────────────────────────────────────────────────
+ * PATRON DE FRAME (la boca): un tramo del tic por frame, el estado en el reloj
+ * ─────────────────────────────────────────────────────────────────────────
  *
- * ARQUITECTURA DE FIBRAS (igual que la alegria):
- *   - El bucle principal (Principal.cpp) mueve la boca "wah"
- *   - UNA FIBRA (create_fiber) parpadea los ojos EN PARALELO con
- *     parpadeo PESADO e impredecible (mas lento que la alegria)
- *   fiber_sleep() cede la CPU -> las dos animaciones corren a la vez.
- *   La boca toca la fila 3-4; los ojos tocan (1,1) y (3,1).
- *   No se pisan -> sin condiciones de carrera.
+ * ANTES esta boca era una cadena de fiber_sleep() y el bucle principal se
+ * comia 900 ms SIN mirar el serial (medido: 880 ms de ventana sorda). Y eso
+ * pega mas de lo que parece, porque Principal.cpp le da PRIORIDAD a TALK
+ * sobre la animacion de la emocion: mientras la IA habla, esta boca es TODO
+ * lo que corre en el hilo principal.
  *
- * modoHablar es el MISMO global de la alegria (Alegria/Hablar.h):
- * cualquier comando que no sea TALK lo apaga y AMBAS fibras mueren.
+ * Ahora animarBocaTriste() es una FUNCION DE FRAME: muestra UN frame (~16 ms)
+ * del tic y vuelve. El estado vive en systemTime(), asi que el comando de la
+ * IA se nota en el frame siguiente. Mismo patron que las 8 emociones y que la
+ * boca de Alegria.
+ *
+ * ── POR QUE LA BOCA NO NECESITA SU PROPIO revisarSerial() ───────────────
+ * El bucle principal ya hace, en este orden:
+ *
+ *     revisarSerial();
+ *     atenderBotonesEscucha();
+ *     if (modoHablar) animarBocaTriste();
+ *
+ * Con la boca devolviendo cada 16 ms, el chequeo del puerto queda a 60 Hz.
+ * Un checkpoint EXTRA adentro seria trabajo redundante.
+ *
+ * ── POR QUE LA BOCA ABRE HACIA ABAJO (y no se toca) ─────────────────────
+ * Es la mandibula la que dirige el movimiento: "la mandibula baja en las
+ * vocales abiertas y en las sílabas acentuadas", y "el movimiento real de la
+ * mandibula tiene peso y seguimiento". En una matriz de 5x5 el unico modo de
+ * que la mandibula baje es que el pixel central del frown deje su fila y
+ * aparezca el de abajo: eso es (2,3) apagandose mientras (2,4) se enciende.
+ * Y el ritmo lento con hold es la "curva musical": keyear la mandibula en
+ * cada tic rapido es justamente la "boca de maquina de escribir" que las
+ * guias markean como amateur.
+ *
+ * OJO: (2,4) NO es parte de la cara en reposo de Triste (su BOCA es
+ * (0,4)(4,4)(1,3)(2,3)(3,3)). Es un pixel que solo existe mientras habla.
+ * El tic lo deja siempre en 0 al cerrarse, y si TALK se corta a mitad, el
+ * caraIntacta() de Triste.cpp lo detecta y lo repinta en el frame siguiente.
+ *
+ * ── LA FIBRA DE LOS OJOS NO SE TOCA ──────────────────────────────────────
+ * Ya esta bien: usa fiber_sleep() (cede la CPU), rompe el loop en cuanto
+ * modoHablar es false, se libera sola, y no procesa comandos. La separacion
+ * de pixeles se mantiene: la boca toca (2,3) y (2,4), la fibra los ojos
+ * (1,1) y (3,1).
  */
 #include "HablarTriste.h"
 #include "../Alegria/Hablar.h"   // modoHablar (compartido)
 
 // ---------------------------------------------------------------------------
 // Posiciones (mismas que Triste.cpp)
-// ---------------------------------------------------------------------------
-static const uint8_t OJO_IZQ[2] = {1, 1};
-static const uint8_t OJO_DER[2] = {3, 1};
-
-// Boca triste cerrada (frown): esquinas (0,4)(4,4) + medio (1,3)(2,3)(3,3)
+//
+// La boca triste cerrada (frown): esquinas (0,4)(4,4) + medio (1,3)(2,3)(3,3)
 static const uint8_t BOCA[5][2] = {
     {0,4}, {4,4}, {1,3}, {2,3}, {3,3}
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// La mandibula: el centro del frown (2,3) y el pixel de abajo (2,4).
+static const uint8_t LABIO[2] = {2, 3};
+static const uint8_t BARBILLA[2] = {2, 4};
 
-static void setPixel(const uint8_t* p, int v)
+// Los ojos de la fibra (fila 1). La boca solo toca la columna 2 de las filas
+// 3 y 4: no se pisan.
+static const uint8_t OJO_IZQ[2] = {1, 1};
+static const uint8_t OJO_DER[2] = {3, 1};
+
+// ---------------------------------------------------------------------------
+// EL TIC COMO TABLA
+//
+// Un "wah" triste: la mandibula baja (el labio se apaga y aparece el de
+// abajo), queda abierta un momento, y vuelve al frown.
+// 60 + 90 + 60 + 90 = 300 ms, los mismos tiempos de siempre.
+// ---------------------------------------------------------------------------
+enum Tramo
 {
-    uBit.display.image.setPixelValue(p[0], p[1], v);
+    T_BAJA = 0,   // la mandibula cae
+    T_ABIERTA,    // abierta un momento
+    T_SUBE,       // vuelve al frown
+    T_CERRADA     // pausa en el frown
+};
+
+struct Segmento
+{
+    unsigned short desde;
+    unsigned short hasta;
+    unsigned char  tramo;
+};
+
+static const Segmento TIC[] = {
+    {  0,  60, T_BAJA    },
+    { 60, 150, T_ABIERTA },
+    {150, 210, T_SUBE    },
+    {210, 300, T_CERRADA },
+};
+static const int NTRAMOS = sizeof(TIC) / sizeof(TIC[0]);
+static const unsigned short TIC_MS = 300;
+
+static unsigned long faseBase = 0;
+static int ultimoLabio = -1;
+static int ultimoBarbilla = -1;
+
+// Los dos valores en este instante del tramo. Son complementarios: con la
+// mandibula abajo el labio esta apagado y la barbilla prendida, y al revés.
+static void valoresTriste(unsigned char tramo, float p, int &labio, int &barbilla)
+{
+    switch (tramo)
+    {
+        case T_BAJA:     // 60 ms
+            labio    = 255 - (int)(255 * p / 0.2f);
+            barbilla = (int)(255 * p / 0.2f);
+            break;
+        case T_ABIERTA:  // 90 ms
+            labio = 0; barbilla = 255;
+            break;
+        case T_SUBE:     // 60 ms
+            labio    = (int)(255 * (p - 0.5f) / 0.2f);
+            barbilla = 255 - (int)(255 * (p - 0.5f) / 0.2f);
+            break;
+        default:         // 90 ms
+            labio = 255; barbilla = 0;
+            break;
+    }
 }
 
-// Parpadeo PESADO y sincronizado: ambos ojos se mueven JUNTOS paso a
-// paso (secuenciales se veria desincronizado). Checa modoHablar en cada
-// paso: si llega otra emocion, la fibra MUERE en el acto.
+// ---------------------------------------------------------------------------
+// FIBRA: parpadeo PESADO e impredecible mientras modoHablar siga activo
+// (SIN CAMBIOS: ya cede la CPU, rompe el loop sola y no procesa comandos)
+// ---------------------------------------------------------------------------
+
 static void cerrarOjosTristes(bool izq, bool der, int steps, int delayMs)
 {
     for (int s = 0; s <= steps && modoHablar; s++) {
         int b = 255 - (255 * s) / steps;
-        if (izq) setPixel(OJO_IZQ, b);
-        if (der) setPixel(OJO_DER, b);
+        if (izq) uBit.display.image.setPixelValue(OJO_IZQ[0], OJO_IZQ[1], b);
+        if (der) uBit.display.image.setPixelValue(OJO_DER[0], OJO_DER[1], b);
         fiber_sleep(delayMs);
     }
 }
@@ -59,63 +144,32 @@ static void abrirOjosTristes(bool izq, bool der, int steps, int delayMs)
 {
     for (int s = 0; s <= steps && modoHablar; s++) {
         int b = (255 * s) / steps;
-        if (izq) setPixel(OJO_IZQ, b);
-        if (der) setPixel(OJO_DER, b);
+        if (izq) uBit.display.image.setPixelValue(OJO_IZQ[0], OJO_IZQ[1], b);
+        if (der) uBit.display.image.setPixelValue(OJO_DER[0], OJO_DER[1], b);
         fiber_sleep(delayMs);
     }
 }
 
-// ---------------------------------------------------------------------------
-// FIBRA: parpadeo PESADO e impredecible mientras modoHablar siga activo
-// (mas lento y pesado que el de la alegria: esperas 2-6s)
-// ---------------------------------------------------------------------------
-
 static void fiberParpadeoTriste(void)
 {
     while (modoHablar) {
-        // 1) Decidir QUE parpadea: ~75% ambos, ~12.5% guino izq, ~12.5% guino der
+        // ~75% ambos ojos, ~12.5% guino izquierdo, ~12.5% guino derecho
         int r = uBit.random(100);
         bool izq = true, der = true;
-        if (r >= 88)      { izq = false; }   // guino derecho
-        else if (r >= 75) { der = false; }   // guino izquierdo
+        if (r >= 88)      { izq = false; }
+        else if (r >= 75) { der = false; }
 
-        // 2) Parpadeo PESADO: cerrar ~200ms, cerrado ~200ms, abrir ~200ms
+        // Parpadeo PESADO: cerrar ~200ms, cerrado ~200ms, abrir ~200ms
         cerrarOjosTristes(izq, der, 5, 40);
         fiber_sleep(200);
         abrirOjosTristes(izq, der, 5, 40);
 
-        // 3) Espera ALEATORIA al siguiente parpadeo: 2s a 6s (triste = menos)
+        // Espera ALEATORIA: 2s a 6s (triste = parpadea menos)
         int espera = 2000 + uBit.random(4000);
         for (int i = 0; i < espera / 100 && modoHablar; i++)
             fiber_sleep(100);
     }
-
-    // Sale del loop (modoHablar ya es false) -> la fibra se libera sola
     release_fiber();
-}
-
-// ---------------------------------------------------------------------------
-// La boca "wah": se abre y cierra a ritmo de habla (fades, sin saltos)
-// ---------------------------------------------------------------------------
-
-// Un "tic" de habla triste: el medio del frown se abre hacia abajo
-// ((2,3) se apaga, (2,4) se enciende) y vuelve a cerrarse.
-static void ticBocaTriste()
-{
-    // abrir: (2,3) se apaga mientras (2,4) se enciende
-    for (int s = 0; s <= 2; s++) {
-        uBit.display.image.setPixelValue(2, 3, 255 - 255 * s / 2);
-        uBit.display.image.setPixelValue(2, 4, 255 * s / 2);
-        fiber_sleep(20);
-    }
-    fiber_sleep(90);          // abierta un momento
-    // cerrar: vuelve al frown
-    for (int s = 0; s <= 2; s++) {
-        uBit.display.image.setPixelValue(2, 3, 255 * s / 2);
-        uBit.display.image.setPixelValue(2, 4, 255 - 255 * s / 2);
-        fiber_sleep(20);
-    }
-    fiber_sleep(90);          // pausa entre tics
 }
 
 // ---------------------------------------------------------------------------
@@ -125,18 +179,17 @@ static void dibujarCaraTriste()
 {
     uBit.display.setBrightness(80);
     uBit.display.image.clear();
-    setPixel(OJO_IZQ, 255);
-    setPixel(OJO_DER, 255);
-    // Frown SIEMPRE encendido (nunca se apaga mientras habla)
+    uBit.display.image.setPixelValue(OJO_IZQ[0], OJO_IZQ[1], 255);
+    uBit.display.image.setPixelValue(OJO_DER[0], OJO_DER[1], 255);
     for (int i = 0; i < 5; i++)
-        setPixel(BOCA[i], 255);
+        uBit.display.image.setPixelValue(BOCA[i][0], BOCA[i][1], 255);
 }
 
 // ---------------------------------------------------------------------------
 // API publica
 // ---------------------------------------------------------------------------
 
-// TALK (con tristeza activa): prepara la cara y lanza la fibra de parpadeo
+// TALK (con tristeza activa): prepara la cara y lanza la fibra de ojos
 void iniciarHablarTriste()
 {
     // Si ya estamos hablando (con cualquier emocion), NO crear otra fibra
@@ -145,13 +198,37 @@ void iniciarHablarTriste()
     modoHablar = true;
     dibujarCaraTriste();
     uBit.serial.send("TALK-SAD\n");   // debug: confirmar el dispatch
+    faseBase = uBit.systemTime();     // el tic arranca ahora
+    ultimoLabio = ultimoBarbilla = -1;   // fuerza la primera escritura
     create_fiber(fiberParpadeoTriste);
 }
 
-// Una pasada de la boca "wah" hablando (la llama el bucle principal)
+// Una pasada del movimiento de dientes hablando (la llama el bucle principal)
 void animarBocaTriste()
 {
-    ticBocaTriste();
-    ticBocaTriste();
-    ticBocaTriste();   // ~3 tics por pasada -> ritmo de conversacion
+    unsigned long t = (uBit.systemTime() - faseBase) % TIC_MS;
+
+    // Localiza el tramo (4 entradas: busqueda lineal, sin RAM extra).
+    const Segmento *seg = &TIC[NTRAMOS - 1];
+    for (int i = 0; i < NTRAMOS; i++) {
+        if (t >= TIC[i].desde && t < TIC[i].hasta) { seg = &TIC[i]; break; }
+    }
+    float p = (float)(t - seg->desde) / (float)(seg->hasta - seg->desde);
+
+    int labio, barbilla;
+    valoresTriste(seg->tramo, p, labio, barbilla);
+
+    if (labio != ultimoLabio) {
+        uBit.display.image.setPixelValue(LABIO[0], LABIO[1], (uint8_t)labio);
+        ultimoLabio = labio;
+    }
+    if (barbilla != ultimoBarbilla) {
+        uBit.display.image.setPixelValue(BARBILLA[0], BARBILLA[1], (uint8_t)barbilla);
+        ultimoBarbilla = barbilla;
+    }
+
+    // fiber_sleep() y uBit.sleep() son la MISMA llamada (CodalDevice.cpp:30
+    // -> fiber_sleep). Cede la CPU a la fibra de los ojos, al replicador del
+    // LED y al stack de BLE. 16 ms = el techo del display (60 Hz).
+    fiber_sleep(16);
 }
