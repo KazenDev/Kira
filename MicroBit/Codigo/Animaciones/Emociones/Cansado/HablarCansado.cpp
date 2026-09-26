@@ -38,11 +38,12 @@
  * REDUCIDA en vez de hiperarticulada. O sea que se lee como "habla lento de
  * corrido", no como "habla con pausas de sueno".
  *
- * PAUSA_ENTRE_TICS_MS esta en 0, o sea el comportamiento de siempre. Si
- * queres que la figura se tome un respiro entre tics, subilo a ~250: el ciclo
- * pasa de 1380 a 1880 ms, el ritmo baja a 1,6 silabas/s, y aparecen las pausas
- * que la fuente dice que son la mitad del efecto. No se cambio por decision
- * propia: es diseno del personaje.
+ * PAUSA_ENTRE_TICS_MS ahora es 250 (antes 0, o sea tics pegados). Con eso
+ * el ciclo pasa de 1380 a 1880 ms, el ritmo baja a 1,6 silabas/s, y aparecen
+ * dos huecos de 250 ms entre tics: el silencio ENTRE PALABRAS pasa a verse,
+ * que era justo lo que faltaba. Durante la pausa la boca se apaga del todo y
+ * despues reabre, asi que el hueco no es un tiempo muerto sino un gesto.
+ * 250 ms es una pausa real entre frases (el rango tipico va de 200 a 400).
  *
  * ── POR QUE LA BOCA NO NECESITA SU PROPIO revisarSerial() ───────────────
  * El bucle principal ya hace, en este orden:
@@ -74,8 +75,9 @@ static const uint8_t BOCA[3][2] = {
 // con sueno, y va en el mismo sentido que el tic lento.
 #define BRILLO_MAX 200
 
-// Ver la nota del encabezado: 0 = tics pegados (como esta siempre).
-#define PAUSA_ENTRE_TICS_MS 0
+// La pausa entre tics: 250 ms, o sea dos huecos por ciclo. Con 0 los tres
+// tics iban pegados y la boca hablaba "de corrido". Ver la nota del encabezado.
+#define PAUSA_ENTRE_TICS_MS 250
 #define TICS_POR_PASADA 3
 
 // ---------------------------------------------------------------------------

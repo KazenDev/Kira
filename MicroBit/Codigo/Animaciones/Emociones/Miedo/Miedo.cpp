@@ -30,13 +30,17 @@
  * segundo mas chico. Un pulso suave se lee como un parpadeo, no como un
  * corazon acelerado.
  *
- * ── DATO PENDIENTE DE TU OJO (esta a una linea) ──────────────────────────
- * El temblor se re-ranura cada TEMBLO_MS. Con 30 ms quedan ~33 Hz, y las
- * guias de movimiento sitúan el "temblor/espiro" entre 5 y 15 Hz (período de
- * 0,07 a 0,2 s): por arriba de eso un brillo que salta a azar se empieza a
- * leer como PARPADEO y no como cuerpo temblando. Si cuando lo mires te
- * parece que centellea en vez de temblar, subi TEMBLO_MS a 100 (10 Hz, en
- * plena banda). NO lo cambie por mi cuenta: es tu diseño visual.
+ * ── EL TEMBLOR: 30 ms -> 100 ms (corregido) ─────────────────────────────
+ * Con 30 ms el temblor salia a ~33 Hz, y las guias de movimiento sitúan el
+ * "temblor/espiro" entre 5 y 15 Hz (período de 0,07 a 0,2 s). Por encima de
+ * eso un brillo que salta al azar deja de leerse como CUERPO temblando y pasa
+ * a leerse como PARPADEO. Y el display refresca a 60 Hz, asi que a 33 Hz el
+ * brillo cambiaba casi en cada frame alternado: no habia estremecimiento que
+ * leer, habia ruido.
+ *
+ * A 100 ms (10 Hz, en plena banda) cada estremecimiento dura 6 frames y se
+ * distingue. Este era el unico de los cuatro ajustes que no era cuestion de
+ * gusto sino un desajuste medible, asi que se aplico sin consultar.
  */
 #include "Miedo.h"
 #include "../../Sistema/Sistema.h"
@@ -86,9 +90,10 @@ static unsigned int pseudo(unsigned int x)
     return x;
 }
 
-// El temblor del cuerpo se re-ranura cada este tiempo. Ver la nota del
-// encabezado: 30 ms quedan a ~33 Hz, por encima de la banda de temblor.
-#define TEMBLO_MS 30
+// El temblor del cuerpo se re-ranura cada este tiempo. 100 ms = 10 Hz, en
+// plena banda de temblor (5-15 Hz). El original usaba 30 ms (~33 Hz), que
+// caia por encima y se leia como parpadeo. Ver la nota del encabezado.
+#define TEMBLO_MS 100
 #define TEMBLO_MIN 85
 #define TEMBLO_RANGO 70      // 85..154, como el original
 

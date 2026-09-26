@@ -56,9 +56,21 @@ static const uint8_t BOCA[3][2] = {
     {1, 3}, {2, 3}, {3, 3}
 };
 
-// El tope de brillo del "bruh" hablador. 255 = el comportamiento de siempre
-// (identico a Alegria). Bajarlo a ~200 lo vuelve hipoarticulado. Ver la nota.
-#define BRILLO_MAXO 255
+// El tope de brillo del "bruh" hablador. 190 = hipoarticulado.
+//
+// POR QUE 190 Y NO 0: Fastidio, que tambien es de arousal bajo, pulsa entre
+// 60 y 240 y NUNCA se cierra del todo, porque es un sonido "entre dientes".
+// Un neutral no es eso: una boca que no se cierra nunca entre silabas se lee
+// como rareza, no como aburrimiento. Asi que aqui se baja la AMPLITUD (cada
+// silaba se nota menos) pero se deja que la boca se cierre del todo, que es
+// lo natural entre palabras. La direccion la da la literatura ("menor arousal
+// implica articulacion mas debil"); el numero exacto es criterio.
+//
+// OJO: la amplitud es solo la mitad del "bruh". Lo que de verdad le falta es
+// el RITMO: esta boca habla a 3,6 silabas/s, igual que Alegria, y un aburrido
+// habla mas lento. Eso no es una constante de una linea (habria que tocar los
+// bordes de los tramos de la tabla de abajo) y queda pendiente de decidir.
+#define BRILLO_MAXO 190
 
 // ---------------------------------------------------------------------------
 // EL TIC COMO TABLA
