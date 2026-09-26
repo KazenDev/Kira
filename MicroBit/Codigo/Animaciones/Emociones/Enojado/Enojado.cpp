@@ -24,13 +24,20 @@
  * suaviza: un golpe tiene que resolver en pocos frames, y estirarlo le
  * quita potencia.
  *
- * ── PENDIENTE DE TU OJO (esta a una linea) ──────────────────────────────
- * ARC_CEJA: el original enciende las dos cejas interiores DE GOLPE al
- * fruncirse. Las guias de animacion de cejas dicen que el movimiento tiene
- * que ir en ARCO, no lineal: la ceja exterior adelanta y la interior la
- * sigue, con un retraso de unos 40 ms. Con ARC_CEJA = 0 queda igual que el
- * original; con el valor de abajo, la derecha sigue a la izquierda. Es
- * sutil, y es tu cara: pruobalo y decides.
+ * ── EL ARCO DE LA CEJA: PROPUESTO Y DESCARTADO ──────────────────────────
+ * Las guias de animacion de cejas dicen que el movimiento tiene que ir en
+ * arco: la ceja exterior adelanta y la interior la sigue con retraso. Se
+ * implemento ARC_CEJA con 40 ms de desfase entre las dos cejas interiores.
+ *
+ * Y quedo en 0, porque al mirarlo en serio no se sostenia: 40 ms son 2,4
+ * frames, o sea NADA que se vea. Era codigo que existia para justificar una
+ * decision que nadie iba a notar. Las dos opciones eran subirlo a ~90 ms (5-6
+ * frames, ahi si se lee como cascada) o dejarlo en 0. Se eligio 0 porque el
+ * fruncido de ceja ya es agresivo de por si, y meterle una cascada de
+ * izquierda a derecha lo vuelve mas acumulado sin necesidad.
+ *
+ * Si queres la asimetria, esta mas barata y mejor justificada en NEUTRAL, que
+ * mueve solo el lado izquierdo del labio: ahi la asimetria es EL gesto.
  */
 #include "Enojado.h"
 #include "../../Sistema/Sistema.h"
@@ -61,7 +68,7 @@ static const uint8_t BOCA[7][2] = {
 
 // Retraso de la ceja interior derecha respecto de la izquierda. 0 = el
 // original (las dos de golpe). Ver la nota del encabezado.
-#define ARC_CEJA 0.036f       // ~40 ms dentro del tramo de 1110 ms
+#define ARC_CEJA 0.0f          // 0 = las dos cejas de golpe, como el original
 
 // ---------------------------------------------------------------------------
 // EL CICLO COMO TABLA.
