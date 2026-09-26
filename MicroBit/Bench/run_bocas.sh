@@ -10,10 +10,10 @@ cd "$(dirname "$0")"
 
 E=../Codigo/Animaciones/Emociones
 
-g++ -O2 -Wall -I mock -I ../Codigo -I ../Codigo/Animaciones/Emociones/Alegria -I ../Codigo/Animaciones/Emociones/Triste -I ../Codigo/Animaciones/Emociones/Cansado -I ../Codigo/Animaciones/Emociones/Miedo \
+g++ -O2 -Wall -I mock -I ../Codigo -I ../Codigo/Animaciones/Emociones/Alegria -I ../Codigo/Animaciones/Emociones/Triste -I ../Codigo/Animaciones/Emociones/Cansado -I ../Codigo/Animaciones/Emociones/Miedo -I ../Codigo/Animaciones/Emociones/Fastidio -I ../Codigo/Animaciones/Emociones/Neutral -I ../Codigo/Animaciones/Emociones/Sorprendido -I ../Codigo/Animaciones/Emociones/Enojado \
     bench_bocas.cpp \
     "$E/Alegria/Hablar.cpp" \
-    HablarViejo.cpp HablarTristeViejo.cpp HablarCansadoViejo.cpp HablarMiedoViejo.cpp \
+    HablarViejo.cpp HablarTristeViejo.cpp HablarCansadoViejo.cpp HablarMiedoViejo.cpp HablarFastidioViejo.cpp HablarNeutralViejo.cpp HablarSorprendidoViejo.cpp HablarEnojadoViejo.cpp \
     "$E/Triste/HablarTriste.cpp" \
     "$E/Enojado/HablarEnojado.cpp" \
     "$E/Sorprendido/HablarSorprendido.cpp" \

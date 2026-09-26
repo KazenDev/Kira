@@ -34,6 +34,10 @@ void animarBocaHablandoVieja();
 void animarBocaTristeVieja();
 void animarBocaCansadoVieja();
 void animarBocaMiedoVieja();
+void animarBocaFastidioVieja();
+void animarBocaNeutralVieja();
+void animarBocaSorprendidaVieja();
+void animarBocaEnojadaVieja();
 // OJO: en la firmware real TODAS las bocas comparten el MISMO modoHablar
 // (viene de Alegria/Hablar.h). Asique la version vieja de Alegria define su
 // propia bandera (modoHablarVieja, para no chocar) y la de Triste usa la real.
@@ -154,7 +158,8 @@ static Boca BOCAS[8] = {
 // Las bocas viejas NO comparten flag entre si en el bench: la de Alegria
 // define el suyo (para no chocar con la nueva), y las de Triste y Cansado usan
 // el modoHablar real, como en la firmware.
-enum Vieja { V_ALEGRIA = 0, V_TRITE, V_CANSADO, V_MIEDO };
+enum Vieja { V_ALEGRIA = 0, V_TRITE, V_CANSADO, V_MIEDO, V_FASTIDIO, V_NEUTRAL,
+             V_SORPRENDIDO, V_ENOJADO };
 static Vieja g_vieja = V_ALEGRIA;
 
 static void medir(const char *titulo, BocaFn fn, bool usarFlagViejo)
@@ -210,6 +215,18 @@ int main()
     g_vieja = V_MIEDO;
     medir("MIEDO    VIEJA", animarBocaMiedoVieja, true);
     medir("MIEDO    NUEVA (frame)", animarBocaMiedo, false);
+    g_vieja = V_FASTIDIO;
+    medir("FASTIDIO VIEJA", animarBocaFastidioVieja, true);
+    medir("FASTIDIO NUEVA (frame)", animarBocaFastidio, false);
+    g_vieja = V_NEUTRAL;
+    medir("NEUTRAL  VIEJA", animarBocaNeutralVieja, true);
+    medir("NEUTRAL  NUEVA (frame)", animarBocaNeutral, false);
+    g_vieja = V_SORPRENDIDO;
+    medir("SORPREND. VIEJA", animarBocaSorprendidaVieja, true);
+    medir("SORPREND. NUEVA (frame)", animarBocaSorprendida, false);
+    g_vieja = V_ENOJADO;
+    medir("ENOJADO  VIEJA", animarBocaEnojadaVieja, true);
+    medir("ENOJADO  NUEVA (frame)", animarBocaEnojada, false);
     g_vieja = V_ALEGRIA;
     medir("TRISTE   NUEVA (frame)", animarBocaTriste, false);
 
