@@ -5,6 +5,31 @@
 #include "../Sistema.h"   // para revisarSerial() -> abortar si llega un comando
 
 // ---------------------------------------------------------------------------
+// El LOTE: el patron corre su ciclo entero adentro de UNA llamada, asi que
+// el bucle principal queda adentro hasta 6,4 s. frameRastro/frameSerial cortan
+// el lote a los LOTE_MS para devolverle el control (ver LoadingBase.h).
+//
+// El corte no se ve: el estado de cada patron vive en `static`, asique el
+// siguiente lote sigue exactamente donde quedo. Y para el que venga por
+// serial el corte es indistinguible de este: los dos hacen que el patron
+// haga su `return` de siempre.
+// ---------------------------------------------------------------------------
+static unsigned long loteHasta = 0;
+static bool loteVigente = false;
+
+void loteIniciar()
+{
+    loteHasta = uBit.systemTime() + LOTE_MS;
+    loteVigente = true;
+}
+
+static bool loteTerminado()
+{
+    if (!loteVigente) return false;
+    return (int32_t)(uBit.systemTime() - loteHasta) >= 0;
+}
+
+// ---------------------------------------------------------------------------
 // Rastro real: baja el brillo de TODOS los pixeles encendidos (decay).
 // Cada frame la luz deja atras una estela que se desvanece SOLA.
 // ---------------------------------------------------------------------------
@@ -29,6 +54,7 @@ bool frameRastro(int porciento)
 {
     decaerRastro(porciento);
     if (revisarSerial()) return true;
+    if (loteTerminado()) return true;   // devolver el control al principal
     return false;
 }
 
@@ -36,6 +62,7 @@ bool frameRastro(int porciento)
 bool frameSerial()
 {
     if (revisarSerial()) return true;
+    if (loteTerminado()) return true;
     return false;
 }
 

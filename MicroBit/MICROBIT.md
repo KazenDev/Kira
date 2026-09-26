@@ -605,11 +605,67 @@ sh MicroBit/Bench/run_bocas.sh      # A/B en el host de las 8
 python3 MicroBit/prueba_talk.py     # en la placa: arranca, se mueve, para, sale
 ```
 
+### Los 10 patrones de carga
+
+`Animaciones/Sistema/Loading/` AUDITORÍA: **no estaban rotos**, y conviene
+dejarlo escrito porque es lo contrario de lo que se suponía.
+
+Los 10 patrones (Arena, Barra, Carrera, Cometa, Espiral, Flechas, Lluvia, Luz,
+Onda, Pulso) corren su ciclo **adentro** de una llamada, hasta 400 frames
+(6,4 s). A primera vista eso parece exactamente el problema que se acababa de
+arreglar en las emociones y las bocas. No lo es:
+
+- Cada frame pasa por `frameRastro()`/`frameSerial()`, que **sí** chequean el
+  serial. Con un sleep de 16-20 ms por frame, la ventana sorda es **un frame**.
+- Medido en la placa: 30/30 ACKs y 13,6-14,8 ms de media en todos los
+  patrones, igual que en reposo. **El puerto nunca estuvo bloqueado.**
+
+Lo que sí pasaba es otra cosa, más sutil: como el patrón corre su ciclo entero
+dentro de una llamada, **el bucle principal quedaba adentro 6,4 s**, y lo único
+que el principal hace además de renderizar es `atenderBotonesEscucha()`. O sea
+que **los botones A/B de la escucha manual quedaban muertos durante el
+loading** (o sea, mientras la IA piensa).
+
+#### El lote
+
+El arreglo no fue achicar los 400 frames de cada patrón —eso toca 10 archivos y
+los contadores internos de cada uno—, sino poner el corte en la base
+compartida, que los 10 usan igual:
+
+```cpp
+bool frameRastro(int porciento) {
+    decaerRastro(porciento);
+    if (revisarSerial())  return true;   // llegó un comando
+    if (loteTerminado()) return true;   // se agotó el lote
+    return false;
+}
+```
+
+Los dos casos hacen que el patrón haga su `return` de siempre, así que para la
+animación son indistinguibles. Y el corte **no se ve** porque el estado de los
+10 patrones vive en `static`: la siguiente pasada sigue exactamente donde
+quedó. Verificado en la placa con la órbita del cometa (la de estado más
+delicado): 4 reinicios en 5 s, o sea ~5 vueltas, que es lo diseñado, y el
+rastro medio se mantiene en 5,8 píxeles.
+
+`LOTE_MS` (250) está en `LoadingBase.h` con el porqué. El trade-off es directo:
+lote más corto = botones más rápidos, a costa de despertar el principal más
+seguido, que es barato.
+
+#### Lo que queda: la pausa del trueno
+
+`Lluvia` tiene un `uBit.sleep(120)` entre ecos del trueno, dentro de un bucle
+de 3. Con eso la ventana real es **~408 ms, una vez cada 7-12 s** (el rayo cae
+con esa frecuencia). No se tocó porque es una pausa de efecto dramático: si
+baja a 40 ms el retumbo pierde el efecto. Queda a criterio, y es el **único**
+punto sordo que queda en la placa.
+
 ## Lo que falta migrar
 
 - **Ninguna animación.** Las 8 emociones, las 3 transiciones y las 8 bocas de
-  TALK usan patrón de frame. No queda ninguna ruta que bloquee el puerto más de
-  un frame.
+  TALK usan patrón de frame, y los 10 loadings ahora cortan su lote para
+  devolverle el control al bucle principal. No queda ninguna ruta que bloquee
+  el puerto más de un frame.
 - **La réplica LED no puede mostrar el brillo**: compara
   `getPixelValue(x,y) > 0`, o sea solo on/off. Todo lo que se anima con el PWM
   global de `setBrightness` —la respiración, el latido, el temblor, el "tsk", la

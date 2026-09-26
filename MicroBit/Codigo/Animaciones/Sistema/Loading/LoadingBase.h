@@ -18,15 +18,41 @@
 // La instancia global del micro:bit se define en Principal.cpp
 extern MicroBit uBit;
 
+// El LOTE: cuanto tiempo puede retener el bucle principal un patron de carga.
+//
+// POR QUE EXISTE. Los 10 patrones corren su ciclo COMPLETO adentro de una
+// llamada (hasta 400 frames = 6,4 s). Cada frame chequea el serial, asi que la
+// IA nunca espera mas de un frame. PERO el bucle principal queda adentro de
+// esa llamada, y lo unico que hace el principal ademas de renderizar es
+// atenderBotonesEscucha(): los botones A/B de la escucha manual quedaban
+// MUERTOS durante los 6,4 s del loading.
+//
+// O sea: el puerto estaba bien, los botones no. Y no se arregla achicando los
+// 400 frames de cada patron (eso toca 10 archivos y los contadores internos de
+// cada uno), sino aca: frameRastro/frameSerial devuelven true cuando el lote
+// se agota, y el patron hace su `return` de siempre. El corte es
+// INVISIBLE porque el estado de todos los patrones vive en `static`, asi que
+// el siguiente frame del lote sigue exactamente donde quedo.
+//
+// El costo de acortar el lote es despertar el principal mas seguido, que es
+// barato (un readUntil y una lectura de botones). El costo de NO hacerlo es que
+// A y B no responden mientras la IA piensa.
+#define LOTE_MS 250
+
+// Arranca un lote nuevo. La llama mostrarLoadingBucle() en cada pasada.
+void loteIniciar();
+
 // Baja el brillo de TODOS los pixeles encendidos (rastro que se desvanece solo).
 // porciento: cuanto queda por frame (78 = rastro corto, 88 = rastro largo).
 void decaerRastro(int porciento = 78);
 
 // Un frame con rastro: decae + si llego comando serial, avisa para abortar.
 // Cada patron puede pedir SU rastro (ej: cometa usa 80 para cola larga).
+// Tambien devuelve true si se agoto el lote (ver LOTE_MS).
 bool frameRastro(int porciento = 78);
 
 // Un frame SIN rastro (patrones que no decaen): solo chequea serial
+// (y el lote). Devuelve true si llego algo o si el lote se agoto.
 bool frameSerial();
 
 // Geometrias compartidas

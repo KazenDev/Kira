@@ -107,6 +107,12 @@ void detenerLoading()
 // reinicio que se veia al volver a ejecutar el patron desde cero.
 void mostrarLoadingBucle()
 {
-    if (patronActual >= 0 && patronActual < NUM_LOADINGS)
+    if (patronActual >= 0 && patronActual < NUM_LOADINGS) {
+        // Lote nuevo: el patron corre como mucho LOTE_MS y devuelve el control,
+        // para que el bucle principal siga atendiendo los botones A/B. El
+        // patron se vuelve a llamar en la siguiente pasada y sigue desde su
+        // estado `static`. Ver LOTE_MS en LoadingBase.h.
+        loteIniciar();
         PATRONES[patronActual](1);
+    }
 }
