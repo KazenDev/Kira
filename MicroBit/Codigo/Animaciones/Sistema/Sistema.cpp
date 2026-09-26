@@ -16,6 +16,7 @@
 #include "Voz/Voz.h"           // VOZ: aro que reacciona al nivel de voz real
 #include "Metronomo/Metronomo.h" // METRO:<bpm>:<acento>: metronomo para musicos
 #include "BleUart/BleUart.h"   // BLE: los mismos comandos por Bluetooth
+#include "ReplicaLed.h"        // REPLICA:OFF/ON -> callar la replica del display
 // Funciones de lectura de sensores (tool calling de la IA)
 #include "../../Funciones/Funciones.h"
 
@@ -519,6 +520,8 @@ void procesarComando(ManagedString cmd)
                 }
             }
         }
+        else if (cmd == "REPLICA:OFF") replicaLedSilenciar(true);
+        else if (cmd == "REPLICA:ON")  replicaLedSilenciar(false);
         else if (cmd == "TEST")  demoAutomatica();
         // STOP: vuelve a la alegria (con transicion, como cualquier cambio)
         else if (cmd == "STOP")  {

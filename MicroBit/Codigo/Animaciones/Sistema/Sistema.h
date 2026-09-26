@@ -39,6 +39,10 @@ extern EmocionActual emocionActual;   // definido en Sistema.cpp
 //   SENSOR:GESTO -> GESTO:codigo:magnitud_mg
 //   SENSOR:BRUJULA -> BRUJULA:rumbo:campo:calibrada
 //   SENSOR:TOQUE -> TOUCH:presionado:lectura
+// "REPLICA:OFF" / "REPLICA:ON": calla (o reactiva) la replica del display por
+//   serial. La replica comparte el UART con los comandos y manda a ~20 fps
+//   mientras se mueve, asi que con ella hablando la latencia no se puede
+//   medir (el piso es su propio trafico). Ver ReplicaLed.h.
 // CALIBRAR:BRUJULA  -> UX oficial de CODAL (manual, puede tardar ~32 s)
 void procesarComando(ManagedString cmd);  // recibe "HAPPY", "SAD", etc.
 // Lee el serial: si llego un comando completo, lo procesa y devuelve true.
@@ -46,5 +50,11 @@ void procesarComando(ManagedString cmd);  // recibe "HAPPY", "SAD", etc.
 // interrumpan solas cuando la IA manda algo -> respuesta inmediata).
 bool revisarSerial();
 void demoAutomatica();                    // muestra todas las emociones
+
+// Botones A/B de la escucha manual (definida en Principal.cpp). La llama el
+// bucle principal una vez por frame; tambien la llaman, frame por frame, los
+// golpes dramaticos de un disparo que se exentan del lote, para que exentarse
+// no cueste botones muertos (ver LOTE_EXENTO en LoadingBase.h).
+void atenderBotonesEscucha();
 
 #endif // SISTEMA_H

@@ -20,6 +20,24 @@
 extern MicroBit uBit;
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// REPLICA:OFF / ON (ver ReplicaLed.h). Son DOS causas de silencio y se combinan
+// con OR: la de la grabacion (replicaLedCallada) y la de la app (este flag).
+// Con un solo bool se pisarian: el que termina su turno lo baja y se lleva
+// por delante la peticion del otro. Por ejemplo: la app pide REPLICA:OFF para
+// medir la latencia del puerto, y en medio alguien graba; al terminar la
+// grabacion, Grabar baja replicaLedCallada y, con un solo flag, la replica
+// volveria a hablar sola.
+//
+// No es un flag propio del "esta grabando": es un motivo mas de callarse.
+// ---------------------------------------------------------------------------
+static volatile bool replicaLedPedida = false;
+
+void replicaLedSilenciar(bool silenciar)
+{
+    replicaLedPedida = silenciar;
+}
+
 // La fibra: lee el framebuffer y lo transmite SOLO cuando cambia
 // ---------------------------------------------------------------------------
 static void fibraReplica()
@@ -28,9 +46,10 @@ static void fibraReplica()
     bool primera = true;
 
     while (1) {
-        // Mientras el GRABADOR transmite audio crudo, NO mandamos frames
-        // LED: por serial (ensuciarian el stream de audio).
-        if (replicaLedCallada) {
+        // Silencio por CUALQUIERA de las dos causas: el grabador esta
+        // mandando audio crudo por el mismo UART, o la app pidio callarse
+        // (REPLICA:OFF). En los dos casos mandar frames LED arruinaria algo.
+        if (replicaLedCallada || replicaLedPedida) {
             uBit.sleep(50);
             continue;
         }

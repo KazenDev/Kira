@@ -39,6 +39,20 @@ extern MicroBit uBit;
 // A y B no responden mientras la IA piensa.
 #define LOTE_MS 250
 
+// LOTES EXENTOS: para golpes dramaticos de UN SOLO disparo.
+//
+// El lote resuelve un problema de los patrones CONTINUOS (sus 400 frames se
+// corren enteros en una llamada). Pero un golpe de un disparo no se puede
+// partir a la mitad sin arruinarlo, y el corte no perdona: ver rayo() en
+// Lluvia.cpp, que con el corte normal no llegaba a mostrar el trueno entero
+// NUNCA y se comia el 120 ms de puerto sordo de paso.
+//
+// Con esto en true, frameRastro/frameSerial dejan de cortar por lote pero
+// SIGUEN cortando por comando serial: el puerto no queda sordo ni un frame.
+// El que exenta tiene que atender los botones el mismo (ver frameRayo() en
+// Lluvia.cpp), porque si no A/B quedan muertos durante el golpe.
+extern bool loteExento;
+
 // Arranca un lote nuevo. La llama mostrarLoadingBucle() en cada pasada.
 void loteIniciar();
 
