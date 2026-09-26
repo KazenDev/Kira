@@ -504,98 +504,134 @@ a mitad hay que **restaurar el brillo a 90**, o la cara queda a media luz.
 **Nota de calibración**: los comentarios decían "72 frames" y "~1,2 s". La
 realidad es 126/132 frames y ~2,0 s. Corregido.
 
-#### Las bocas de TALK (4 de 8 migradas)
+#### Las bocas de TALK (las 8 migradas) ✅
 
 `Codigo/Animaciones/Emociones/*/Hablar*.cpp` son las bocas de lip-sync. Se
-escaparon del análisis de las emociones por una razón concreta: usan
-**`fiber_sleep()` en vez de `uBit.sleep()`**, así que un grep de "sleep" no las
+escaparon del analisis de las emociones por una razon concreta: usan
+**`fiber_sleep()` en vez de `uBit.sleep()`**, asi que un grep de "sleep" no las
 encuentra.
 
-Y el problema era el más serio del proyecto, porque `Principal.cpp` le da
-**prioridad a TALK sobre la animación de la emoción**:
+Y el problema era el mas serio del proyecto, porque `Principal.cpp` le da
+**prioridad a TALK sobre la animacion de la emocion**:
 
 ```cpp
 if (modoHablar) { animarBocaCansado(); }   // primero esto
-else if (...)   { animarCansado(); ... }   // la emoción solo si NO habla
+else if (...)   { animarCansado(); ... }   // la emocion solo si NO habla
 ```
 
 O sea que **mientras la IA habla, la boca es todo lo que corre en el hilo
 principal**. Y eran secuencias de `fiber_sleep()` sin un solo checkpoint:
 
-| boca | antes | estado |
-|---|---|---|
-| Cansado | 1350 ms | **0 ms** |
-| Miedo | 1165 ms | **0 ms** |
-| Fastidio | 974 ms | — |
-| Neutral | 820 ms | — |
-| Alegría | 820 ms | **0 ms** |
-| Triste | 880 ms | **0 ms** |
-| Enojado | 665 ms | — |
-| Sorprendido | 690 ms | — |
+| boca | antes | tic | silabas/s | amplitud |
+|---|---|---|---|---|
+| Cansado | 1350 ms | 460 ms | 2,2 | 0..200 |
+| Miedo | 1165 ms | guion | — | 0..255 |
+| Fastidio | 974 ms | 248 ms | 4,0 | **60..240** |
+| Triste | 880 ms | 300 ms | 3,3 | 0..255 |
+| Neutral | 820 ms | 280 ms | 3,6 | 0..255 |
+| Alegria | 820 ms | 280 ms | 3,6 | 0..255 |
+| Sorprendido | 690 ms | 235 ms | 4,3 | 0..255 |
+| Enojado | 665 ms | 170 ms | **5,9** | 0..255 |
+| **las 8 ahora** | **0 ms** | | | |
 
-Las cuatro migradas son exactamente las cuatro peores. Verificado en la placa
-con TALK activo: **24/24 ACKs y 12-19 ms de peor latencia** (con TALK en el
-bucle viejo, hasta 1350 ms).
+Las ocho dan **24/24 ACKs y 12-19 ms de peor latencia** con TALK activo
+(antes 2/16 y 1219,8 ms en el peor caso medido).
 
-Dos cosas que conviene saber:
+##### La escala de ritmo es una curva de arousal
 
-- **La fibra de los ojos no se toca.** Usa `fiber_sleep()` (que cede la CPU),
-  rompe el loop en cuanto `modoHablar` es false, se libera sola, y no procesa
-  comandos. Además, en una fibra el estado **no** tiene que ser función del
-  reloj: un loop de fibra ya es una máquina de estados con su propio ritmo, así
-  que ahí `uBit.random()` está perfecto. Lo que necesitaba ser función del
-  reloj era la boca, porque corre en el hilo principal.
-- **La boca no lleva checkpoint propio, a propósito.** El bucle principal ya
-  hace `revisarSerial()` antes de la cadena de render, así que con la boca
-  devolviendo cada 16 ms el puerto se chequea a 60 Hz solo. Agregar otro sería
-  trabajo redundante. Y `uBit.sleep()` **es** `fiber_sleep()`
-  (`CodalDevice.cpp:30`), así que las emociones y las bocas ceden la CPU igual.
+Con las ocho migradas se ve la tabla completa, y el ritmo de habla cae dentro
+del rango normal (3,3-5,9 silabas/s) **ordenado de forma monotonica en
+arousal**: el enfado en el techo, el cansancio el unico por debajo, el resto
+repartido. Eso es lo que predice la literatura: "las emociones con arousal alto,
+como el enfado y la alegria, se relacionan con una velocidad de habla mas
+rapida", con el dato duro de que "la velocidad en la tristeza fue
+significativamente mas lenta que en el enfado y la alegria".
 
-**Los cuatro guiones ya estaban bien, y hay respaldo:**
+**Matiz honesto**: esa convencion no es unanime. Un estudio de habla espontanea
+en portugues encontro el enfado *mas lento* que el neutral, y otro hallo que en
+habla clara *reducir* el ritmo aumenta el juicio de enfado; ambos reconocen que
+contradicen la mayoria de la literatura. Asi que es "consistente con la
+convencion dominante", no "demostrado". Y con 5,9 silabas/s el enojado esta en
+el **techo de lo plausible**: para mas enfado el camino no seria un tic mas
+corto sino mas amplitud o una pausa.
 
-- **Cansado (2,2 sílabas/s)**: su tic de 460 ms es el más largo de las ocho
-  bocas y está por debajo del rango normal de habla (4 sílabas/s, medido entre
-  3,3 y 5,9). Eso es lo que hace que el "siii... ya voy..." se lea. Encima el
-  brillo tope es 200 en vez de 255: más lento **y** más tenue, las dos cosas en
-  el mismo sentido. *Pendiente de tu ojo, en `PAUSA_ENTRE_TICS_MS`*: la
-  literatura del habla lenta dice que no es solo más lento, sino "articular
-  lentamente con un **mayor número de pausas** e hiperarticulación". Esta boca
-  tiene la primera parte pero no las otras dos: los tres tics van pegados y con
-  amplitud reducida. Con la constante en 0 queda como siempre; a 250 aparecen
-  las pausas.
-- **Miedo (guion compuesto, 1180 ms)**: es la única con guion de 5 pasos en vez
-  de oscilador libre, y tiene las tres alteraciones canónicas de la tartamudez
-  —"el flujo se interrumpe por **bloqueos, repeticiones o prolongaciones**"— en
-  orden: los dos tics cortos son las repeticiones, la pausa de 150 ms el
-  bloqueo, y el tic de 120 ms la prolongación, que va **al final** porque es la
-  palabra que por fin sale trabada. Y un detalle fino: durante el bloqueo la
-  boca queda **abierta a 255**, no cerrada; es el intento de decir la palabra
-  antes de que se trabe, así que el bloqueo es el pico de la frase.
-- **Triste**: abre la mandíbula **hacia abajo** (el píxel central del frown
-  deja su fila y aparece el de abajo). Es lo estándar: "la mandíbula dirige el
-  movimiento... baja en las vocales abiertas", y el ritmo lento con hold evita
-  la "boca de máquina de escribir" que las guías marcan como amateur.
-- **Alegría**: los dientes a 255, el tic más corto (280 ms = 3,6 sílabas/s,
-  ritmo normal).
+##### Dos gestos con asimetria deliberada
+
+- **Sorprendido**: la apertura es un **33% mas rapida** que el cierre (45 ms
+  contra 60). Es el principio clasico de animacion, "anticipacion lenta, accion
+  rapida, recuperacion lenta", y en un gaspo la inspiracion es el pico.
+- **Enojado**: apertura y cierre duran **lo mismo** (30 ms cada uno), al reves de
+  Sorprendido. El grunido es simetrico, no un gaspo. Que los dos sean
+  distintos a proposito se ve al ponerlos lado a lado.
+
+##### Lo que da la identidad a cada boca
+
+Casi nunca es el ritmo, es otra cosa:
+
+- **Fastidio** es el unico **hipoarticulado** (60..240, nunca 0 ni 255) porque
+  el fastidio es arousal bajo y "menor arousal implica articulacion mas debil".
+  Es ademas el unico cuyo pulso es **invisible** en la replica LED, porque nunca
+  llega a 0.
+- **Neutral** tiene una boca **identica a la de Alegria** (mismos 3 pixeles,
+  mismo tic de 280 ms, mismo rango). Todo el "bruh" vive en los ojos.
+- **Miedo** es la unica con **guion de 5 pasos** en vez de oscilador libre, y
+  tiene las tres alteraciones canonicas de la tartamudez —"el flujo se
+  interrumpe por **bloqueos, repeticiones o prolongaciones**"— en orden. Y un
+  detalle fino: durante el bloqueo la boca queda **abierta a 255**, no cerrada;
+  es el intento de decir la palabra antes de que se trabe, asi que el bloqueo
+  es el pico de la frase.
+- **Cansado** es el unico **por debajo** del rango normal (2,2), que es lo que
+  lo hace "siii... ya voy..." en vez de solo lento.
+- **Triste** abre la mandibula **hacia abajo** (el pixel central del frown deja
+  su fila y aparece el de abajo): "la mandibula dirige el movimiento... baja
+  en las vocales abiertas".
+
+##### Lo que NO se toco
+
+- **La fibra de los ojos.** Usa `fiber_sleep()` (cede la CPU), rompe el loop en
+  cuanto `modoHablar` es false, se libera sola, y no procesa comandos. Ademas,
+  en una fibra el estado **no** tiene que ser funcion del reloj: un loop de
+  fibra ya es una maquina de estados con su propio ritmo, asi que ahi
+  `uBit.random()` esta perfecto. Lo que necesitaba ser funcion del reloj era la
+  boca, que corre en el hilo principal.
+- **Un checkpoint propio de serial en la boca, a proposito NO se agrego**: el
+  bucle principal ya hace `revisarSerial()` antes de la cadena de render, asi
+  que con la boca devolviendo cada 16 ms el puerto se chequea a 60 Hz solo.
+  Agregar otro seria trabajo redundante. Y `uBit.sleep()` **es** `fiber_sleep()`
+  (`CodalDevice.cpp:30`).
 
 ```bash
-sh MicroBit/Bench/run_bocas.sh      # A/B en el host (vieja vs. nueva)
+sh MicroBit/Bench/run_bocas.sh      # A/B en el host de las 8
 python3 MicroBit/prueba_talk.py     # en la placa: arranca, se mueve, para, sale
 ```
 
 ## Lo que falta migrar
 
-- **4 bocas de TALK** (Enojado, Sorprendido, Neutral, Fastidio) — todas
-  mecánicas: mismo tic libre que Alegría/Triste/Cansado.
+- **Ninguna animación.** Las 8 emociones, las 3 transiciones y las 8 bocas de
+  TALK usan patrón de frame. No queda ninguna ruta que bloquee el puerto más de
+  un frame.
 - **La réplica LED no puede mostrar el brillo**: compara
   `getPixelValue(x,y) > 0`, o sea solo on/off. Todo lo que se anima con el PWM
-  global de `setBrightness` (la respiración, el latido, el temblor, el "tsk",
-  la lágrima al atenuarse) **no se ve en el espejo de la web**, aunque en la
-  placa real sí se vea. No es del firmware: es que el replicador manda 1 bit
-  por píxel.
+  global de `setBrightness` —la respiración, el latido, el temblor, el "tsk", la
+  lágrima al atenuarse, y toda la boca del fastidio— **no se ve en el espejo de
+  la web**, aunque en la placa real sí se vea. No es del firmware: es que el
+  replicador manda 1 bit por píxel.
 
 > El display refresca a **60 Hz** (`NRF52_LED_MATRIX_FREQUENCY`), así que los
 > 16 ms de cada frame ya son el techo: más rápido no se ve, solo gasta.
+
+### Pendientes de tu ojo (cuatro constantes, una línea cada una)
+
+Estas cuatro son decisiones de diseño del personaje, no de rendimiento. El
+default es **siempre el comportamiento original**, así que el firmware
+flasheado se ve igual que antes, salvo por la fluidez y la reactividad.
+
+| constante | archivo | valor | qué pasa si lo cambiás |
+|---|---|---|---|
+| `TEMBLO_MS` | Miedo | 30 | El temblor del cuerpo está a ~33 Hz y las guías de movimiento ponen el temblor entre 5 y 15 Hz. Subilo a `100` (10 Hz) si te parece que *centellea* en vez de temblar. |
+| `ARC_CEJA` | Enojado | 0.036 | La ceja interior derecha sigue a la izquierda con 40 ms de retraso (movimiento en arco, no lineal). Con `0` queda de golpe, como el original. |
+| `PAUSA_ENTRE_TICS_MS` | Cansado | 0 | El habla lenta no es solo más lenta: es "articular con **más pausas** e hiperarticulación". Con `250` aparecen las pausas y el ritmo baja a 1,6 sílabas/s. |
+| `BRILLO_MAXO` | Neutral | 255 | Su boca es idéntica a la de Alegría, así que el "bruh" está solo en los ojos. A `200` sería hipoarticulada, como la de Fastidio, que es lo que la literatura diría para un personaje aburrido. |
 
 ---
 
