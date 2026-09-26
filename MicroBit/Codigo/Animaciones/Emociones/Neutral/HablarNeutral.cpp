@@ -66,17 +66,27 @@ static const uint8_t BOCA[3][2] = {
 // lo natural entre palabras. La direccion la da la literatura ("menor arousal
 // implica articulacion mas debil"); el numero exacto es criterio.
 //
-// OJO: la amplitud es solo la mitad del "bruh". Lo que de verdad le falta es
-// el RITMO: esta boca habla a 3,6 silabas/s, igual que Alegria, y un aburrido
-// habla mas lento. Eso no es una constante de una linea (habria que tocar los
-// bordes de los tramos de la tabla de abajo) y queda pendiente de decidir.
+// OJO: la amplitud es solo la mitad del "bruh". La otra mitad es el RITMO, que
+// antes venía atado a la tabla. Ver TIC_MS mas abajo.
 #define BRILLO_MAXO 190
 
 // ---------------------------------------------------------------------------
 // EL TIC COMO TABLA
 //
-// Un tic de habla neutral: los 3 LEDs se encienden y apagan. Es el mismo tic
-// que el de Alegria: 60 + 80 + 60 + 80 = 280 ms.
+// Un tic de habla neutral: los 3 LEDs se encienden, quedan, apagan y quedan
+// apagados. Las proporciones son las del tic original de Alegria
+// (60+80+60+80), asi que cambiar el ritmo NO cambia la forma del gesto.
+//
+// Los bordes van como FRACCIONES de TIC_MS y no en milisegundos, para que el
+// ritmo sea UNA sola constante. Antes estaban duplicados en dos lugares (la
+// tabla y valorEn()), y por eso cambiar la velocidad no era de una linea:
+// habia que editar los dos sin que dejaran de concordar.
+//
+// El tic original era de 280 ms con bordes en 0 / 60 / 140 / 200 / 280, o sea
+//   0,000 -> 0,214  sube
+//   0,214 -> 0,500  quieto
+//   0,500 -> 0,714  baja
+//   0,714 -> 1,000  oscuro
 // ---------------------------------------------------------------------------
 enum Tramo
 {
@@ -86,33 +96,46 @@ enum Tramo
     T_OSCURO
 };
 
-struct Segmento
-{
-    unsigned short desde;
-    unsigned short hasta;
-    unsigned char  tramo;
-};
+#define NTRAMOS 4
+static const float BORDE[] = { 0.0000f, 0.2143f, 0.5000f, 0.7143f, 1.0000f };
+static const unsigned char TRAMO[NTRAMOS] = { T_ENCIENDE, T_QUIETO, T_APAGA, T_OSCURO };
 
-static const Segmento TIC[] = {
-    {  0,  60, T_ENCIENDE },   // 60 ms
-    { 60, 140, T_QUIETO   },   // 80 ms
-    {140, 200, T_APAGA    },   // 60 ms
-    {200, 280, T_OSCURO   },   // 80 ms
-};
-static const int NTRAMOS = sizeof(TIC) / sizeof(TIC[0]);
-static const unsigned short TIC_MS = 280;
+// EL RITMO DEL "BRUH". Con 280 ms eran 3,6 silabas/s, que es lo MISMO que
+// Alegria: por eso la cara se leia como una Alegria con los ojos cerrados, y
+// bajar solo la amplitud no alcanzaba.
+//
+// Con 360 ms son 2,8 silabas/s. La escala de las ocho bocas queda:
+//
+//     Enojado      170 ms -> 5,9   (arousal alto)
+//     Sorprendido  235 ms -> 4,3
+//     Fastidio     248 ms -> 4,0
+//     Alegria      280 ms -> 3,6   (ritmo de habla normal, ~4,0)
+//     Triste       300 ms -> 3,3
+//     Neutral      360 ms -> 2,8   <- aca: aburrido, por debajo de Alegria
+//     Cansado      460 ms -> 2,2       y por encima del sueño
+//
+// 2,8 queda por debajo de Triste y por encima de Cansado, que es lo que
+// corresponde: el fastidio es arousal bajo (como la tristeza) pero el
+// personaje esta DESPIERTO, no dormido. Es un 29% mas lento que antes, un
+// paso que se nota sin tirar el ritmo al extremo.
+//
+// Es el numero mas "de gusto" de los cinco ajustes: la banda la dan los
+// datos, el valor exacto no. Con 340 (3,0) el contraste es menor; con 400
+// (2,5) empieza a meterse en territorio de Cansado.
+#define TIC_MS 360
 
 static unsigned long faseBase = 0;
 static int ultimoGesto = -1;
 
-// El brillo de los 3 LEDs en este instante del tramo.
+// El brillo de los 3 LEDs. p va de 0 a 1 DENTRO del tramo, asi que cada
+// tramo es solo una rampa y no necesita saber los bordes.
 static int valorEn(unsigned char tramo, float p)
 {
     switch (tramo)
     {
-        case T_ENCIENDE: return (int)(BRILLO_MAXO * p / 0.2143f);
+        case T_ENCIENDE: return (int)(BRILLO_MAXO * p);
         case T_QUIETO:   return BRILLO_MAXO;
-        case T_APAGA:    return BRILLO_MAXO - (int)(BRILLO_MAXO * (p - 0.5f) / 0.2143f);
+        case T_APAGA:    return BRILLO_MAXO - (int)(BRILLO_MAXO * p);
         default:         return 0;
     }
 }
@@ -192,16 +215,26 @@ void iniciarHablarNeutral()
 // segundo mientras modoHablar siga activo.
 void animarBocaNeutral()
 {
-    unsigned long t = (uBit.systemTime() - faseBase) % TIC_MS;
+    // t cabe en un int (siempre < TIC_MS), asi que se trabaja en int para no
+    // mezclar signos en las comparaciones.
+    int t = (int)((uBit.systemTime() - faseBase) % TIC_MS);
 
-    // Localiza el tramo (4 entradas: busqueda lineal, sin RAM extra).
-    const Segmento *seg = &TIC[NTRAMOS - 1];
-    for (int i = 0; i < NTRAMOS; i++) {
-        if (t >= TIC[i].desde && t < TIC[i].hasta) { seg = &TIC[i]; break; }
+    // Localiza el tramo. Los bordes se calculan con multiplicaciones sobre
+    // TIC_MS, que es constante de compilacion, asi que no aparecen divisiones.
+    int desde = 0;
+    int hasta = (int)(BORDE[1] * TIC_MS);
+    unsigned char tramo = TRAMO[0];
+    for (int i = 1; i < NTRAMOS; i++) {
+        int b = (int)(BORDE[i] * TIC_MS);
+        if (t >= b) {
+            desde = b;
+            hasta = (i + 1 < NTRAMOS) ? (int)(BORDE[i + 1] * TIC_MS) : TIC_MS;
+            tramo = TRAMO[i];
+        }
     }
-    float p = (float)(t - seg->desde) / (float)(seg->hasta - seg->desde);
+    float p = (float)(t - desde) / (float)(hasta - desde);
 
-    int v = valorEn(seg->tramo, p);
+    int v = valorEn(tramo, p);
     if (v != ultimoGesto) {
         for (int i = 0; i < 3; i++)
             uBit.display.image.setPixelValue(BOCA[i][0], BOCA[i][1], (uint8_t)v);
