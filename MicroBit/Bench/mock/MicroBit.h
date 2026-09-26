@@ -87,6 +87,7 @@ struct BenchCounters
     unsigned long peorGapMs;       // el hueco mas largo entre cambios
     int  randomValor;              // lo que devuelve uBit.random(max)
     unsigned long lagrimas;        // veces que Triste pidió una lágrima
+    unsigned long fibras;          // fibers creadas (create_fiber)
 };
 
 extern BenchCounters bench;
@@ -239,6 +240,20 @@ class Serial
         // director de transiciones lo usa para el "TRANS:n" de debug.
         int printf(const char *fmt, ...) { (void)fmt; return 0; }
 };
+
+// ---------------------------------------------------------------------------
+// Fibers (CODAL): las bocas de TALK corren en una fibra y ceden la CPU con
+// fiber_sleep().
+//
+// Para el bench NO se corre la fibra: lo que se mide es la ventana sorda de
+// la funcion de la BOCA, que es la que corre en el bucle principal. La fibra
+// de los parpadeos no procesa comandos, asi que no es un cuello de botella.
+// ---------------------------------------------------------------------------
+typedef void (*FiberFn)();
+
+void fiber_sleep(unsigned long ms);
+void create_fiber(FiberFn fn);
+void release_fiber();
 
 // ---------------------------------------------------------------------------
 // MicroBit
