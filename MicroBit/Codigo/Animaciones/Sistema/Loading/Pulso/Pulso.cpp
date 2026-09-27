@@ -65,9 +65,19 @@ static bool golpe(int pico, int ataque, int caida)
 // Lub-dub completo + descanso con variabilidad natural
 static bool latido(int restMs)
 {
+    // TELEMETRIA DEL LATIDO. Misma pregunta que el rayo, mismo canal
+    // (LoadingBase.h: marcarTelemetria). Un latido son 14 + 12 + ~28 frames a
+    // 20 ms, o sea ~1,1 s, y el lote son 250 ms: el lote parte el latido por
+    // la mitad SIEMPRE. Estos marcadores son los que lo demuestran en vez de
+    // suponerlo.
+    //   PULSO:INI  entro al latido
+    //   PULSO:FIN  el latido entero llego al descanso
+    marcarTelemetria("PULSO:", "INI");
     if (golpe(255, 6, 8)) return true;   // LUB (sistole, fuerte)
     if (golpe(170, 5, 7)) return true;   // DUB (suave, justo despues)
-    return descanso(restMs);
+    if (descanso(restMs)) return true;
+    marcarTelemetria("PULSO:", "FIN");
+    return false;
 }
 
 void animarPulso(int ciclos)

@@ -69,6 +69,25 @@ bool frameRastro(int porciento = 78);
 // (y el lote). Devuelve true si llego algo o si el lote se agoto.
 bool frameSerial();
 
+// ---------------------------------------------------------------------------
+// TELEMETRIA POR SERIAL de un golpe dramatico (marcarTelemetria).
+//
+// Hay golpes que la replica LED no puede observar: manda 1 bit por pixel, asi
+// que no ve nada que se anime con brillo, y con la replica encendida el piso
+// de latencia (134 ms) tapa cualquier efecto de 100-200 ms que uno quiera
+// medir. Durante el rayo incluso sale al reves: la pantalla se apaga, la
+// replica manda menos, y la latencia DENTRO del rayo sale mas baja que fuera.
+// El instrumento se movia en contra.
+//
+// Asi que el golpe se anuncia por el puerto. Uso: se marca al ENTRAR y al
+// TERMINAR, y el final solo se emite si el golpe NO se corto a mitad. Comparar
+// los dos numeros es lo que dice si el golpe existe: asi se demostro que el
+// retumbo del trueno no se veia nunca (0 de 400).
+//
+// Un solo send con reintento, porque tres sends seguidos son tres
+// transacciones de UART y cada una se pierde sola si el puerto esta ocupado.
+void marcarTelemetria(const char *prefijo, const char *que);
+
 // Geometrias compartidas
 extern const uint8_t RING[16][2];     // borde (16 posiciones)
 extern const uint8_t SPIRAL[25][2];   // espiral: borde -> interior -> centro
