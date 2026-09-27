@@ -130,58 +130,22 @@ static bool frameRayo(int porciento)
 // ---------------------------------------------------------------------------
 // MARCADORES DEL RAYO (3 lineas de telemetria, una vez cada 7-12 s)
 //
-// El rayo era el unico trozo de la firmware que no se podia observar: el
-// replica LED manda 1 bit por pixel, asi que de un rayo no se ve el BRILLO, y
-// la latencia de un comando no lo delata (con el replica encendido el piso es
-// de 134 ms, mas grande que cualquier efecto que uno quiera medir). Encima,
-// durante el rayo la pantalla se apaga y la replica manda MENOS, asi que la
-// latencia medida DENTRO del rayo salia mas baja que fuera: el propio
-// instrumento se movia en contra. Por eso estos marcadores.
-//
 //   RAYO:INI  entro al rayo
 //   RAYO:P4   llego al retumbo (paso 4)
 //   RAYO:FIN  llego al final, paso 5 incluido
 //
 // El que importa es RAYO:FIN == RAYO:INI. Con el corte del lote de antes, ese
-// numero daba 0 sobre 400 rayos y en la placa NO SE LLEGABA NUNCA (el
-// retumbo no era intermitente, no existia). Con la exencion, los tres tienen
-// que dar el mismo numero. Se lee asi:
+// numero daba 0 sobre 400 rayos y en la placa no se llegaba nunca: el
+// retumbo no era intermitente, no existia. Con la exencion, los tres dan lo
+// mismo (medido 26/26). Por que hace falta instrumentarlo esta en
+// LoadingBase.h: el replica LED no ve brillo y con el puerto saturado la
+// latencia no lo delata.
 //
-//   LOAD3, 240 s, contar RAYO:INI / RAYO:P4 / RAYO:FIN
-//
-// Cuesta ~30 bytes cada 7-12 s, o sea nada, y no estorba: van por el mismo
-// send que el resto de la telemetria y el replica ya los puede perder sin
-// problema (ver por que en ReplicaLed.cpp).
+// El helper es marcarTelemetria() de LoadingBase, compartido con el latido:
+// misma pregunta, mismo canal. El "send unico con reintento" va ahi y la nota
+// de por que esta en LoadingBase.cpp.
 // ---------------------------------------------------------------------------
-static void marcarRayo(const char *que)
-{
-    // UN solo send, no tres. Tres envios seguidos son tres transacciones de
-    // UART y cada una puede fallar sola si el UART esta ocupado (el ACK de un
-    // comando, que tiene prioridad). Con la app mandando comandos cada 95 ms
-    // eso no es teorico: se perdia el "RAYO:" y el "P4" por separado, y el
-    // host veia "RAYO:\n", que no matchea ningun marcador. Medido: 19 INI y
-    // 0 P4, o sea P4 e INI contaban cosas distintas. Armar el texto y
-    // mandarlo de una vez elimina esa clase de problema.
-    char buf[16];
-    int n = 0;
-    for (const char *p = "RAYO:"; *p; p++) buf[n++] = *p;
-    for (const char *p = que; *p; p++) buf[n++] = *p;
-    buf[n++] = '\n';
-
-    // REINTENTA si el UART esta ocupado, y hace falta: el P4 y el FIN se
-    // emiten justo despues de un frameRayo(), que puede haber mandado el ACK
-    // de un comando serial en ese mismo instante. Sin reintento el send se
-    // pierde entero: medido, 23 RAYO:INI y 0 RAYO:FIN con la app mandando un
-    // comando cada 95 ms. El INI entraba y el P4 no JUSTO por eso: el INI va
-    // al principio del rayo, donde el UART suele estar libre. O sea: no era la
-    // placa la que se comia el rayo, era la instrumentacion la que se comia
-    // la palabra. Mismo remedio que en Grabar.cpp.
-    for (int intento = 0; intento < 3; intento++) {
-        if (uBit.serial.send((uint8_t *)buf, n) != DEVICE_SERIAL_IN_USE)
-            return;
-        uBit.sleep(2);
-    }
-}
+#define MARCAR_RAYO(que) marcarTelemetria("RAYO:", que)
 
 // ---------------------------------------------------------------------------
 // EL RAYO, Y POR QUE NO SE CORTA A LA MITAD
@@ -225,7 +189,7 @@ static void rayoInterno()
         if (xs[r] < 0) xs[r] = 0;
         if (xs[r] > 4) xs[r] = 4;
     }
-    marcarRayo("INI");
+    MARCAR_RAYO("INI");
     // 1) FLASH: el cielo entero se ilumina
     for (int f = 0; f < 2; f++) {
         if (frameRayo(92)) return;
@@ -248,7 +212,7 @@ static void rayoInterno()
             uBit.display.image.setPixelValue(xs[r], r, 160 - f * 40);
         uBit.sleep(16);
     }
-    marcarRayo("P4");
+    MARCAR_RAYO("P4");
     // 4) RETUMBO DEL TRUENO: un pico y que el rastro lo apague solo
     //
     // QUE HACIA ANTES, y por que estaba mal en tres cosas a la vez:
@@ -291,7 +255,7 @@ static void rayoInterno()
     }
     // Solo se llega aca si NINGUN paso hizo return: o sea, si el rayo entero
     // llego al final. Los `return` de arriba se lo saltan, que es el punto.
-    marcarRayo("FIN");
+    MARCAR_RAYO("FIN");
 }
 
 // El rayo, sin corte por lote. El wrapper existe para que loteExento SIEMPRE

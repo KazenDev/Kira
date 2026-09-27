@@ -69,6 +69,32 @@ bool frameSerial()
 }
 
 // ---------------------------------------------------------------------------
+// TELEMETRIA de golpe dramatico (ver la nota en LoadingBase.h). Un solo send
+// con reintento: la etiqueta de salida se emite justo despues de un frame que
+// pudo mandar el ACK de un comando en ese mismo instante, y sin reintento el
+// send se pierde entero. Medido en el rayo: 23 RAYO:INI y 0 RAYO:FIN con la
+// app mandando un comando cada 95 ms. No era la placa la que se comia el
+// golpe, era la instrumentacion. Mismo remedio que en Grabar.cpp.
+//
+// El prefijo va por argumento y no es "RAYO:" a proposito: ya lo comparten el
+// rayo y el latido, que son dos golpes distintos con la MISMA pregunta (¿llegas
+// al final?) y el mismo canal. Un helper, dos prefijos.
+// ---------------------------------------------------------------------------
+void marcarTelemetria(const char *prefijo, const char *que)
+{
+    char buf[20];
+    int n = 0;
+    for (const char *p = prefijo; *p; p++) buf[n++] = *p;
+    for (const char *p = que; *p; p++) buf[n++] = *p;
+    buf[n++] = '\n';
+    for (int intento = 0; intento < 3; intento++) {
+        if (uBit.serial.send((uint8_t *)buf, n) != DEVICE_SERIAL_IN_USE)
+            return;
+        uBit.sleep(2);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Geometrias compartidas
 // ---------------------------------------------------------------------------
 const uint8_t RING[16][2] = {
