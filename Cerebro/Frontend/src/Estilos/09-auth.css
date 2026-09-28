@@ -119,6 +119,60 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
+/* Campo de contraseña con el botón de ver. El input va a flex:1 para que el
+   botón quede sobre el borde derecho en vez de hacer crecer la fila. */
+.auth-clave {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.auth-clave input {
+  flex: 1;
+  min-width: 0;
+  /* Espacio para que el texto no se meta debajo del botón. */
+  padding-right: 42px;
+}
+
+.auth-ver {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-2);
+  background: transparent;
+  border: 0;
+  border-radius: 0 10px 10px 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.auth-ver:hover {
+  color: var(--text-1);
+}
+
+/* El foco del input tiene que seguir viéndose cuando el botón tiene el foco,
+   si no se pierde el indicador de "dónde estás escribiendo". */
+.auth-ver:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 0 10px 10px 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .auth-ver svg {
+    transition: transform 0.12s ease;
+  }
+  .auth-ver:active svg {
+    transform: scale(0.9);
+  }
+}
+
 .auth-submit {
   min-height: 44px;
   display: inline-flex;
