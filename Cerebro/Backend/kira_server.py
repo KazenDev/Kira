@@ -90,6 +90,7 @@ from app.intelligence.retrieval import (
 )
 from app.main import create_app
 from app.services.auth import AuthStore
+from app.services import clima as clima_service
 from app.services.tenancy import (
     StatesProxy,
     StoreProxy,
@@ -1575,7 +1576,26 @@ DIAS_ES = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "dom
 
 HERRAMIENTAS: dict[str, dict] = {
     "leer_temperatura": {
-        "descripcion": "Lee la temperatura ambiente en grados Celsius (sensor real del micro:bit).",
+        # OJO: esta descripcion cambio. Decia "Lee la temperatura ambiente ...
+        # (sensor real)", y ESO ES FALSO. La micro:bit no tiene sensor de
+        # ambiente: tiene el termometro del silicono del chip, que el datasheet
+        # describe como "no representativo de la temperatura ambiente" con
+        # +/-5 C sin trimear. Medido en la placa: 25 C clavados, sin deriva.
+        #
+        # El problema no era solo que el numero fuera +-5, sino que la IA lo
+        # AFIRMABA como verdad y Kira lo escribia en su diario ("hoy senti
+        # que..."). Con esta descripcion la IA sabe que mide su propio cuerpo
+        # de silicio y puede decirlo. El segundo numero (el clima de afuera)
+        # se agrega en formatear_sensor, para que pueda comparar.
+        "descripcion": (
+            "Lee la temperatura de TU PROPIO CHIP en grados Celsius. OJO: esto "
+            "NO es la temperatura del ambiente ni de la pieza. El sensor esta "
+            "dentro del procesador y mide el calor de su propio silicono, asi "
+            "que va unos grados por encima de la temperatura del aire. Si te "
+            "preguntan si hace frio o calor, NO respondas con este numero como "
+            "si fuera el ambiente: decilo como lo que es, junto con el dato "
+            "del clima que viene aparte."
+        ),
         "comando": "SENSOR:TEMP",
         "prefijo": "TEMP:",
     },
@@ -1722,12 +1742,63 @@ def _por_que_no_contesto() -> str:
             "llegar a la placa (conectar la placa por Bluetooth desde el celu)")
 
 
+def _a_num(v: str) -> float:
+    try:
+        return float(str(v).strip())
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _texto_temperatura(chip: str) -> str:
+    """
+    Arma el texto de temperatura para la IA, con el segundo numero adentro.
+
+    Por que NO es un simple "temperatura: N grados": porque ese numero NO es
+    la temperatura del ambiente, es la del silicono del chip (ver la nota de
+    HERRAMIENTAS["leer_temperatura"]). Antes se lo daba como si lo fuera, la
+    IA lo repitio como verdad y Kira lo escribio en su diario.
+
+    Ahora van los dos numeros y el rotulo de cada uno, para que la IA pueda:
+      - comparar el chip contra el clima de afuera y razonar
+      - decir "siento X" y "afuera hay Y" como dos cosas distintas
+      - no inventar una temperatura de la pieza que nadie midio
+
+    Y de paso deja la MUESTRA en el log: cada par (chip, afuera) es un punto
+    de calibracion. Con una semana de estos se puede calcular el offset real
+    de la placa, que hoy no se puede porque no hay termometro de referencia.
+
+    Si el clima no se pudo leer, NO se degrada el mensaje: se devuelve el
+    numero del chip solo, que es como funcionaba todo este tiempo. El clima es
+    un extra, no un requisito.
+    """
+    clima = clima_service.temperatura_externa(config.CLIMA_LAT, config.CLIMA_LON)
+
+    if clima is None:
+        return f"silicio del chip: {chip} grados Celsius (NO es la del ambiente)"
+
+    # La muestra para calibrar. Importa la serie, no cada linea.
+    print(f"[TEMP] chip={chip} afuera={clima['temp']} "
+          f"dif={_a_num(chip) - clima['temp']:+.1f} loc={config.CLIMA_LOC}")
+
+    extra = ""
+    if clima.get("sensacion") is not None:
+        extra = f" (sensacion {clima['sensacion']} C)"
+
+    return (
+        f"silicio del chip: {chip} grados Celsius (NO es la temperatura del "
+        f"ambiente, va caliente). Afuera ahora, en {config.CLIMA_LOC}, hay "
+        f"{clima['temp']} grados{extra}, segun el clima: es un dato de la "
+        f"calle, no de la pieza, asi que NO promedies los dos para inventar la "
+        f"temperatura de la habitacion. Contalos como lo que son."
+    )
+
+
 def formatear_sensor(nombre: str, linea: str) -> str:
     """Convierte la respuesta cruda del micro:bit en texto natural."""
     try:
         valor = linea.split(":", 1)[1].strip()
         if nombre == "leer_temperatura":
-            return f"temperatura: {valor} grados Celsius"
+            return _texto_temperatura(valor)
         if nombre == "leer_luz":
             n = int(valor)
             estado = "muy poca luz (oscuro)" if n < 40 else "luz media" if n < 160 else "mucha luz (iluminado)"

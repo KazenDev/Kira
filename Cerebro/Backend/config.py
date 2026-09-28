@@ -64,6 +64,25 @@ ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY", "")
 EXA_API_KEY = os.getenv("EXA_API_KEY", "")
 EXA_BASE_URL = "https://api.exa.ai"
 
+# ------------------- CLIMA (el segundo numero de la temperatura) ----------------
+# POR QUE. La micro:bit no tiene sensor de temperatura ambiente: lo que hay es
+# el termometro del silicono del chip, que segun el datasheet NO representa la
+# temperatura ambiente y tiene +/-5 C sin trimear. Medido en la placa: es
+# estable, no deriva, el error es un offset fijo de ESA placa. Y el offset solo
+# se puede medir con un termometro de referencia.
+#
+# Mientras tanto, darle a la IA el dato del clima de ACA permite que compare
+# los dos numeros y razone en vez de afirmar con seguridad un numero del que no
+# sabe. Ver app/services/clima.py para el por y el por que NO.
+#
+# ES UN EXTERIOR, NO LA PIEZA. Con calefaccion encendida (lo normal en
+# Pitalito a la noche) la pieza puede estar MAS CALIENTE que la calle, asi que
+# "el promedio de los dos" no es la temperatura de la pieza. Por eso se le dan
+# los dos a la IA y no se calcula un numero corregido.
+CLIMA_LAT = float(os.getenv("CLIMA_LAT", "1.8537"))
+CLIMA_LON = float(os.getenv("CLIMA_LON", "-76.0509"))
+CLIMA_LOC = os.getenv("CLIMA_LOC", "Pitalito, Huila")
+
 # Tags de emocion para que la VOZ suene con la misma emocion que la cara
 # (formato oficial de Fish Audio S2: [bracket] con lenguaje natural, 64+ emociones)
 TTS_TAGS = {
