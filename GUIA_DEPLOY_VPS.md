@@ -37,17 +37,57 @@ y `Cerebro/LEEME.txt`.
 
 ## ☁️ El VPS (producción)
 
+> ⚠️ **MUDANZA DE SERVIDOR (2026-09-27).** El VPS de producción **cambió**.
+> El viejo (`root@207.244.244.197`) queda **abandonado**: no deployar ahí ni
+> volver a apuntar a esa IP. Ahora producción es la caja de abajo.
+> Lo único verificado de la caja nueva es el acceso; TODO lo demás está
+> **sin confirmar** y hay que mirarlo antes de confiar en un `--delete`.
+
+### Caja nueva (la que se usa)
+
+| Dato | Valor | Estado |
+|---|---|---|
+| IP | `147.93.145.94` | ✅ confirmado por el dueño |
+| Usuario | `kazen` (**no** root) | ✅ confirmado por el dueño |
+| Acceso | `ssh kazen@147.93.145.94` | ✅ funciona (pide contraseña) |
+| URL pública | ¿`https://147.93.145.94.nip.io`? | ❓ **sin verificar** |
+| SO / RAM | — | ❓ sin verificar |
+| App en | ¿`/opt/kira/`? | ❓ **sin verificar** |
+| Servicio | ¿systemd `kira` en 127.0.0.1:9000? | ❓ **sin verificar** |
+| Proxy TLS | ¿Caddy? | ❓ sin verificar |
+| `sudo` | — | ❓ sin verificar (si no hay sudo sin contraseña, el restart del servicio y el rsync a `/opt` van a necesitar un plan B) |
+
+### El primer boot en la caja nueva: mirá antes de sync-ear
+
+El `--delete` de abajo es **destructivo** y las reglas de oro son explícitas
+con `memoria/` (los recuerdos y la personalidad de Kira: borrarlos es
+lobotomizarla). En una caja nueva, sincronizar a ciegas es exactamente el
+error que mata al personaje. Antes del primer deploy:
+
+```bash
+ssh kazen@147.93.145.94 \
+  'ls -la /opt/ 2>&1; echo ---; ls -la /opt/kira 2>&1; echo ---; \
+   systemctl list-units --type=service 2>/dev/null | grep -i kira; echo ---; \
+   systemctl is-active kira 2>&1; echo ---; ls -la /opt/kira/Backend/memoria 2>&1 | head'
+```
+
+Si `/opt/kira/Backend/memoria` existe y tiene cosas, el `--exclude memoria` de
+los comandos de abajo es **lo único** que separa "actualizar el código" de
+"borrarle la personalidad a Kira". No sacarlo.
+
+### Caja vieja (ABANDONADA — no deployar)
+
 | Dato | Valor |
 |---|---|
-| IP | `207.244.244.197` (usuario: `root`, contraseña abajo ⚠️) |
-| URL pública | **https://207.244.244.197.nip.io** (HTTPS automático por Caddy) |
-| SO | Ubuntu 24.04, 4 cores, 8GB RAM |
-| App en | `/opt/kira/` (Backend + Frontend/dist + Personaje) |
-| Servicio | systemd `kira` → uvicorn en 127.0.0.1:9000 |
-| Proxy TLS | Caddy (config: `/etc/caddy/Caddyfile`, bloque `207.244.244.197.nip.io`) |
-| Logs | `journalctl -u kira -n 50` (ver qué pasa en vivo) |
+| IP | `207.244.244.197` — **ya no es producción** |
+| Estado | dado de baja por el dueño el 2026-09-27 |
 
 ## 🚀 DEPLOY (los 3 comandos, MEMORIALIZARLOS)
+
+> ⚠️ Estos comandos están escritos para la caja VIEJA (`root`, `/opt/kira`).
+> Para la nueva hay que cambiar **usuario y ruta**, y eso está sin verificar
+> arriba. No los corras tal cual hasta haberlos adaptado a lo que haya
+> en la caja real.
 
 ```bash
 PW='CONFIGURAR_ESTA_VARIABLE_EN_TU_ENTORNO'
