@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Database, LoaderCircle, LogIn, ShieldCheck, UserPlus } from 'lucide-react';
+import { Database, Eye, EyeOff, LoaderCircle, LogIn, ShieldCheck, UserPlus } from 'lucide-react';
 import {
   cerrarSesion,
   iniciarSesion,
@@ -22,6 +22,11 @@ export default function AuthGate() {
   const [confirmacion, setConfirmacion] = useState('');
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
+  // Ver la contraseña. El motivo real: tipear 12 caracteres en un campo de
+  // puntos y no poder verificar es la forma más fácil de registrar una cuenta
+  // con un error de tipeo, y después uno no se acuerda cuál era. El botón
+  // existe para eso, no por magia.
+  const [verClave, setVerClave] = useState(false);
 
   useEffect(() => {
     let vigente = true;
@@ -56,6 +61,10 @@ export default function AuthGate() {
       setError('Las contraseñas no coinciden.');
       return;
     }
+    // Tapar la clave en cuanto se envía. Si la persona la dejó a la vista para
+    // verificar, no tiene sentido dejarla descubierta mientras espera: el
+    // servidor está respondiendo y cualquiera que mire la pantalla la lee.
+    setVerClave(false);
     setEnviando(true);
     try {
       const respuesta: RespuestaAuth = modo === 'login'
@@ -142,30 +151,60 @@ export default function AuthGate() {
             />
 
             <label htmlFor="auth-password">Contraseña</label>
-            <input
-              id="auth-password"
-              type="password"
-              autoComplete={modo === 'login' ? 'current-password' : 'new-password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={8}
-              maxLength={128}
-              required
-            />
+            {/* El input va envuelto porque el botón del ojo tiene que SOBRELOS
+                el campo, no empujar el layout. Por eso el input pasa de
+                `width:100%` directo a `flex:1` dentro de la fila. */}
+            <div className="auth-clave">
+              <input
+                id="auth-password"
+                type={verClave ? 'text' : 'password'}
+                autoComplete={modo === 'login' ? 'current-password' : 'new-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                maxLength={128}
+                required
+              />
+              <button
+                type="button"
+                className="auth-ver"
+                onClick={() => setVerClave(!verClave)}
+                aria-label={verClave ? 'Ocultar contraseña' : 'Ver contraseña'}
+                aria-pressed={verClave}
+                title={verClave ? 'Ocultar' : 'Ver'}
+              >
+                {verClave ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+              </button>
+            </div>
 
             {modo === 'registro' && (
               <>
                 <label htmlFor="auth-confirm">Repetir contraseña</label>
-                <input
-                  id="auth-confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  value={confirmacion}
-                  onChange={(e) => setConfirmacion(e.target.value)}
-                  minLength={8}
-                  maxLength={128}
-                  required
-                />
+                {/* Comparte el mismo toggle: son la misma clave, y tener dos
+                    botones independientes invita a que uno este abierto y el
+                    otro cerrado, que es peor que ninguno. */}
+                <div className="auth-clave">
+                  <input
+                    id="auth-confirm"
+                    type={verClave ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    value={confirmacion}
+                    onChange={(e) => setConfirmacion(e.target.value)}
+                    minLength={8}
+                    maxLength={128}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="auth-ver"
+                    onClick={() => setVerClave(!verClave)}
+                    aria-label={verClave ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    aria-pressed={verClave}
+                    title={verClave ? 'Ocultar' : 'Ver'}
+                  >
+                    {verClave ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+                  </button>
+                </div>
               </>
             )}
 
