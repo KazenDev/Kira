@@ -166,6 +166,7 @@ function KiraCaraInner({
           nivel: kiraVivo.nivel,
           mirarX,
           reducido: reducido(),
+          risa: vivo && kiraVivo.risaHasta > ahora,
         },
         (ahora - t0) / 1000
       );

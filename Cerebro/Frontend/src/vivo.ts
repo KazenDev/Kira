@@ -11,7 +11,13 @@ export const kiraVivo = {
   herramienta: null as string | null, // la tool que esta usando (para su animacion)
   boca: 0, // 0 cerrada .. 1 abierta: la letra que esta sonando AHORA
   nivel: 0, // 0..1: cuanto ruido escucha el microfono
+  risaHasta: 0, // performance.now() hasta el que se rie (le hicieron cosquillas en la pantalla)
 };
+
+/** Cosquillas en la pantalla: todas las caras se rien un ratito. */
+export function hacerCosquillas(ms = 1300) {
+  kiraVivo.risaHasta = performance.now() + ms;
+}
 
 const VOCALES = 'aeiouáéíóúAEIOUÁÉÍÓÚ';
 

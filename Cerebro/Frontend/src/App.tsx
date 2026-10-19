@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ChangeEvent } from 'react';
-import { Mic, ArrowUp, ArrowDown, ArrowRight, Square, Brain, RefreshCw, Camera, Check, X, Menu, Plus, Bluetooth, BluetoothConnected } from 'lucide-react';
+import { Mic, ArrowUp, ArrowDown, ArrowRight, Square, Brain, RefreshCw, Camera, Check, X, Menu, Plus, Bluetooth, BluetoothConnected, Maximize2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   enviarMensajeStream,
@@ -22,6 +22,7 @@ import {
 } from './api';
 import KiraCara from './KiraCara';
 import FondoVivo from './FondoVivo';
+import ModoCara from './ModoCara';
 import { bocaDeLetra, kiraVivo } from './vivo';
 import Sidebar from './Sidebar';
 import ChatHeader from './ChatHeader';
@@ -179,6 +180,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   const escuchandoRef = useRef(false);
   const [streamId, setStreamId] = useState<string | null>(null); // mensaje parcial en streaming
   const [emotion, setEmotion] = useState('happy');
+  const [modoCara, setModoCara] = useState(false); // Kira a pantalla completa (feria)
   // el markdown se baja en un rato libre (ver Burbuja: carga diferida)
   useEffect(() => {
     const precargar = () => void import('./MensajeMarkdown');
@@ -1991,6 +1993,14 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
                   <button
                     type="button"
                     className="header-menu-item"
+                    onClick={() => setModoCara(true)}
+                  >
+                    <Maximize2 size={16} strokeWidth={2} aria-hidden="true" />
+                    <span>Modo cara (pantalla completa)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="header-menu-item"
                     onClick={() => {
                       sonidoUI('abrir');
                       setMemoriaAbierta(true);
@@ -2156,6 +2166,37 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
                 </motion.button>
               )}
             </AnimatePresence>
+
+            {modoCara && (
+              <ModoCara
+                subtitulo={ultimoKiraId ? (mensajes.find((m) => m.id === ultimoKiraId)?.contenido ?? '') : ''}
+                estadoTexto={
+                  escuchando
+                    ? 'te escucho…'
+                    : hablando
+                      ? 'hablando…'
+                      : mostrarPuntos
+                        ? (labelTrace ?? 'pensando…')
+                        : 'tocale la cara o hablale'
+                }
+                escuchando={escuchando}
+                puedeHablar={!respuestaActiva}
+                onHablar={() => {
+                  if (escuchando) {
+                    if (grabadorCel.current?.state === 'recording') grabadorCel.current.stop();
+                  } else {
+                    void escucharHabla();
+                  }
+                }}
+                onCosquillas={() =>
+                  postSilencioso('/api/comando', {
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cmd: 'REACCION:1' }),
+                  })
+                }
+                onCerrar={() => setModoCara(false)}
+              />
+            )}
 
             <footer className="input-bar">
               {escuchando ? (

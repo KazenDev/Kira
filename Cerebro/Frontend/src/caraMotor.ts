@@ -20,6 +20,7 @@ export interface EntradaCara {
   nivel: number; // 0..1 (escuchando)
   mirarX: number | null; // -1..1 si sigue al puntero
   reducido: boolean; // prefers-reduced-motion
+  risa?: boolean; // le estan haciendo cosquillas
 }
 
 export interface Motor {
@@ -352,6 +353,16 @@ export function cuadro(m: Motor, ent: EntradaCara, t: number): Rejilla {
   m.boca += (ent.boca - m.boca) * Math.min(1, dt * 22);
 
   const animT = t - m.animDesde;
+  if (ent.risa) {
+    // ojos "^ ^" bien cerrados de risa y boca grande que rebota
+    const salto = !ent.reducido && Math.floor(t * 9) % 2 ? 1 : 0;
+    dibujo(g, ['.#.#.', '#.#.#', '.....', '#...#', '.###.'], 1, 0, 0);
+    if (salto) {
+      pon(g, 1, 4, 1);
+      pon(g, 2, 3, 0.5);
+      pon(g, 3, 4, 1);
+    }
+  } else
   switch (ent.estado) {
     case 'piensa': {
       const anim = (ent.herramienta && ANIM_HERRAMIENTA[ent.herramienta]) || m.anim;
