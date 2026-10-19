@@ -55,6 +55,12 @@ void demoAutomatica();                    // muestra todas las emociones
 // Es el UNICO camino para cambiar emocionActual (comandos, STOP, metronomo).
 void cambiarEmocion(EmocionActual e);
 
+// Avisa algo a la PC POR INICIATIVA PROPIA (EVENTO:..., JUEGO:..., LAGRIMA):
+// por USB con reintento (la replica LED puede tener el UART ocupado) y por
+// BLE, igual que los ACK. Con un uBit.serial.send() suelto estos avisos se
+// perdian a veces y por Bluetooth no llegaban nunca.
+void avisarPC(const char *linea);
+
 // Botones A/B de la escucha manual (definida en Principal.cpp). La llama el
 // bucle principal una vez por frame; tambien la llaman, frame por frame, los
 // golpes dramaticos de un disparo que se exentan del lote, para que exentarse

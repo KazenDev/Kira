@@ -77,6 +77,11 @@ void cambiarEmocion(EmocionActual e)
     vidaPonerEmocion(e, true);
 }
 
+void avisarPC(const char *linea)
+{
+    responder(ManagedString(linea));
+}
+
 // ---------------------------------------------------------------------------
 // Demo automatica (prueba del codigo sin necesitar la IA)
 // Cada emocion vive 3 s con el motor de vida; cualquier comando la corta.

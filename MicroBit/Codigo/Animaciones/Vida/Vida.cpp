@@ -243,6 +243,35 @@ void vidaDibujarCara(EmocionActual e)
     volcar(l);
 }
 
+// Los nombres de las reacciones, para avisarle a la PC (EVENTO:<NOMBRE>).
+// Mismo orden que Reaccion (Cara.h) desde R_COSQUILLAS.
+static const char *const NOMBRE_REACCION[] = {
+    "COSQUILLAS", "CARINO", "GRUNIDO", "SOBRESALTO", "DESPERTAR", "MAREO",
+    "DORMIR", "TOQUE", "MOLESTA", "BERRINCHE", "OFENDIDA", "ENAMORADA",
+    "PERDON", "ESTORNUDO", "TIRITAR", "ACALORADA", "DESLUMBRADA", "CAIDA",
+};
+static const int N_NOMBRES = sizeof(NOMBRE_REACCION) / sizeof(NOMBRE_REACCION[0]);
+static uint8_t ultimoAvisado = 0;
+static uint32_t ultimoAviso = 0;
+
+// La PC usa estos avisos para que Kira HABLE sola ("¡ey, me mareaste!").
+// Freno: la misma reaccion no se repite antes de 3 s (una sacudida larga o
+// tres toques seguidos son UNA cosa que contar, no tres). Dormirse no se
+// avisa: no hay nada que decir.
+static void avisarReaccion(uint8_t r)
+{
+    if (r < R_COSQUILLAS || r == R_DORMIR) return;
+    int i = r - R_COSQUILLAS;
+    if (i < 0 || i >= N_NOMBRES) return;
+    uint32_t ahora = uBit.systemTime();
+    if (r == ultimoAvisado && ahora - ultimoAviso < 3000) return;
+    ultimoAvisado = r;
+    ultimoAviso = ahora;
+    char linea[32];
+    snprintf(linea, sizeof(linea), "EVENTO:%s\n", NOMBRE_REACCION[i]);
+    avisarPC(linea);
+}
+
 static void atenderEventos()
 {
     uint8_t ev = cara.eventos;
@@ -251,14 +280,16 @@ static void atenderEventos()
     // (El sonido de llegada lo toca cambiarEmocion() ANTES de la transicion,
     // para que se oiga cuando empieza el cambio y no cuando termina.)
 
-    if (ev & EV_REACCION)
+    if (ev & EV_REACCION) {
         sonidoTocar((uint8_t)(S_COSQUILLAS + cara.eventoReaccion - R_COSQUILLAS));
+        avisarReaccion(cara.eventoReaccion);
+    }
 
     if ((ev & EV_GESTO) && cara.eventoGesto >= 0 &&
         cara.eventoGesto < cara.p->nGestos) {
         uint8_t s = cara.p->gestos[cara.eventoGesto].sonido;
         if (s == S_LAGRIMA)
-            uBit.serial.send("LAGRIMA\n");   // como antes: aviso por serial
+            avisarPC("LAGRIMA\n");   // como antes: aviso por serial
         // Los gestos sueltos solo suenan en silencio: si Kira habla, su voz
         // ya esta sonando en el cel y un bip encima molesta.
         if (s != S_NADA && !modoHablar)
@@ -281,8 +312,9 @@ static void frameJuego(uint32_t inicio)
     volcar(lienzo);
     if (juego.sonido) sonidoTocar(juego.sonido);
     if (juego.hayAviso) {
-        uBit.serial.send(juego.aviso);
-        uBit.serial.send("\n");
+        char linea[48];
+        snprintf(linea, sizeof(linea), "%s\n", juego.aviso);
+        avisarPC(linea);
     }
     if (!sigue) {
         // Vuelve la cara, contenta de haber jugado
