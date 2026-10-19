@@ -24,9 +24,13 @@
 #include "Arena/Arena.h"
 #include "Onda/Onda.h"
 #include "Luz/Luz.h"
+#include "Pensativa/Pensativa.h"
+#include "Corazon/Corazon.h"
+#include "Estrellas/Estrellas.h"
+#include "Bloques/Bloques.h"
 
 // Registro de patrones (todos con la misma firma: void animarXxx(int))
-static const int NUM_LOADINGS = 10;
+static const int NUM_LOADINGS = NUM_LOADINGS_TOTAL;
 typedef void (*PatronLoading)(int);
 static const PatronLoading PATRONES[NUM_LOADINGS] = {
     animarCometa,    // 0: luz orbitando con rastro
@@ -38,7 +42,11 @@ static const PatronLoading PATRONES[NUM_LOADINGS] = {
     animarFlechas,   // 6: spinner de 4 flechas girando 🔄
     animarArena,     // 7: sandbox de arena interactivo 🏜️🌀
     animarOnda,      // 8: onda senoidal interactiva 🌊
-    animarLuz        // 9: circulo de carga con sensor de luz 🕯️📊
+    animarLuz,       // 9: circulo de carga con sensor de luz 🕯️📊
+    animarPensativa, // 10: Kira pensando (mira arriba, puntos suspensivos) 🤔
+    animarCorazon,   // 11: corazon que late lub-dub 💓
+    animarEstrellas, // 12: cielo que titila + estrella fugaz ✨
+    animarBloques    // 13: mini-Tetris 🧱
 };
 
 // Muestra UN patron especifico (indice 0..NUM_LOADINGS-1)

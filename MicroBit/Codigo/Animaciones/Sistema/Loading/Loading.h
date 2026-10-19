@@ -28,7 +28,10 @@ extern MicroBit uBit;
 // entonces. Asi la IA manda LOADING mientras "piensa" y el aro/patron
 // sigue girando hasta que llegue la respuesta real (o STOP).
 extern bool modoLoading;          // definido en Loading.cpp
-void iniciarLoading(int idx);     // LOAD0..LOAD9: bucle continuo con ESE patron
+// Cuantos patrones hay (LOAD0..LOAD13)
+#define NUM_LOADINGS_TOTAL 14
+
+void iniciarLoading(int idx);     // LOAD0..LOAD13: bucle continuo con ESE patron
 void iniciarLoading();            // LOADING: bucle con un patron al azar
 void detenerLoading();            // lo apaga (vuelve a la emocion activa)
 void mostrarLoadingBucle();       // un ciclo del patron actual (lo llama el bucle)

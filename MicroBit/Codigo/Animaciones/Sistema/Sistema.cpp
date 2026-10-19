@@ -9,6 +9,7 @@
 #include "../Vida/Vida.h"              // el motor de vida: la cara, el habla y los sentidos
 #include "../Vida/Sonidos/Sonidos.h"   // SONIDO:ON/OFF, VOLUMEN:<n>, SONAR:<n>
 #include "../Vida/Nucleo/SonidoId.h"
+#include <ctype.h>
 #include "Loading/Loading.h"   // las animaciones de carga (patrones de luz)
 #include "Loading/Luz/Luz.h"      // recalibrarLuz() para el comando CALIB
 #include "Transiciones/Transiciones.h"   // efectos entre emociones (60 FPS)
@@ -530,11 +531,13 @@ void procesarComando(ManagedString cmd)
         }
         else if (cmd == "LOADING") iniciarLoading();
         else if (cmd == "LOADALL") mostrarLoadingTodos(1);  // preview de todos
-        // LOAD0..LOAD9: BUCLE CONTINUO con ese patron especifico
+        // LOAD0..LOAD13: BUCLE CONTINUO con ese patron especifico
         // (gira sin reinicios hasta que llegue otra emocion o STOP)
-        else if (cmd.length() == 5 && cmd.substring(0, 4) == "LOAD") {
+        else if ((cmd.length() == 5 || cmd.length() == 6) && cmd.substring(0, 4) == "LOAD"
+                 && isdigit(cmd.charAt(4)) && (cmd.length() == 5 || isdigit(cmd.charAt(5)))) {
             int idx = cmd.charAt(4) - '0';
-            if (idx >= 0 && idx < 10)
+            if (cmd.length() == 6) idx = idx * 10 + (cmd.charAt(5) - '0');
+            if (idx >= 0 && idx < NUM_LOADINGS_TOTAL)
                 iniciarLoading(idx);
             else {
                 uBit.display.print("?");
