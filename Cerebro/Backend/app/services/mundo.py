@@ -106,8 +106,9 @@ def pronostico(lat: float, lon: float, lugar: str, rumbo_kira: float | None = No
         f"?latitude={lat}&longitude={lon}&timezone=auto"
         "&current=wind_direction_10m,wind_speed_10m,wind_gusts_10m,uv_index,is_day"
         "&hourly=precipitation_probability,temperature_2m&forecast_hours=6"
-        "&daily=sunrise,sunset,uv_index_max,precipitation_probability_max,moon_phase"
-        "&forecast_days=1"
+        "&daily=sunrise,sunset,uv_index_max,precipitation_probability_max,moon_phase,"
+        "temperature_2m_max,temperature_2m_min,weather_code"
+        "&forecast_days=2"
     )
     try:
         d = _get_json(url, ttl=900)
@@ -140,6 +141,16 @@ def pronostico(lat: float, lon: float, lugar: str, rumbo_kira: float | None = No
         partes.append(f"UV máximo del día {round(dia['uv_index_max'][0], 1)}")
     if dia.get("moon_phase"):
         partes.append(f"la luna está en {fase_luna(float(dia['moon_phase'][0]))}")
+    # MAÑANA: medido con la prueba de carga, a "¿y mañana?" Kira decia que su
+    # pronostico no llegaba hasta ahi
+    if len(dia.get("temperature_2m_max") or []) > 1:
+        from app.services.clima import CIELO_WMO
+        cielo = CIELO_WMO.get(int((dia.get("weather_code") or [0, 0])[1] or 0), "")
+        lluvia = (dia.get("precipitation_probability_max") or [None, None])[1]
+        partes.append(
+            f"MAÑANA: entre {round(dia['temperature_2m_min'][1])} y {round(dia['temperature_2m_max'][1])} grados"
+            + (f", {cielo}" if cielo else "")
+            + (f", lluvia hasta {lluvia}%" if lluvia is not None else ""))
     if not partes:
         return _falla("el pronóstico")
     return {"ok": True, "resultado": f"Pronóstico para {lugar}: " + "; ".join(partes) + "."}

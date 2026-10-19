@@ -1785,7 +1785,7 @@ HERRAMIENTAS: dict[str, dict] = {
         "prefijo": None,
     },
     "pronostico": {
-        "descripcion": (f"Pronóstico de {config.CLIMA_LOC}: si va a llover en las próximas horas, "
+        "descripcion": (f"Pronóstico de {config.CLIMA_LOC} para HOY y MAÑANA: si va a llover en las próximas horas, "
                         "temperaturas que vienen, viento (de dónde viene y si te da de frente o de "
                         "costado según tu brújula), índice UV, a qué hora sale y se pone el sol y en "
                         "qué fase está la luna."),
