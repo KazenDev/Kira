@@ -121,6 +121,46 @@ async function escribirConTope(
   ]);
 }
 
+/** ESCRITURA RAPIDA: las rafagas chicas van SIN respuesta (ATT write
+ *  command): no esperan el ida y vuelta de confirmacion por cada paquete de
+ *  20 bytes, que era la mayor parte del retraso de la boca. Es seguro hasta 60
+ *  bytes porque el buffer RX de la placa es de 96 (ver BLE_RX_BUF en
+ *  BleUart.cpp) y la placa lo vacia cada 10 ms. Lo que sea mas grande, o si
+ *  el navegador/la placa no lo soportan, va por el camino de siempre (con
+ *  respuesta: control de flujo real). */
+const RAFAGA_SIN_RESPUESTA = 60;
+let sinRespuestaRoto = false;
+
+async function escribirLineas(ch: BluetoothRemoteGATTCharacteristic, bytes: Uint8Array): Promise<void> {
+  const puedeRapido =
+    !sinRespuestaRoto &&
+    bytes.length <= RAFAGA_SIN_RESPUESTA &&
+    typeof ch.writeValueWithoutResponse === 'function' &&
+    ch.properties?.writeWithoutResponse === true;
+  if (puedeRapido) {
+    try {
+      for (let i = 0; i < bytes.length; i += 20) {
+        await Promise.race<void>([
+          ch.writeValueWithoutResponse(bytes.slice(i, i + 20)),
+          new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error('timeout escribiendo por BLE')), 3000)
+          ),
+        ]);
+      }
+      return;
+    } catch (e) {
+      // NotSupported/NotAllowed: este enlace no lo banca -> nunca mas lo
+      // intenta y sigue con respuesta. Un timeout se propaga (re-encola).
+      const nombre = e instanceof Error ? e.name : '';
+      if (nombre !== 'NotSupportedError' && nombre !== 'NotAllowedError') throw e;
+      sinRespuestaRoto = true;
+    }
+  }
+  for (let i = 0; i < bytes.length; i += 20) {
+    await escribirConTope(ch, bytes.slice(i, i + 20));
+  }
+}
+
 /** Backoff exponencial oficial de Chrome (sample Automatic Reconnect). */
 function backoff(intento: number) {
   return Math.min(2000 * Math.pow(2, intento), 8000);
@@ -667,9 +707,7 @@ export default function PuenteBle({ compacto = false, oculto = false, onEstado }
           if (lineas.length && chars.current) {
             try {
               const bytes = new TextEncoder().encode(lineas.join(''));
-              for (let i = 0; i < bytes.length; i += 20) {
-                await escribirConTope(chars.current.escribir, bytes.slice(i, i + 20));
-              }
+              await escribirLineas(chars.current.escribir, bytes);
               // Ya hay comandos "esperando respuesta": eso es lo que mide la
               // guardia del enlace para decidir si el camino de vuelta murio.
               ultimaEscrituraMs.current = Date.now();

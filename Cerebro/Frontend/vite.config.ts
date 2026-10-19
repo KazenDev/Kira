@@ -18,17 +18,17 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['fondo-doodle.svg', 'icono.svg', 'apple-touch-icon.png', 'favicon.ico'],
       manifest: {
-        name: 'Kira — Cerebro de la feria',
+        name: 'Kira — la IA que vive en una micro:bit',
         short_name: 'Kira',
         description:
-          'Charlando con Kira, una IA que se cría conversando, con carita de micro:bit.',
-        lang: 'es-AR',
+          'Hablá con Kira: una IA curiosa con voz, emociones y cara de LEDs que vive en una micro:bit.',
+        lang: 'es-CO',
         start_url: '/',
         scope: '/',
         display: 'standalone',
         orientation: 'any',
-        background_color: '#212121',
-        theme_color: '#212121',
+        background_color: '#191817',
+        theme_color: '#191817',
         categories: ['education', 'entertainment'],
         icons: [
           { src: 'icono-192.png', sizes: '192x192', type: 'image/png' },
@@ -57,6 +57,19 @@ export default defineConfig({
     }),
   ],
   base: './',
+  build: {
+    rollupOptions: {
+      output: {
+        // vendors en archivos propios: un deploy nuevo de Kira no obliga al
+        // celu a bajar React o motion otra vez (quedan en cache del SW)
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          motion: ['motion'],
+          iconos: ['lucide-react'],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

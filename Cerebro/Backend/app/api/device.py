@@ -95,7 +95,10 @@ async def api_ble_tx(
             lineas = manager.relay_tomar_tx()
             if lineas:
                 return {"lineas": lineas}
-            await asyncio.sleep(0.03)
+            # 10 ms: el comando sale hacia el celu casi al instante (con 30 ms
+            # la boca de la placa llegaba en promedio 15 ms mas tarde, por
+            # nada: es UNA corrutina sola, el costo de mirar seguido es nulo)
+            await asyncio.sleep(0.01)
         return {"lineas": []}
     return {"lineas": manager.relay_tomar_tx()}
 

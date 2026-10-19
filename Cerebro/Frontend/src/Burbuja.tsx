@@ -1,7 +1,7 @@
 // Mensajes del chat en formato "turn": asistente sin burbuja y usuario en una
 // superficie sutil. Las acciones secundarias viven en un único menú para que la
 // conversación no se llene de iconos repetidos.
-import { memo, useState } from 'react';
+import { lazy, memo, Suspense, useState } from 'react';
 
 /** Un glifo por clase de origen, para que el ojo escanee la fila sin leerla.
  *  Texto plano a propósito: son 9 caracteres y meter 9 iconos SVG por el
@@ -39,7 +39,18 @@ import {
 } from 'lucide-react';
 import { MensajeChat } from './api';
 import KiraCara from './KiraCara';
-import MensajeMarkdown from './MensajeMarkdown';
+// El markdown (con resaltado de codigo) es lo mas pesado del bundle y casi
+// nunca hace falta para pintar el PRIMER mensaje: se baja aparte, y mientras
+// tanto el texto se ve plano (igual de legible).
+const MensajeMarkdown = lazy(() => import('./MensajeMarkdown'));
+
+function Markdown({ contenido }: { contenido: string }) {
+  return (
+    <Suspense fallback={<p className="md-plano">{contenido}</p>}>
+      <MensajeMarkdown contenido={contenido} />
+    </Suspense>
+  );
+}
 
 interface Props {
   m: MensajeChat;
@@ -82,7 +93,7 @@ function BurbujaInner({
               decoding="async"
             />
           )}
-          {m.contenido.trim() ? <MensajeMarkdown contenido={m.contenido} /> : null}
+          {m.contenido.trim() ? <Markdown contenido={m.contenido} /> : null}
         </div>
       </motion.div>
     );
@@ -117,7 +128,7 @@ function BurbujaInner({
               <span className="cursor" aria-hidden="true" />
             </p>
           ) : (
-            <MensajeMarkdown contenido={m.contenido} />
+            <Markdown contenido={m.contenido} />
           )}
 
           {!parcial && m.fuentes && m.fuentes.length > 0 && (

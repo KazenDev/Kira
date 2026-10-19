@@ -179,6 +179,13 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   const escuchandoRef = useRef(false);
   const [streamId, setStreamId] = useState<string | null>(null); // mensaje parcial en streaming
   const [emotion, setEmotion] = useState('happy');
+  // el markdown se baja en un rato libre (ver Burbuja: carga diferida)
+  useEffect(() => {
+    const precargar = () => void import('./MensajeMarkdown');
+    const ric = (window as unknown as { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback;
+    if (ric) ric(precargar);
+    else window.setTimeout(precargar, 1500);
+  }, []);
   // cada visita: 3 sugerencias distintas y un saludo de pantalla distinto
   const [sugerencias] = useState(() => elegirSugerencias());
   const [saludoPantalla] = useState(

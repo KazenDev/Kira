@@ -313,3 +313,10 @@ html:has(.fondo-vivo) body,
 .app:has(.fondo-vivo) {
   background: transparent;
 }
+
+/* mientras baja el markdown: el texto plano, igual de legible */
+.md-plano {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
