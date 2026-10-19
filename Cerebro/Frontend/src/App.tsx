@@ -1206,6 +1206,80 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     postSilencioso('/api/cancelar'); // descarta el audio; no intenta transcribirlo
   };
 
+  // ---------- HABLARLE DIRECTO A LA PLACA (botón A) ----------
+  // Se aprieta A, se habla, se aprieta A otra vez (B cancela). Dos caminos:
+  // - POR AIRE (celular): la placa avisa TECLA:A / TECLA:B y graba el
+  //   micrófono del celular (el audio de la placa no entra por Bluetooth).
+  // - CON CABLE: el server captura el audio de la placa y avisa OIDO:...
+  //   (INICIO, TEXTO:<lo que dijo>, NADA, CANCELADO).
+  // Apretar A mientras Kira habla la corta: es la persona queriendo hablar.
+  const teclaPlacaRef = useRef<(t: string) => void>(() => undefined);
+  teclaPlacaRef.current = (t: string) => {
+    if (mbConectadoRef.current || !elegido) return; // con cable escucha el server
+    const grabandoCel = escuchandoRef.current && rutaCelRef.current;
+    if (t === 'A') {
+      if (grabandoCel) {
+        if (grabadorCel.current?.state === 'recording') grabadorCel.current.stop(); // envía
+      } else if (!escuchandoRef.current) {
+        if (streamPendienteRef.current || reproduciendoAudioRef.current) detenerRespuesta();
+        setError('');
+        void grabarVozCel();
+      }
+    } else if (t === 'B' && grabandoCel) {
+      cancelarEscucha();
+    }
+  };
+  const oidoPlacaRef = useRef<(s: string) => void>(() => undefined);
+  oidoPlacaRef.current = (s: string) => {
+    if (s === 'INICIO') {
+      if (streamPendienteRef.current || reproduciendoAudioRef.current) detenerRespuesta();
+      escuchaSesionRef.current += 1;
+      rutaCelRef.current = false;
+      setError('');
+      setNivelEscucha(0);
+      setEscuchando(true);
+      escuchandoRef.current = true;
+      return;
+    }
+    if (!escuchandoRef.current || rutaCelRef.current) return; // no era una escucha de la placa
+    setEscuchando(false);
+    escuchandoRef.current = false;
+    if (s.startsWith('TEXTO:')) {
+      const texto = s.slice(6).trim();
+      if (texto) void enviarRef.current?.(texto);
+    } else if (s === 'NADA') {
+      mostrarErrorTemporal('No te escuché nada — hablá más cerca del micro:bit');
+    }
+  };
+  useEffect(() => {
+    const alTecla = (e: Event) => teclaPlacaRef.current(String((e as CustomEvent).detail));
+    window.addEventListener('kira-tecla', alTecla);
+    // con cable: los avisos del server llegan por /api/eventos (aparte de la
+    // autonomía, que puede estar apagada: hablarle a la placa anda igual)
+    let vivo = true;
+    let seq = -1;
+    const id = window.setInterval(async () => {
+      if (document.hidden || !mbConectadoRef.current) return;
+      try {
+        const r = await obtenerEventos(seq);
+        if (!vivo) return;
+        const primera = seq < 0;
+        seq = r.seq;
+        if (primera) return;
+        for (const ev of r.eventos) {
+          if (ev.linea.startsWith('OIDO:')) oidoPlacaRef.current(ev.linea.slice(5));
+        }
+      } catch {
+        /* sin server un rato: el próximo intento sigue */
+      }
+    }, 700);
+    return () => {
+      vivo = false;
+      window.removeEventListener('kira-tecla', alTecla);
+      window.clearInterval(id);
+    };
+  }, []);
+
   const cambiarSonido = (v: boolean) => {
     setSonido(v);
     setSonidoActivo(v);
@@ -1694,7 +1768,9 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         const primeraVez = seqEventosRef.current < 0;
         seqEventosRef.current = r.seq;
         // El ultimo evento que valga la pena (los de antes de abrir la web no)
-        const ultimo = primeraVez ? undefined : r.eventos[r.eventos.length - 1];
+        // (los OIDO: son la persona hablándole a la placa: no son autonomía)
+        const propios = r.eventos.filter((e) => !e.linea.startsWith('OIDO:'));
+        const ultimo = primeraVez ? undefined : propios[propios.length - 1];
         if (ultimo && (!pendiente || pesa(ultimo.linea) >= pesa(pendiente.linea))) {
           pendiente = { linea: ultimo.linea, t: Date.now() };
         }

@@ -63,6 +63,11 @@ class SerialTransport:
         # dict con datos, evento, fase ('esperando_start'|'audio'), buf
         self._captura: dict | None = None
         self._ultima_captura_cancelada = False
+        # A APRETADO EN LA PLACA sin que nadie pidiera escuchar: la placa
+        # igual abre el microfono y manda el audio. Antes se perdia (y peor:
+        # se leia como texto basura). Ahora se captura y se le pasa a esta
+        # funcion (la pone kira_server: transcribe y avisa a la web).
+        self.al_escuchar_solo = None  # Callable[[bytes | None], None] | None
         # Relay BLE extraído. Los aliases siguientes mantienen compatibilidad
         # con diagnóstico y tests legacy.
         self.relay = RelayBroker(lock=self._lock)
@@ -335,14 +340,48 @@ class SerialTransport:
 
             self._stop_event.wait(0.05)
 
+    def _empezar_captura_sola(self) -> None:
+        """La persona apreto A en la placa: lo que queda en el buffer ya es
+        audio. Se captura hasta AUDIO:END (A otra vez) o AUDIO:CANCEL (B)."""
+        resto, self._buf = self._buf, b""
+        with self._lock:
+            self._captura = {
+                "datos": bytearray(), "evento": threading.Event(), "fase": "audio",
+                "buf": b"", "cancelado": False, "sola": True, "desde": time.time(),
+            }
+        self.registrar_evento_externo("OIDO:INICIO")
+        print("[SERIAL] A en la placa: escuchando (sin que la web lo pida)")
+        if resto:
+            self._procesar_captura(resto)
+
+    def _terminar_captura_sola(self, cap: dict) -> None:
+        with self._lock:
+            if self._captura is cap:
+                self._captura = None
+        audio = None if cap.get("cancelado") else bytes(cap["datos"])
+        destino = self.al_escuchar_solo
+        if destino is None:
+            return
+        # transcribir tarda segundos: nunca en el hilo del serial
+        threading.Thread(target=destino, args=(audio,), daemon=True).start()
+
     def _leer_captura(self):
         """Lee audio binario entre START/END sin duplicar el remanente."""
         try:
             datos = self._ser.read(4096)
         except Exception:
             return
+        cap = self._captura
+        # una escucha sola que nunca cerro (se fue sin apretar A): 90 s y se tira
+        if cap is not None and cap.get("sola") and time.time() - cap["desde"] > 90:
+            cap["cancelado"] = True
+            self._terminar_captura_sola(cap)
+            return
         if not datos:
             return
+        self._procesar_captura(datos)
+
+    def _procesar_captura(self, datos: bytes):
         cap = self._captura
         if cap is None:
             return
@@ -358,13 +397,19 @@ class SerialTransport:
             cap["cancelado"] = True
             cap["datos"].clear()
             cap["evento"].set()
+            if cap.get("sola"):
+                self._terminar_captura_sola(cap)
             return
+        if audio:
+            cap["datos"].extend(audio)
         if complete:
             cap["evento"].set()
+            if cap.get("sola"):
+                self._terminar_captura_sola(cap)
+                return
 
         if not audio:
             return
-        cap["datos"].extend(audio)
 
         cb_chunk = cap.get("cb_chunk")
         if cb_chunk is not None:
@@ -414,6 +459,9 @@ class SerialTransport:
                 continue
             if self._registrar_ambiente(texto):
                 continue
+            if texto == "AUDIO:START" and self._captura is None:
+                self._empezar_captura_sola()
+                return
             self.ultimo_ack = texto
             self.ultimo_ack_time = time.time()
             self.respondiendo = True
@@ -433,7 +481,7 @@ class SerialTransport:
         self._cola.put(cmd)
 
     # Prefijos de las lineas que la placa manda POR SU CUENTA y que importan
-    PREFIJOS_EVENTO = ("EVENTO:", "JUEGO:", "MUNDO:")
+    PREFIJOS_EVENTO = ("EVENTO:", "JUEGO:", "MUNDO:", "OIDO:")
 
     def registrar_evento_externo(self, linea: str) -> None:
         """Un evento que NO viene de la placa (el observador del mundo: el

@@ -1442,6 +1442,7 @@ async def lifespan(_app: FastAPI):
         print(f"[RAG] {rag_store.stats()}")
     except Exception as error:
         print(f"[RAG] no se pudo leer el estado: {type(error).__name__}: {error}")
+    serial_mgr.al_escuchar_solo = escucha_desde_la_placa
     serial_mgr.start()
     # al arrancar: saluda con alegria (para que el micro:bit no quede apagado)
     serial_mgr.enviar("HAPPY")
@@ -3732,6 +3733,27 @@ def samples_a_mp3(samples: bytes) -> str | None:
             except Exception:
                 pass
     return mp3_path if ok else None
+
+
+def escucha_desde_la_placa(audio: bytes | None) -> None:
+    """Apretaron A en la placa (con cable) sin que la web pidiera escuchar:
+    se transcribe y la web lo manda como mensaje de la persona (OIDO:TEXTO).
+    Corre en su propio hilo (lo lanza el transporte serial)."""
+    if audio is None:
+        serial_mgr.registrar_evento_externo("OIDO:CANCELADO")
+        return
+    if len(audio) < 1000:
+        serial_mgr.registrar_evento_externo("OIDO:NADA")
+        return
+    try:
+        mp3 = samples_a_mp3(audio)
+        texto = (transcribir_audio(mp3) if mp3 else None) or ""
+    except Exception as e:
+        print(f"[OIDO] no pude transcribir lo de la placa: {e}")
+        texto = ""
+    texto = " ".join(texto.split())[:500]
+    print(f"[OIDO] A en la placa -> {texto!r}")
+    serial_mgr.registrar_evento_externo(f"OIDO:TEXTO:{texto}" if texto else "OIDO:NADA")
 
 
 def transcribir_audio(mp3_path: str) -> str | None:

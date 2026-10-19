@@ -138,12 +138,57 @@ def test_unique_audio_files() -> None:
         check(not list(Path(tmp).glob("*.wav")), "no quedan WAV temporales", list(Path(tmp).iterdir()))
 
 
+class SerialFalso:
+    """Un puerto que devuelve los trozos de a uno (como llegan del cable)."""
+
+    def __init__(self, trozos: list[bytes]):
+        self.trozos = list(trozos)
+        self.is_open = True
+
+    def read(self, _n: int) -> bytes:
+        return self.trozos.pop(0) if self.trozos else b""
+
+
+def _correr_lectura(manager: SerialManager, veces: int = 20) -> None:
+    for _ in range(veces):
+        manager._leer_respuesta()
+
+
+def test_a_en_la_placa() -> None:
+    print("\n== 6) A apretado en la placa SIN que la web pida escuchar ==")
+    audio = bytes(range(200)) * 10                      # 2000 bytes de "voz"
+    for nombre, trozos, espera in [
+        ("A ... A: el audio llega entero",
+         [b"ACK:HAPPY\nAUDIO:START\n" + audio[:700], audio[700:1500], audio[1500:] + b"AUDIO:END\nACK:X\n"],
+         audio),
+        ("A ... B: cancelado, no se transcribe",
+         [b"AUDIO:START\n" + audio[:500], b"AUDIO:CANCEL\n"], None),
+    ]:
+        manager = SerialManager()
+        try:
+            recibido: list = []
+            listo = threading.Event()
+            manager.al_escuchar_solo = lambda a: (recibido.append(a), listo.set())
+            manager._ser = SerialFalso(trozos)
+            _correr_lectura(manager)
+            listo.wait(2)
+            check(recibido == [espera], nombre, (len(recibido[0]) if recibido and recibido[0] else recibido))
+            check(manager._captura is None, f"{nombre}: la captura se cierra", manager._captura)
+            _, eventos = manager.eventos_desde(0)
+            check(any(e["linea"] == "OIDO:INICIO" for e in eventos), f"{nombre}: la web se entera de que escucha",
+                  eventos)
+        finally:
+            manager._ser = None
+            manager.close()
+
+
 def main() -> int:
     test_audio_parser()
     test_device_state()
     test_exclusive_device_requests()
     test_sensor_firmware_desconocido()
     test_unique_audio_files()
+    test_a_en_la_placa()
     print()
     if FALLOS:
         print(f"FALLARON {len(FALLOS)} chequeo(s):")

@@ -49,6 +49,15 @@ void atenderBotonesEscucha()
         return;
     }
 
+    // POR AIRE el audio de la placa no entra (el Bluetooth no da el ancho):
+    // con el celular, el que graba es SU microfono. Por eso la placa le avisa
+    // los botones de la escucha (TECLA:A empieza/termina, TECLA:B cancela) y
+    // el celular graba en sincronia. Sale del BOTON y no de la escucha: la
+    // escucha la apaga cualquier comando, y eso no es la persona apretando.
+    // (B siempre se avisa: para el celular solo cancela si estaba grabando)
+    if (pulsoA) bleEnviar(ManagedString("TECLA:A\n"));
+    if (pulsoB) bleEnviar(ManagedString("TECLA:B\n"));
+
     if (modoEscuchar) {
         if (pulsoB) {
             // B manda siempre: cancela y descarta, incluso si A+B aparecen.

@@ -380,6 +380,11 @@ export default function PuenteBle({ compacto = false, oculto = false, onEstado }
         const linea = buferEntrada.current.slice(0, idx).trim();
         buferEntrada.current = buferEntrada.current.slice(idx + 1);
         if (linea) {
+          // BOTONES DE LA ESCUCHA: los atiende la app AL INSTANTE (graba con el
+          // micrófono del celular: el audio de la placa no entra por aire)
+          if (linea === 'TECLA:A' || linea === 'TECLA:B') {
+            window.dispatchEvent(new CustomEvent('kira-tecla', { detail: linea.slice(6) }));
+          }
           bandejaSalida.current.push(linea);
           // LA PLACA HABLO: el camino de vuelta esta vivo (y el firmware nuevo
           // manda un HELLO al detectar el enlace, que tambien cae aqui).
