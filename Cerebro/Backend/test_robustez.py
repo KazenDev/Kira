@@ -117,6 +117,22 @@ def test_marcas() -> None:
     check("sin caracteres: solo la marca inicial", marcas_de_alineacion([], [], None) == [[0.0, 0]])
 
 
+def test_lineas_pegadas() -> None:
+    print("\n== 3b) BLE: dos lineas pegadas (se perdio el \\n) se separan ==")
+    from app.hardware.serial_transport import separar_pegadas
+    check("EVENTO + AMBIENTE pegados",
+          separar_pegadas("EVENTO:DESPERTARAMBIENTE:26:26:0:24") == ["EVENTO:DESPERTAR", "AMBIENTE:26:26:0:24"])
+    check("un eco de comando NO se corta", separar_pegadas("ACK:JUEGO:1") == ["ACK:JUEGO:1"])
+    check("LED + EVENTO pegados", separar_pegadas("LED:" + "1" * 25 + "EVENTO:TOQUE") == ["LED:" + "1" * 25, "EVENTO:TOQUE"])
+    nombres = ["EVENTO:MAREO", "JUEGO:DADO:4", "AMBIENTE:1:2:3:4", "ACK:LOADING", "EVENTO:TOQUE"]
+    malos = 0
+    for _ in range(300):
+        lineas = [AZAR.choice(nombres) for _ in range(AZAR.randint(1, 4))]
+        if separar_pegadas("".join(lineas)) != lineas:
+            malos += 1
+    check("300 combinaciones pegadas al azar vuelven a separarse", malos == 0)
+
+
 async def test_endpoint_basura() -> None:
     print("\n== 4) /api/chat/stream con basura: nunca 500, siempre cierra ==")
     import httpx
@@ -189,6 +205,7 @@ def main() -> int:
     test_segmentador()
     test_muletillas()
     test_marcas()
+    test_lineas_pegadas()
     asyncio.run(test_endpoint_basura())
     print("\n" + ("TODO OK ✅" if FALLOS == 0 else f"FALLAS: {FALLOS} ❌"))
     return 1 if FALLOS else 0

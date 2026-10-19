@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import queue
+import re
 import collections
 import threading
 import time
@@ -14,6 +15,17 @@ import serial.tools.list_ports
 from app.hardware.audio_capture import consume_audio_capture
 from app.hardware.ble_relay import RelayBroker
 from app.hardware.device_state import DeviceState
+
+
+# Por BLE, si la placa manda dos lineas seguidas y su buffer de salida se
+# llena, se puede perder el '\n' y llegan PEGADAS ("EVENTO:DESPERTARAMBIENTE:
+# 26:26:0:24"). Se cortan donde empieza una linea conocida pegada a una letra
+# o numero (despues de ':' no: "ACK:JUEGO:1" es UNA linea).
+_LINEA_PEGADA = re.compile(r"(?<=[A-Za-z0-9])(?=(?:EVENTO|JUEGO|AMBIENTE|LED|ACK):)")
+
+
+def separar_pegadas(texto: str) -> list[str]:
+    return [p for p in _LINEA_PEGADA.split(texto.strip()) if p]
 
 
 PREFIJOS_SENSOR = frozenset({
@@ -565,6 +577,11 @@ class SerialTransport:
     def relay_linea_entrante(self, texto: str):
         """Linea que llega DEL micro:bit via el navegador (ACK, TEMP:, LED:...).
         Espejo exacto del parseo de _leer_respuesta, pero alimentado por HTTP."""
+        partes = separar_pegadas(texto)
+        if len(partes) > 1:
+            for parte in partes:
+                self.relay_linea_entrante(parte)
+            return
         texto = texto.strip()
         if not texto:
             return

@@ -1565,8 +1565,11 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         streamPendienteRef.current = false;
         setStreamPendiente(false);
         // si fue el USUARIO quien cortó (botón stop / Escape), no es un
-        // error: se conserva el texto parcial y listo
-        if (e.name === 'AbortError') {
+        // error: se conserva el texto parcial y listo. Si Kira hablaba SOLA
+        // (evento) tampoco: nadie le pidio nada, no hay que asustar con un
+        // "el cerebro fallo"
+        if (e.name === 'AbortError' || evento) {
+          if (evento && e.name !== 'AbortError') console.warn('turno autonomo fallido', evento, e);
           setMensajes((m) => {
             const parcial = m.find((msg) => msg.id === idParcial);
             if (parcial && !parcial.contenido.trim()) {

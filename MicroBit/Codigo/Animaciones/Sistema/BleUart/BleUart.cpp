@@ -263,14 +263,15 @@ static void fibraBle()
 //   malloc(rxBufferSize + txBufferSize + 2*MICROBIT_UART_S_ATTRSIZE)  (linea 85)
 // con ATTSIZE = 20. Antes eran 33+33+40 = 106 bytes; ahora 97+33+40 = 170.
 // Son +64 bytes de heap, de los ~2 KB libres en el peor caso. El buffer de TX
-// se deja en 32: por ahi solo salen ACKs y respuestas de sensor (cortas), y su
-// desborde YA se diagnosticaba (el "el celu no escucha" de mas abajo).
+// era de 32 y con send(ASYNC) lo que no entraba SE TIRABA: dos lineas
+// seguidas (EVENTO:DESPERTAR + AMBIENTE:...) perdian el '\n' y llegaban
+// pegadas a la web. Ahora 64 (+32 de heap) y bleEnviar espera a que drene.
 //
 // Si alguna vez se ve "BLE: RX lleno" en el log, la app esta mandando rafegas
 // que ni con 96 alcanzan: ahi la solucion es la MTU o throttlear en la app,
 // no agrandar mas (el heap es el limite duro).
 #define BLE_RX_BUF 96
-#define BLE_TX_BUF 32
+#define BLE_TX_BUF 64
 
 // El desborde del buffer RX: se avisa UNA vez por enlace.
 static void alRxLleno(MicroBitEvent)
@@ -303,14 +304,28 @@ void bleEnviar(ManagedString texto)
     if (!enlaceVivo())
         return;
 
-    int escrito = bleUart->send(texto, ASYNC);
+    // send(ASYNC) copia SOLO lo que entra en el buffer y tira el resto: se
+    // reintenta lo que falta mientras el buffer drena (cada notificacion
+    // libera 20 bytes), con un tope para no colgar la vida de la placa si el
+    // celu dejo de leer.
+    const uint8_t *datos = (const uint8_t *)texto.toCharArray();
+    int largo = texto.length();
+    int enviado = 0;
+    uint32_t tope = uBit.systemTime() + 150;
+    while (enviado < largo) {
+        int escrito = bleUart->send(datos + enviado, largo - enviado, ASYNC);
 
-    // Conectado pero SIN suscripcion del celular (CCCD): la respuesta se
-    // perderia en el silencio total. Lo dejamos anotado UNA vez por enlace
-    // en el log USB (el arreglo del lado del celu es re-suscribirse).
-    if (escrito == MICROBIT_NOT_SUPPORTED && !avisadoSinSuscriptor) {
-        avisadoSinSuscriptor = true;
-        uBit.serial.send("BLE: el celu no escucha (falta suscripcion)\n");
+        // Conectado pero SIN suscripcion del celular (CCCD): la respuesta se
+        // perderia en el silencio total. Lo dejamos anotado UNA vez por enlace
+        // en el log USB (el arreglo del lado del celu es re-suscribirse).
+        if (escrito == MICROBIT_NOT_SUPPORTED && !avisadoSinSuscriptor) {
+            avisadoSinSuscriptor = true;
+            uBit.serial.send("BLE: el celu no escucha (falta suscripcion)\n");
+        }
+        if (escrito < 0) return;
+        enviado += escrito;
+        if (enviado >= largo || (int32_t)(uBit.systemTime() - tope) > 0) return;
+        fiber_sleep(5);
     }
 }
 
