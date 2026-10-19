@@ -123,6 +123,7 @@ struct Estimulos
     int   luz;              // 0..255
     bool  voces;            // el oido noto gente hablando cerca (Oido.h)
     bool  aplauso;          // el oido noto un golpe de ruido
+    bool  dedo;             // hubo un dedo en el logo o en A/B hace <0,6 s
 };
 
 struct EstadoCara;
@@ -185,6 +186,7 @@ struct EstadoCara
     uint32_t sacudidaDesde;
     bool     sacudiendo;
     uint32_t ultimoGolpe;
+    uint32_t golpePendiente;   // tiron visto, esperando confirmar (0 = no)
     bool     baseLista;
     float    baseX, baseY, baseZ;
     float    prevX, prevY, prevZ;

@@ -38,6 +38,7 @@ static bool lista = false;
 static int brilloGlobal = 160;
 
 static uint32_t ultimaAcel = 0;
+static uint32_t ultimoDedo = 0;   // ultima vez con un dedo en el logo o A/B
 static uint32_t ultimaTemp = 0;
 static uint32_t ultimaLuz = 0;
 // La luz se mide con la propia matriz de LEDs y CODAL tiene que cambiar el
@@ -364,7 +365,7 @@ void vidaDibujarCara(EmocionActual e)
     caraIniciar(muestra, personalidadDe(e), t, 1u, false);
     muestra.sentidosActivos = false;
     muestra.proxGesto = t + 60000;
-    Estimulos nada = { false, 0, 0, 0, false, false, false, false, false, 0, false, 0, false, false };
+    Estimulos nada = { false, 0, 0, 0, false, false, false, false, false, 0, false, 0, false, false, false };
     caraFrame(muestra, t, nada, l);
     volcar(l);
 }
@@ -481,6 +482,10 @@ void vidaFrame()
     e.sacudida = gesto == ACCELEROMETER_EVT_SHAKE;
     e.caida = gesto == ACCELEROMETER_EVT_FREEFALL;
     e.toque = uBit.logo.isPressed();
+    // apretar con el dedo sacude la placa: eso no es un golpe
+    if (e.toque || uBit.buttonA.isPressed() || uBit.buttonB.isPressed())
+        ultimoDedo = inicio;
+    e.dedo = ultimoDedo != 0 && inicio - ultimoDedo < 600;
     e.picar = pendPicar;
     pendPicar = false;
 

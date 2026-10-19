@@ -332,8 +332,18 @@ static void sentir(EstadoCara &c, const Estimulos &e, uint32_t t)
             caraActividad(c, t);
 
         // GOLPE: un tiron brusco que no es una sacudida (la sacudida es
-        // sostenida y la detecta CODAL)
-        if (tiron > 1500.0f && !c.sacudiendo && t - c.ultimoGolpe > 2500) {
+        // sostenida y la detecta CODAL). La placa pesa ~10 g: apretar el logo
+        // o un boton con el dedo ya la empuja mas de 1,5 g, y Kira se asustaba
+        // de un mimo. Ahora: umbral de 2 g, nunca con un dedo encima, y se
+        // confirma 150 ms despues (el toque capacitivo puede llegar tarde).
+        if (tiron > 2000.0f && !c.sacudiendo && !e.dedo && t - c.ultimoGolpe > 2500)
+            c.golpePendiente = t;
+    }
+    if (c.golpePendiente) {
+        if (e.dedo || c.sacudiendo) {
+            c.golpePendiente = 0;                 // era un dedo, no un golpe
+        } else if (t - c.golpePendiente >= 150) {
+            c.golpePendiente = 0;
             c.ultimoGolpe = t;
             caraActividad(c, t);
             reaccionar(c, R_SOBRESALTO, t);
@@ -438,7 +448,9 @@ static void sentir(EstadoCara &c, const Estimulos &e, uint32_t t)
         caraActividad(c, t);                  // si dormia, esto la despierta
         if (!dormida) reaccionar(c, R_ATENTA, t);
     }
-    if (e.aplauso) {
+    // (el "toc" de un dedo sobre la placa suena fuerte en su microfono: con
+    // un dedo encima no es un aplauso)
+    if (e.aplauso && !e.dedo) {
         caraActividad(c, t);
         reaccionar(c, R_APLAUSO, t);
     }
@@ -544,6 +556,7 @@ void caraIniciar(EstadoCara &c, const Personalidad *p, uint32_t t,
     c.sacudidaDesde = 0;
     c.sacudiendo = false;
     c.ultimoGolpe = 0;
+    c.golpePendiente = 0;
     c.baseLista = false;
     c.inclX = c.inclY = 0.0f;
     c.sentidosActivos = true;
