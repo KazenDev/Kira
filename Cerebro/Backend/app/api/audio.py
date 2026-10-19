@@ -36,6 +36,20 @@ async def api_tts_stream(
     return await services.tts_stream(tts_id)
 
 
+@router.get("/api/tts-tiempos/{tts_id}")
+async def api_tts_tiempos(
+    tts_id: str,
+    services: BackendContext = Depends(get_backend_context),
+) -> Any:
+    """Marcas [segundo, letras visibles dichas] de un audio ya generado: la
+    web revela el texto al ritmo de la voz. 404 si todavia no hay (o el TTS
+    no las dio): la web cae a un ritmo parejo."""
+    marcas = services.tts_tiempos(tts_id) if services.tts_tiempos else None
+    if not marcas:
+        raise HTTPException(404, "sin tiempos")
+    return {"marcas": marcas}
+
+
 @router.post("/api/transcribir")
 async def api_transcribir(
     archivo: UploadFile = File(...),

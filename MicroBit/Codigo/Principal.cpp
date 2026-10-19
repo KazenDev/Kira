@@ -60,6 +60,7 @@ void atenderBotonesEscucha()
             } else {
                 // Primer A después de ESCUCHAR: abrir el micrófono.
                 sonidoCallar();
+                vidaOidoPausar();
                 escucharIniciar();
             }
         }
@@ -69,6 +70,7 @@ void atenderBotonesEscucha()
         detenerLoading();
         detenerVoz();
         sonidoCallar();   // que el microfono no grabe a Kira
+        vidaOidoPausar();
         escucharIniciar();
     }
 

@@ -150,8 +150,16 @@ async def api_eventos(
     services: BackendContext = Depends(get_backend_context),
 ):
     """Lo que la placa aviso sola (EVENTO:..., JUEGO:...) desde 'desde'."""
-    seq, eventos = services.serial_manager().eventos_desde(desde)
-    return {"seq": seq, "eventos": eventos}
+    manager = services.serial_manager()
+    seq, eventos = manager.eventos_desde(desde)
+    amb = getattr(manager, "ambiente", None)
+    fresco = bool(amb) and time.time() - amb.get("t", 0) < 10
+    return {
+        "seq": seq,
+        "eventos": eventos,
+        # para que la web sepa si hay gente alrededor (saca charla antes)
+        "gente_cerca": bool(fresco and amb.get("actividad", 0) >= 12),
+    }
 
 
 @router.post("/api/loading")

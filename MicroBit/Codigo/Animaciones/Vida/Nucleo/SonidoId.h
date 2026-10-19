@@ -38,6 +38,8 @@ enum SonidoId
     S_ACALORADA,
     S_DESLUMBRADA,
     S_CAIDA,
+    S_ATENTA,
+    S_APLAUSO,
     // Gestos sueltos
     S_BOSTEZO,
     S_SUSPIRO,
@@ -57,6 +59,12 @@ enum SonidoId
     S_DING,        // resultado normal
     S_CUENTA,      // "pie-dra, pa-pel, ti-je-ra"
     S_YA,          // ¡ya! (flash de reflejos, revelar ppt)
+    // Herramientas de la IA
+    S_ALARMA,      // termino el temporizador
+    S_MEL_CUMPLE,  // feliz cumpleanos
+    S_MEL_ESTRELLITA,
+    S_MEL_ESCALA,  // do-re-mi-fa-sol-la-si-do
+    S_MEL_VICTORIA,
     NUM_SONIDOS
 };
 

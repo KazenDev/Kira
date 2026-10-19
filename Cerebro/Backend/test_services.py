@@ -7,6 +7,8 @@ Ejecutar:
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -115,9 +117,17 @@ async def test_speech_stream() -> None:
         def raise_for_status(self):
             return None
 
-        async def aiter_bytes(self):
-            yield b"mp3-a"
-            yield b"mp3-b"
+        async def aiter_lines(self):
+            # /stream/with-timestamps: una linea JSON por trozo, audio en base64
+            yield json.dumps({"audio_base64": base64.b64encode(b"mp3-a").decode(),
+                              "alignment": {"characters": list("[laughs] ho"),
+                                            "character_start_times_seconds": [0.0] * 9 + [0.1, 0.2],
+                                            "character_end_times_seconds": [0.0] * 9 + [0.2, 0.3]}})
+            yield ""
+            yield json.dumps({"audio_base64": base64.b64encode(b"mp3-b").decode(),
+                              "alignment": {"characters": list("la vos"),
+                                            "character_start_times_seconds": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+                                            "character_end_times_seconds": [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]}})
 
     class FakeClient:
         calls = 0
@@ -153,6 +163,9 @@ async def test_speech_stream() -> None:
         speech_module.httpx.AsyncClient = original
     check(chunks == [b"mp3-a", b"mp3-b"], "el stream reenvía los chunks", chunks)
     check(service.get_cached(tts_id) == b"mp3-amp3-b", "el stream arma la cache lazy", service.get_cached(tts_id))
+    marcas = service.get_tiempos(tts_id)
+    check(marcas == [[0.0, 0], [0.5, 4], [0.9, 8]],
+          "tiempos: una marca por palabra, sin contar el [laughs] (no se ve)", marcas)
 
 
 async def test_background_tasks() -> None:

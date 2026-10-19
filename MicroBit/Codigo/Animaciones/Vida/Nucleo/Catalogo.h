@@ -43,7 +43,7 @@ struct Nota
     uint8_t  vibHz;      // vibrato: velocidad (0 = 9 Hz)
 };
 
-#define MAX_NOTAS 7          // notas por variante en la tabla
+#define MAX_NOTAS 16         // notas por variante en la tabla (las melodias son largas)
 #define MAX_SEGMENTOS 24     // segmentos ya expandidos (vibrato incluido)
 #define CHARS_NOTA 72
 // Lo maximo que ocupa un sonido codificado (con las comas y el '\0')

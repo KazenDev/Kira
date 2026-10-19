@@ -29,6 +29,10 @@
 #define MI6 1319
 #define SOL6 1568
 #define DO7 2093
+#define RE6 1175
+#define FA6 1397
+#define LA6 1760
+#define SI6 1976
 
 struct Variante
 {
@@ -271,6 +275,15 @@ static const Variante CATALOGO[] = {
     { S_RISITA,  3, {{TRI,  800, 700, 1200, 1500,  60, CUR, 0, 0},
                      PAUSA(30),
                      {TRI,  750,   0, 1300, 1650,  90, CUR, 0, 0}}},
+    // --- El oido ---------------------------------------------------------------
+    // Atenta: "¿mm?" curioso que sube y queda colgado
+    { S_ATENTA, 2, {{SEN, 900, 900, 650, 900, 160, CUR, 0, 0},
+                    {SEN, 900,   0, 900, 1100, 180, CUR, 2, 8}}},
+    // Aplauso: "¡yaaay!" que sube con trino
+    { S_APLAUSO, 3, {{TRI, 1023, 1000, MI5, SOL5, 110, CUR, 0, 0},
+                     {TRI, 1023, 1000, DO6, MI6, 110, CUR, 0, 0},
+                     {TRI, 1023,    0, SOL6, DO7, 300, CUR, 3, 12}}},
+
     // --- Minijuegos -----------------------------------------------------------
     // "¡a jugar!": escalita rapida que sube
     { S_JUEGO, 4, {{CUA, 800, 800, DO6, DO6, 60, F, 0, 0},
@@ -296,6 +309,52 @@ static const Variante CATALOGO[] = {
                     {CUA, 800, 0, 700, 700, 60, F, 0, 0},
                     PAUSA(240)}},
     { S_YA,    1, {{CUA, 1023, 0, 1400, 1400, 140, F, 0, 0}}},
+
+    // --- Herramientas: alarma y melodias (en la octava donde el buzzer suena) --
+    { S_ALARMA, 6, {{CUA, 1023, 1000, 1760, 1760, 110, F, 0, 0}, PAUSA(70),
+                    {CUA, 1023, 1000, 1760, 1760, 110, F, 0, 0}, PAUSA(70),
+                    {CUA, 1023,    0, 2093, 2093, 300, F, 0, 0}, PAUSA(10)}},
+    // Feliz cumpleanos (primera frase): sol sol la sol do si / sol sol la sol re do
+    { S_MEL_CUMPLE, 12, {{TRI, 1000, 500, SOL5, SOL5, 260, F, 0, 0},
+                         {TRI, 1000, 500, SOL5, SOL5, 130, F, 0, 0},
+                         {TRI, 1000, 600, LA5, LA5, 400, F, 0, 0},
+                         {TRI, 1000, 600, SOL5, SOL5, 400, F, 0, 0},
+                         {TRI, 1000, 600, DO6, DO6, 400, F, 0, 0},
+                         {TRI, 1000, 300, SI5, SI5, 750, F, 0, 0},
+                         {TRI, 1000, 500, SOL5, SOL5, 260, F, 0, 0},
+                         {TRI, 1000, 500, SOL5, SOL5, 130, F, 0, 0},
+                         {TRI, 1000, 600, LA5, LA5, 400, F, 0, 0},
+                         {TRI, 1000, 600, SOL5, SOL5, 400, F, 0, 0},
+                         {TRI, 1000, 600, RE6, RE6, 400, F, 0, 0},
+                         {TRI, 1000,   0, DO6, DO6, 800, F, 0, 0}}},
+    // Estrellita, ¿donde estas? (primera frase)
+    { S_MEL_ESTRELLITA, 14, {{SEN, 1000, 600, DO6, DO6, 330, F, 0, 0},
+                             {SEN, 1000, 600, DO6, DO6, 330, F, 0, 0},
+                             {SEN, 1000, 600, SOL6, SOL6, 330, F, 0, 0},
+                             {SEN, 1000, 600, SOL6, SOL6, 330, F, 0, 0},
+                             {SEN, 1000, 600, LA6, LA6, 330, F, 0, 0},
+                             {SEN, 1000, 600, LA6, LA6, 330, F, 0, 0},
+                             {SEN, 1000, 400, SOL6, SOL6, 640, F, 0, 0},
+                             {SEN, 1000, 600, FA6, FA6, 330, F, 0, 0},
+                             {SEN, 1000, 600, FA6, FA6, 330, F, 0, 0},
+                             {SEN, 1000, 600, MI6, MI6, 330, F, 0, 0},
+                             {SEN, 1000, 600, MI6, MI6, 330, F, 0, 0},
+                             {SEN, 1000, 600, RE6, RE6, 330, F, 0, 0},
+                             {SEN, 1000, 600, RE6, RE6, 330, F, 0, 0},
+                             {SEN, 1000,   0, DO6, DO6, 700, F, 0, 0}}},
+    { S_MEL_ESCALA, 8, {{TRI, 1000, 800, DO6, DO6, 220, F, 0, 0},
+                        {TRI, 1000, 800, RE6, RE6, 220, F, 0, 0},
+                        {TRI, 1000, 800, MI6, MI6, 220, F, 0, 0},
+                        {TRI, 1000, 800, FA6, FA6, 220, F, 0, 0},
+                        {TRI, 1000, 800, SOL6, SOL6, 220, F, 0, 0},
+                        {TRI, 1000, 800, LA6, LA6, 220, F, 0, 0},
+                        {TRI, 1000, 800, SI6, SI6, 220, F, 0, 0},
+                        {TRI, 1000,   0, DO7, DO7, 500, F, 0, 0}}},
+    // Fanfarria de victoria: ta-ta-ta-taaan
+    { S_MEL_VICTORIA, 6, {{CUA, 1000, 900, SOL5, SOL5, 130, F, 0, 0}, PAUSA(30),
+                          {CUA, 1000, 900, SOL5, SOL5, 130, F, 0, 0}, PAUSA(30),
+                          {CUA, 1000, 900, SOL5, SOL5, 130, F, 0, 0},
+                          {CUA, 1023,   0, MI6, MI6, 700, F, 3, 6}}},
 
     // Hola: el arranque (Do-Sol-Do, con trino al final)
     { S_HOLA,    3, {{SEN, 1000, 1000, DO5, DO5,  90, F, 0, 0},
@@ -458,5 +517,7 @@ int catalogoCodificar(uint8_t id, float azarVariante, float azarTono,
     if (n <= 0) return -1;
     float tono = 0.92f + 0.16f * azarTono;
     float dur  = 0.9f + 0.2f * azarDur;
+    // Las melodias y la alarma van afinadas: el azar las desafinaria
+    if (id >= S_ALARMA && id <= S_MEL_VICTORIA) tono = dur = 1.0f;
     return codificarNotas(notas, n, tono, dur, salida, capacidad);
 }

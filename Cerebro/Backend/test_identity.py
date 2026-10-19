@@ -82,6 +82,11 @@ async def test_extraccion_semantica() -> None:
             identity_block = ks.memoria_identidad_bloque("kira")
             check("Valentina" in identity_block, "el nombre entra al contexto prioritario")
             check(identity_block.startswith("\n\n# IDENTIDAD"), "el bloque de identidad es una sección de prompt válida", identity_block[:40])
+            # En la feria la misma cuenta la usa mucha gente: en OTRA charla el
+            # nombre no se le atribuye a quien habla ahora
+            otra = ks.memoria_identidad_bloque("kira", "otra-charla-123")
+            check("NO asumas" in otra and "Valentina" in otra,
+                  "en otra charla recuerda el nombre pero no lo asume", otra[:80])
             check(prompts and "\n" in prompts[0]["messages"][1]["content"], "la transcripción usa líneas reales")
 
             # La evidencia tiene que pertenecer al usuario, no a una afirmación

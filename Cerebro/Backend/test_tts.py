@@ -10,6 +10,7 @@ punto: "Bueno.", "Bueno..", "Bueno..." -> la voz se cortaba y volvia.
 import sys
 
 from app.domain.tts import SegmentadorTTS, quitar_tags_audio
+from app.domain.streaming import quitar_muletillas
 
 FALLOS = 0
 
@@ -76,6 +77,20 @@ check("saca [laughs] y [whispers, excited]", "[" not in limpio, limpio)
 check("deja el texto bien puntuado", limpio == "¡¿Qué?! No te creo... en serio, ¿vos?", limpio)
 check("no toca corchetes que no son tags", quitar_tags_audio("vale [12] pesos") == "vale [12] pesos")
 check("un tag que todavía está llegando no se muestra", quitar_tags_audio("A ver [gigg") == "A ver")
+
+print("\n== 6) muletillas de asistente fuera ==")
+check("'Ah, buena esa...' -> 'Ah, no te veo'", quitar_muletillas("Ah, buena esa... no te veo") == "Ah, no te veo")
+check("'¡Qué buena pregunta!' al inicio se va", quitar_muletillas("¡Qué buena pregunta! El cielo es azul") == "El cielo es azul")
+check("en medio de una frase NO se toca",
+      quitar_muletillas("Es una buena pregunta para la profe") == "Es una buena pregunta para la profe")
+check("con dos puntos tambien", quitar_muletillas("Hola. Buena pregunta: mirá") == "Hola. Mirá",
+      quitar_muletillas("Hola. Buena pregunta: mirá"))
+check("a medio llegar no muestra la muletilla", quitar_muletillas("Buena esa") == "")
+check("'che' argentino fuera", quitar_muletillas("Tonta será, pero che... algo te causó gracia")
+      == "Tonta será, pero... algo te causó gracia", quitar_muletillas("Tonta será, pero che... algo te causó gracia"))
+check("'Che, ¿viste?' -> '¿viste?'", quitar_muletillas("Che, ¿viste eso?") == " ¿viste eso?".strip(),
+      repr(quitar_muletillas("Che, ¿viste eso?")))
+check("no toca 'noche' ni 'leche'", quitar_muletillas("De noche tomo leche") == "De noche tomo leche")
 
 print("\n" + ("TODO OK ✅" if FALLOS == 0 else f"{FALLOS} FALLAS ❌"))
 sys.exit(1 if FALLOS else 0)

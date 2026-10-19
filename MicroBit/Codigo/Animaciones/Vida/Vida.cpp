@@ -3,10 +3,14 @@
  */
 #include "Vida.h"
 #include <stdio.h>
+#include <math.h>
 #include "Nucleo/Cara.h"
 #include "Nucleo/SonidoId.h"
 #include "../Emociones/Emociones.h"
 #include "Nucleo/Juegos.h"
+#include "Nucleo/Oido.h"
+#include "Nucleo/Pantalla.h"
+#include "../Sistema/MicFft/MicFft.h"
 #include "Sonidos/Sonidos.h"
 #include "../Sistema/Loading/Loading.h"
 #include "../Sistema/Voz/Voz.h"
@@ -40,6 +44,65 @@ static uint32_t ultimaLuz = 0;
 // modo del display para eso. Apagada por defecto: LUZ:ON la activa.
 static bool luzActiva = false;
 static uint32_t nanVistos = 0;
+
+// LO QUE MUESTRA (ver Nucleo/Pantalla.h): iconos, texto, flecha, temporizador
+static EstadoPantalla pantalla;
+static bool pantallaLista = false;
+static Lienzo capa;
+static float rumboLeido = -1.0f;
+static uint32_t ultimoRumbo = 0;
+
+static const uint8_t *glifoCodal(char c)
+{
+    static BitmapFont fuente = BitmapFont::getSystemFont();
+    return fuente.get(c);
+}
+
+static void asegurarPantalla()
+{
+    if (!pantallaLista) {
+        pantallaIniciar(pantalla);
+        pantallaLista = true;
+    }
+}
+
+void vidaIcono(const char *nombre, uint32_t ms)
+{
+    asegurarPantalla();
+    pantallaIcono(pantalla, pantallaIconoPorNombre(nombre), uBit.systemTime(), ms);
+}
+
+void vidaTexto(const char *texto)
+{
+    asegurarPantalla();
+    pantallaTexto(pantalla, texto, uBit.systemTime());
+}
+
+void vidaFlecha(int grados, uint32_t ms)
+{
+    asegurarPantalla();
+    pantallaFlecha(pantalla, (float)grados, uBit.systemTime(), ms);
+}
+
+void vidaTimer(uint32_t segundos)
+{
+    asegurarPantalla();
+    pantallaTimer(pantalla, segundos, uBit.systemTime());
+}
+
+// EL OIDO (ver Nucleo/Oido.h): el microfono prendido midiendo SOLO el nivel
+// de ruido, para notar a la gente. Lo usa la cara mientras esta en pantalla;
+// los modos que necesitan el microfono (escucha manual, ecualizador,
+// grabador) lo toman y al volver la cara el oido lo vuelve a prender.
+static DetectorOido oido;
+static bool oidoActivo = true;
+static bool oidoListo = false;
+static uint32_t ultimaOida = 0;
+static int ultimoConteoFft = -1;
+static uint32_t ultimoAmbiente = 0;
+static uint32_t finSordera = 0;      // un ratito despues de que Kira suene
+static float movimiento = 0.0f;      // cuanto la estan moviendo (EMA)
+static float prevAx = 0, prevAy = 0, prevAz = 0;
 
 // El boton B fuera de la escucha
 static bool bAntes = false;
@@ -133,6 +196,69 @@ void vidaPicar()
 void vidaLuz(bool activa)
 {
     luzActiva = activa;
+}
+
+void vidaOido(bool activo)
+{
+    oidoActivo = activo;
+    if (!activo) micFftDetener();
+}
+
+void vidaOidoPausar()
+{
+    // Otro modo necesita el microfono (escucha manual, grabador): se lo
+    // soltamos. El oido lo retoma solo cuando la cara vuelve a la pantalla.
+    micFftDetener();
+    ultimoConteoFft = -1;
+}
+
+// Nivel de ruido 0..100: el PROMEDIO de las 5 bandas del FFT. Medido en la
+// placa, la banda mas fuerte sola saltaba de 8 a 76 en dos segundos en una
+// pieza tranquila: demasiado nerviosa para notar gente.
+static float nivelRuido()
+{
+    const float *b = micFftBandas();
+    float s = 0.0f;
+    for (int i = 0; i < 5; i++) s += b[i];
+    float n = (s / 5.0f) * (100.0f / 4.5f);
+    return n > 100.0f ? 100.0f : n;
+}
+
+// Una muestra del oido. Devuelve el EventoOido de este frame.
+static int oir(uint32_t ahora)
+{
+    if (!oidoActivo) return OIDO_NADA;
+    if (!micFftActivo()) {
+        micFftIniciar();
+        ultimoConteoFft = -1;
+        oidoListo = false;      // retoma el microfono: vuelve a ajustarse
+    }
+    if (!oidoListo) {
+        oidoIniciar(oido, ahora);
+        oidoListo = true;
+    }
+    if (ahora - ultimaOida < 50) return OIDO_NADA;
+    ultimaOida = ahora;
+    int conteo = micFftConteo();
+    if (conteo == ultimoConteoFft) return OIDO_NADA;   // sin ventana nueva
+    ultimoConteoFft = conteo;
+    // Sordo mientras Kira suena (sus sonidos o su voz) y medio segundo despues
+    if (modoHablar || sonidoSonando()) finSordera = ahora + 600;
+    bool sordo = (int32_t)(finSordera - ahora) > 0;
+    return oidoMuestra(oido, nivelRuido(), ahora, sordo);
+}
+
+// Cada 2 s: cuanto ruido hay y cuanto la mueven, para que la IA sepa donde
+// esta parada (el bloque "tu entorno ahora" del backend)
+static void reportarAmbiente(uint32_t ahora)
+{
+    if (ahora - ultimoAmbiente < 2000) return;
+    ultimoAmbiente = ahora;
+    char linea[48];
+    snprintf(linea, sizeof(linea), "AMBIENTE:%d:%d:%d:%d\n",
+             (int)oido.rapido, (int)oido.base, (int)oidoActividad(oido),
+             (int)movimiento);
+    avisarPC(linea);
 }
 
 // VIDA:? -> que esta haciendo la cara (diagnostico por serial)
@@ -238,7 +364,7 @@ void vidaDibujarCara(EmocionActual e)
     caraIniciar(muestra, personalidadDe(e), t, 1u, false);
     muestra.sentidosActivos = false;
     muestra.proxGesto = t + 60000;
-    Estimulos nada = { false, 0, 0, 0, false, false, false, false, false, 0, false, 0 };
+    Estimulos nada = { false, 0, 0, 0, false, false, false, false, false, 0, false, 0, false, false };
     caraFrame(muestra, t, nada, l);
     volcar(l);
 }
@@ -249,6 +375,7 @@ static const char *const NOMBRE_REACCION[] = {
     "COSQUILLAS", "CARINO", "GRUNIDO", "SOBRESALTO", "DESPERTAR", "MAREO",
     "DORMIR", "TOQUE", "MOLESTA", "BERRINCHE", "OFENDIDA", "ENAMORADA",
     "PERDON", "ESTORNUDO", "TIRITAR", "ACALORADA", "DESLUMBRADA", "CAIDA",
+    "VOCES", "APLAUSO",
 };
 static const int N_NOMBRES = sizeof(NOMBRE_REACCION) / sizeof(NOMBRE_REACCION[0]);
 static uint8_t ultimoAvisado = 0;
@@ -346,6 +473,9 @@ void vidaFrame()
         e.ax = (float)s.x;
         e.ay = (float)s.y;
         e.az = (float)s.z;
+        float tiron = fabsf(e.ax - prevAx) + fabsf(e.ay - prevAy) + fabsf(e.az - prevAz);
+        prevAx = e.ax; prevAy = e.ay; prevAz = e.az;
+        movimiento += (tiron - movimiento) * 0.15f;
     }
     int gesto = uBit.accelerometer.getGesture();
     e.sacudida = gesto == ACCELEROMETER_EVT_SHAKE;
@@ -372,9 +502,28 @@ void vidaFrame()
         e.luz = uBit.display.readLightLevel();
     }
 
+    int oidoEv = oir(inicio);
+    e.voces = oidoEv == OIDO_VOCES;
+    e.aplauso = oidoEv == OIDO_APLAUSO;
+
     caraFrame(cara, inicio, e, lienzo);
-    volcar(lienzo);
+    asegurarPantalla();
+    // La flecha necesita la brujula: solo si esta calibrada (calibrar es un
+    // juego de ~30 s que bloquea la placa: lo pide la persona, no la flecha)
+    if (pantalla.capa == CAPA_FLECHA && inicio - ultimoRumbo >= 100) {
+        ultimoRumbo = inicio;
+        rumboLeido = uBit.compass.isCalibrated() ? (float)uBit.compass.heading() : -1.0f;
+    }
+    if (pantallaFrame(pantalla, inicio, rumboLeido, glifoCodal, capa))
+        volcar(capa);
+    else
+        volcar(lienzo);
+    if (pantalla.eventos & EVP_TIMER_FIN) {
+        sonidoTocar(S_ALARMA);
+        avisarPC("EVENTO:TIMER\n");   // para que Kira lo anuncie
+    }
     atenderEventos();
+    if (oidoActivo) reportarAmbiente(inicio);
 
     // 60 fps: duerme lo que falte para 16 ms (cede la CPU a BLE, la replica
     // LED y los sonidos)

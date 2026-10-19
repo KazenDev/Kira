@@ -75,6 +75,9 @@ enum Reaccion
     R_ACALORADA,      // calor: jadea y se abanica, "uff"
     R_DESLUMBRADA,    // volvio la luz de golpe
     R_CAIDA,          // caida libre: "¡aaah!"
+    // --- El oido (solo el nivel de ruido) ---
+    R_ATENTA,         // alguien se puso a hablar cerca: "¿quién anda ahí?"
+    R_APLAUSO,        // un golpe de ruido / aplauso: se emociona
     NUM_REACCIONES
 };
 
@@ -118,6 +121,8 @@ struct Estimulos
     int   temp;             // grados (del chip)
     bool  hayLuz;           // lectura nueva de luz
     int   luz;              // 0..255
+    bool  voces;            // el oido noto gente hablando cerca (Oido.h)
+    bool  aplauso;          // el oido noto un golpe de ruido
 };
 
 struct EstadoCara;

@@ -6,7 +6,7 @@ N=../Codigo/Animaciones/Vida/Nucleo
 E=../Codigo/Animaciones/Emociones
 g++ -O2 -Wall -Wextra -I ../Codigo test_vida.cpp \
     $N/Lienzo.cpp $N/Ojos.cpp $N/Habla.cpp $N/Cara.cpp $N/Reacciones.cpp \
-    $N/Juegos.cpp $N/Catalogo.cpp \
+    $N/Juegos.cpp $N/Catalogo.cpp $N/Oido.cpp $N/Pantalla.cpp \
     $E/Emociones.cpp $E/*/*.cpp \
     -o test_vida
 ./test_vida

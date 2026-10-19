@@ -27,5 +27,7 @@ void sonidoCallar();              // corta lo que este sonando
 void sonidoSilenciar(bool silencio);
 bool sonidoSilenciado();
 void sonidoVolumen(int volumen);  // 0..255
+// ¿Esta sonando algo (o por sonar)? El oido no escucha mientras tanto.
+bool sonidoSonando();
 
 #endif // SONIDOS_H

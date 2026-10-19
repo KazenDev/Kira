@@ -48,6 +48,14 @@ int  vidaBrilloGlobal();
 void vidaClima(int clima);        // 0 normal, 1 calor, 2 frio, -1 automatico
 void vidaPicar();                 // como un toque corto de B (PICAR)
 void vidaLuz(bool activa);        // LUZ:ON / LUZ:OFF (dormirse si la tapan)
+void vidaOido(bool activo);       // OIDO:ON / OIDO:OFF (notar gente por el ruido)
+void vidaOidoPausar();            // soltar el microfono para otro modo
+
+// Lo que la IA le pide mostrar (ICONO:, TEXTO:, FLECHA:, TIMER:)
+void vidaIcono(const char *nombre, uint32_t ms);
+void vidaTexto(const char *texto);
+void vidaFlecha(int grados, uint32_t ms);
+void vidaTimer(uint32_t segundos);
 void vidaDiagnostico();           // VIDA:?
 
 // Boton B fuera de la escucha: toque corto = picarla, mantener = minijuego.

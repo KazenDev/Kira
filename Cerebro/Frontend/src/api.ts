@@ -421,6 +421,7 @@ export interface TurnoHistorial {
   rol: string;
   contenido: string;
   rastro?: RastroItem[] | null;
+  emotion?: string | null;
 }
 
 // Resultado final de un chat STREAMING
@@ -449,7 +450,8 @@ export async function enviarMensajeStream(
   onFin: (r: ResultadoStream) => void,
   onError: (e: Error) => void,
   signal?: AbortSignal,
-  onAudio?: (url: string, orden: number) => void,
+  // texto = lo que se VE de esa frase: la pantalla lo escribe mientras suena
+  onAudio?: (url: string, orden: number, texto?: string) => void,
   sesion?: string | null,
   // FOTO del celular (data URL JPEG ya reducido): viaja en el turno nuevo y la
   // IA la VE (DeepSeek V4.1-Flash es multimodal nativo)
@@ -522,7 +524,13 @@ export async function enviarMensajeStream(
         } else if (datos.tipo === 'audio' && typeof datos.url === 'string') {
           // TTS POR FRASES: una frase ya tiene su audio listo — la cola
           // de reproducción lo toma en orden (puede llegar ANTES del fin)
-          if (onAudio) onAudio(datos.url, Number(datos.orden ?? 0));
+          if (onAudio) {
+            onAudio(
+              datos.url,
+              Number(datos.orden ?? 0),
+              typeof datos.texto === 'string' ? datos.texto : undefined
+            );
+          }
         } else if (datos.tipo === 'fin') {
           onFin({
             emotion: String(datos.emotion ?? 'neutral'),

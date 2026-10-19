@@ -36,7 +36,15 @@ import { fotoDesdeArchivo } from './foto';
 import { ChatSesion, nuevoSaludo, tituloSinEmoji, horaLista } from './tipos';
 
 type ChatsPorPersonaje = Record<string, ChatSesion[]>;
-type AudioEnCola = { url: string; orden: number };
+type AudioEnCola = { url: string; orden: number; texto?: string };
+// [segundo, letras visibles ya dichas] de un clip (ver /api/tts-tiempos)
+type MarcasVoz = [number, number][];
+// El clip que suena AHORA, para escribir el texto al ritmo de la voz: arranca
+// en la letra `base` del mensaje y cubre `largo` letras.
+type ClipVoz = { base: number; largo: number; marcas: MarcasVoz | null };
+// Letras por segundo de la voz de Kira (medido: 17-18): mientras el primer
+// clip suena en streaming todavia no hay marcas, y se estima un pelin abajo
+const LETRAS_POR_SEG = 16;
 
 type AppProps = {
   usuario: UsuarioKira;
@@ -409,6 +417,8 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       audio.pause();
       colaAudioRef.current = [];
       reproduciendoAudioRef.current = false;
+      limiteVozRef.current = Infinity; // el texto ya no espera a la voz
+      clipVozRef.current = null;
       setEscribiendo(false);
       setHablando(false);
       postSilencioso('/api/calla');
@@ -488,7 +498,9 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     audio.onloadedmetadata = () => {
       if (callaTimerRef.current) clearTimeout(callaTimerRef.current);
       const ms = (audio.duration || 0) * 1000;
-      if (ms > 800) {
+      // en streaming la duracion es Infinity: setTimeout(Infinity) dispara YA
+      // (cerraba la boca al arrancar); ahi alcanza con el CALLA del onended
+      if (Number.isFinite(ms) && ms > 800) {
         callaTimerRef.current = setTimeout(() => {
           callaTimerRef.current = null;
           if (!siguePara?.()) postSilencioso('/api/calla');
@@ -511,20 +523,78 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   // AVANZAR LA COLA DE VOZ: reproduce el siguiente chunk en orden (si ya
   // llegó), con prefetch del siguiente mientras suena (calienta el caché
   // del server: la generación Fish del próximo arranca antes).
-  const blobsAudioRef = useRef<Map<string, Promise<Blob>>>(new Map());
-  const obtenerBlobAudio = useCallback((url: string): Promise<Blob> => {
+  // Cada clip se baja entero y DESPUES sus tiempos (el server los tiene recien
+  // cuando termino de generar el audio). Sin tiempos -> null: ritmo parejo.
+  const blobsAudioRef = useRef<Map<string, Promise<{ blob: Blob; marcas: MarcasVoz | null }>>>(
+    new Map()
+  );
+  const obtenerBlobAudio = useCallback((url: string) => {
     const ya = blobsAudioRef.current.get(url);
     if (ya) return ya;
-    const p = fetchKira(url).then((r) => {
+    const p = fetchKira(url).then(async (r) => {
       if (!r.ok) throw new Error(`audio ${r.status}`);
-      return r.blob();
+      const blob = await r.blob();
+      let marcas: MarcasVoz | null = null;
+      if (url.includes('/api/tts-stream/')) {
+        try {
+          const t = await fetchKira(url.replace('/api/tts-stream/', '/api/tts-tiempos/'));
+          if (t.ok) marcas = ((await t.json()) as { marcas?: MarcasVoz }).marcas ?? null;
+        } catch {
+          marcas = null;
+        }
+      }
+      return { blob, marcas };
     });
     p.catch(() => blobsAudioRef.current.delete(url));
     blobsAudioRef.current.set(url, p);
     return p;
   }, []);
 
+  // TEXTO AL RITMO DE LA VOZ (como un transcriptor): con la voz prendida el
+  // typewriter no pasa de lo que Kira ya DIJO. limiteVoz = letras ya dichas
+  // de los clips terminados; clipVoz = el que suena (se mide con currentTime).
+  // Infinity = sin tope (voz apagada, sin audio, o ya termino todo).
+  const limiteVozRef = useRef<number>(Infinity);
+  const clipVozRef = useRef<ClipVoz | null>(null);
+  const finVozRef = useRef(false); // ya llego el 'fin' del stream
+  const liberarVoz = useCallback(() => {
+    limiteVozRef.current = Infinity;
+    clipVozRef.current = null;
+  }, []);
+  const topeVoz = (): number => {
+    const c = clipVozRef.current;
+    if (!c) return limiteVozRef.current;
+    const a = audioElRef.current;
+    const t = a?.currentTime ?? 0;
+    let frac = 0;
+    const m = c.marcas;
+    if (m && m.length > 1 && m[m.length - 1][1] > 0) {
+      // interpolado entre marcas (una por palabra): va letra por letra
+      let n = m[m.length - 1][1];
+      for (let i = 0; i < m.length - 1; i++) {
+        if (t < m[i + 1][0]) {
+          const tramo = m[i + 1][0] - m[i][0];
+          const k = tramo > 0 ? (t - m[i][0]) / tramo : 1;
+          n = m[i][1] + (m[i + 1][1] - m[i][1]) * Math.max(0, k);
+          break;
+        }
+      }
+      frac = n / m[m.length - 1][1];
+    } else if (a && a.duration && Number.isFinite(a.duration)) {
+      frac = t / a.duration;
+    } else if (c.largo > 0) {
+      frac = (t * LETRAS_POR_SEG) / c.largo; // streaming: duracion desconocida
+    }
+    return c.base + Math.round(Math.min(1, frac) * c.largo);
+  };
+
   const avanzarColaAudio = useCallback(() => {
+    // PRECARGA apenas llegan: el TTS se genera recien cuando se pide la URL,
+    // asi que una frase que llega mientras suena otra se pide YA (antes se
+    // pedia al terminar la anterior y quedaba un hueco de ~1 s)
+    colaAudioRef.current
+      .filter((c) => c.orden > ordenAudioRef.current && c.orden <= ordenAudioRef.current + 2)
+      .forEach((c) => obtenerBlobAudio(c.url));
     if (reproduciendoAudioRef.current) return;
     const cabeza = colaAudioRef.current[0];
     if (!cabeza || cabeza.orden !== ordenAudioRef.current) return;
@@ -538,24 +608,59 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       .filter((c) => c.orden > miOrden && c.orden <= miOrden + 2)
       .forEach((c) => obtenerBlobAudio(c.url));
     const hayOtro = () => colaAudioRef.current.some((c) => c.orden === miOrden + 1);
+    // donde empieza este clip en el mensaje (la frase anterior + el espacio)
+    const sincroniza = limiteVozRef.current !== Infinity;
+    const base = sincroniza ? (limiteVozRef.current === 0 ? 0 : limiteVozRef.current + 1) : 0;
+    const largo =
+      cabeza.texto != null ? cabeza.texto.length : Math.max(0, streamObjetivoRef.current.length - base);
+    const terminoClip = () => {
+      // lo de este clip ya se dijo entero; si no viene otro y el stream ya
+      // cerro, se suelta el tope (lo que sobre se escribe normal)
+      if (limiteVozRef.current !== Infinity) {
+        limiteVozRef.current = base + largo;
+        clipVozRef.current = null;
+        if (!hayOtro() && finVozRef.current) liberarVoz();
+      }
+      arrancarTypewriter();
+    };
+    if (miOrden === 0 && !blobsAudioRef.current.has(cabeza.url) && cabeza.url.includes('/api/tts-stream/')) {
+      // LA PRIMERA FRASE suena EN STREAMING (arranca con el primer byte, ~1 s
+      // antes que esperar el mp3 entero). Sus marcas exactas no sirven: el
+      // navegador baja el audio al ritmo en que suena y el server las tiene
+      // recien al final. El texto va al ritmo medido de la voz (LETRAS_POR_SEG).
+      if (limiteVozRef.current !== Infinity) clipVozRef.current = { base, largo, marcas: null };
+      arrancarTypewriter();
+      jugarAudio(cabeza.url, () => {
+        terminoClip();
+        reproduciendoAudioRef.current = false;
+        ordenAudioRef.current = miOrden + 1;
+        avanzarColaAudio();
+      }, hayOtro);
+      return;
+    }
     obtenerBlobAudio(cabeza.url)
-      .then((blob) => {
+      .then(({ blob, marcas }) => {
         blobsAudioRef.current.delete(cabeza.url);
         const objUrl = URL.createObjectURL(blob);
+        if (limiteVozRef.current !== Infinity) clipVozRef.current = { base, largo, marcas };
+        arrancarTypewriter();
         jugarAudio(objUrl, () => {
           URL.revokeObjectURL(objUrl);
+          terminoClip();
           reproduciendoAudioRef.current = false;
           ordenAudioRef.current = miOrden + 1;
           avanzarColaAudio();
         }, hayOtro);
       })
       .catch(() => {
-        // chunk fallido (Fish se atragantó): se salta y sigue con el próximo
+        // chunk fallido: se salta (su texto se muestra igual) y sigue
+        terminoClip();
         reproduciendoAudioRef.current = false;
         ordenAudioRef.current = miOrden + 1;
         avanzarColaAudio();
       });
-  }, [jugarAudio, obtenerBlobAudio]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jugarAudio, obtenerBlobAudio, liberarVoz]);
 
   // Replay manual: reutiliza la cola y el MISMO elemento de audio. No se permite
   // mientras Kira todavía está respondiendo o hablando para no cortar frases.
@@ -601,6 +706,8 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         detenerTypewriter();
         return;
       }
+      const tope = Math.min(objetivo.length, topeVoz());
+      if (revelado >= tope && revelado < objetivo.length) return; // esperando a la voz
       if (revelado >= objetivo.length) {
         // alcanzó el texto actual: pausamos el timer (un próximo delta lo retoma)
         window.clearInterval(streamTimerRef.current!);
@@ -614,7 +721,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       }
       // velocidad adaptativa: un mensaje largo revela más rápido (máx ~4s)
       const vel = Math.max(1, Math.ceil(objetivo.length / 150));
-      const siguiente = Math.min(revelado + vel, objetivo.length);
+      const siguiente = Math.min(revelado + vel, tope);
       streamReveladoRef.current = siguiente;
       const texto = objetivo.slice(0, siguiente);
       setMensajes((m) =>
@@ -677,6 +784,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       });
     }
     // la cola de voz muere con el stream: nada de frases huerfanas sonando
+    liberarVoz();
     colaAudioRef.current = [];
     vistosAudioRef.current.clear();
     ordenAudioRef.current = 0;
@@ -688,7 +796,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     }
     if (audioElRef.current && !audioElRef.current.paused) audioElRef.current.pause();
     postSilencioso('/api/calla');
-  }, [detenerTypewriter]);
+  }, [detenerTypewriter, liberarVoz]);
 
   // Escape corta la respuesta en curso (atajo estándar de los chats IA)
   useEffect(() => {
@@ -1287,6 +1395,10 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     vistosAudioRef.current.clear();
     ordenAudioRef.current = 0;
     reproduciendoAudioRef.current = false;
+    // con voz, el texto sale al ritmo de lo que va diciendo
+    limiteVozRef.current = vozActivadaRef.current ? 0 : Infinity;
+    clipVozRef.current = null;
+    finVozRef.current = false;
     // LA PLACA FISICA TAMBIEN PIENSA: LOADING random en el micro:bit
     // (via serial o por el puente BLE en modo feria) mientras la IA
     // contesta. Sin esto la cara queda congelada en la emocion vieja.
@@ -1302,6 +1414,9 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       // citar sus propias fuentes si le repreguntan. Antes no volvia, por eso
       // no tenia memoria de sus busquedas (ver app/services/rastro.py).
       rastro: m.rol === 'kira' ? (m.rastro ?? null) : null,
+      // la emocion de cada respuesta de Kira: el backend le devuelve a la IA
+      // sus turnos en el mismo JSON que ella produce (ver contenido_para_ia)
+      emotion: m.rol === 'kira' ? (m.emotion ?? null) : null,
     }));
 
     await enviarMensajeStream(
@@ -1335,6 +1450,14 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
           : resp.tts_url
             ? [resp.tts_url]
             : null;
+        finVozRef.current = true;
+        // sin cola de frases (sin voz, TTS caido, respuesta de respaldo) o con
+        // todo ya dicho: el texto no espera a nadie
+        const quedaVoz =
+          colaAudioRef.current.length > 0 ||
+          reproduciendoAudioRef.current ||
+          (resp.tts_urls ?? []).some((u) => !vistosAudioRef.current.has(u));
+        if (!vozActivadaRef.current || !resp.tts_urls?.length || !quedaVoz) liberarVoz();
         const completar = () => {
           if (sesionRespuesta !== respuestaSesionRef.current) return;
           streamPendienteRef.current = false;
@@ -1436,12 +1559,12 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       },
       controller.signal,
       // onAudio: una frase ya tiene su audio listo — a la cola, en orden
-      (url, orden) => {
+      (url, orden, textoFrase) => {
         if (sesionRespuesta !== respuestaSesionRef.current) return;
         if (!vozActivadaRef.current) return;
         if (vistosAudioRef.current.has(url)) return;
         vistosAudioRef.current.add(url);
-        colaAudioRef.current.push({ url, orden });
+        colaAudioRef.current.push({ url, orden, texto: textoFrase });
         colaAudioRef.current.sort((a, b) => a.orden - b.orden);
         avanzarColaAudio();
       },

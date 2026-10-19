@@ -101,6 +101,7 @@ async def test_app() -> None:
         "/api/chat": {"post"},
         "/api/chat/stream": {"post"},
         "/api/tts-stream/{tts_id}": {"get"},
+        "/api/tts-tiempos/{tts_id}": {"get"},   # la web escribe al ritmo de la voz
         "/api/loading": {"post"},
         "/api/voz": {"post"},
         "/api/talk": {"post"},
@@ -117,7 +118,7 @@ async def test_app() -> None:
     }
     openapi = ks.app.openapi()
     actual = {ruta: set(metodos) for ruta, metodos in openapi["paths"].items()}
-    chequear(actual == esperado, "las 37 rutas API conservan path y método", sorted(actual.items()))
+    chequear(actual == esperado, "las 38 rutas API conservan path y método", sorted(actual.items()))
 
     print("\n== 2) endpoints movidos a routers ==")
     transport = httpx.ASGITransport(app=ks.app)

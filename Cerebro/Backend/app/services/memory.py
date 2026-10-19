@@ -90,6 +90,7 @@ class MemoryStore:
                     "memory_class",
                     "durable",
                     "field",
+                    "sesion",
                     "memory_key",
                     "confidence",
                     "evidence",

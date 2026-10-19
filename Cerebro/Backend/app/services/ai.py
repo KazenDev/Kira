@@ -16,7 +16,13 @@ from typing import Any
 
 import httpx
 
-from app.domain.streaming import extraer_message_parcial, limpiar_json_ia, sse_event
+from app.domain.streaming import (
+    como_objeto,
+    extraer_message_parcial,
+    limpiar_json_ia,
+    quitar_muletillas,
+    sse_event,
+)
 
 TIMEOUT_IA = httpx.Timeout(connect=8.0, read=20.0, write=15.0, pool=8.0)
 ESTADOS_REINTENTABLES = {408, 409, 429, 500, 502, 503, 504}
@@ -45,6 +51,46 @@ def reiniciar_enfriamientos() -> None:
 
 class StreamVacio(Exception):
     """HTTP 200 completed without a single content delta."""
+
+
+def _parece_json(texto: str) -> bool:
+    # "[1713706487]" o "[{...}]" es JSON; "[sighs] bueno..." es texto con un
+    # audio tag adelante
+    return texto.startswith("{") or (texto.startswith("[") and not __import__("re").match(r"\[[A-Za-z]", texto))
+
+
+def _salida_util(buffer: str) -> bool:
+    """¿Se puede sacar una respuesta de esto? Un JSON con message/tool, o
+    texto plano (el respaldo a veces contesta sin JSON: se rescata). Basura
+    como '[1713706487]' o nada: no, y entonces se reintenta."""
+    texto = limpiar_json_ia(buffer).strip()
+    if not texto:
+        return False
+    try:
+        obj = como_objeto(json.loads(texto))
+        return bool(obj.get("message") or obj.get("tool"))
+    except Exception:
+        return not _parece_json(texto) or bool(extraer_message_parcial(texto))
+
+
+def rescatar_salida(buffer: str) -> dict:
+    """La salida como objeto, rescatando lo que se pueda: texto plano -> el
+    mensaje; JSON cortado -> lo que alcanzo a decir. Antes estos casos eran
+    'La IA devolvio una respuesta incompleta' aunque el texto sirviera."""
+    texto = limpiar_json_ia(buffer).strip()
+    try:
+        return como_objeto(json.loads(texto))
+    except Exception:
+        pass
+    emo = _EMOCION_PARCIAL.search(texto)
+    if texto.startswith("{"):
+        parcial = extraer_message_parcial(texto)
+        if parcial:
+            return {"emotion": emo.group(1) if emo else "neutral", "message": parcial.strip()}
+        return {}
+    if texto and not _parece_json(texto):
+        return {"emotion": "neutral", "message": texto}
+    return {}
 
 
 class AIProvider:
@@ -94,10 +140,24 @@ class AIProvider:
         return type(error).__name__
 
     def has_fallback(self, index: int) -> bool:
-        return index + 1 < len(self.config.PROVEEDORES_IA)
+        # Respaldo = un proveedor mas adelante que PUEDA andar (con key). Si
+        # ninguno tiene key (tests sin red), cualquiera cuenta: es el
+        # comportamiento de siempre.
+        siguientes = self.config.PROVEEDORES_IA[index + 1:]
+        if not siguientes:
+            return False
+        con_key = [p for p in self.config.PROVEEDORES_IA if str(p.get("api_key") or "").strip()]
+        if not con_key:
+            return True
+        return any(str(p.get("api_key") or "").strip() for p in siguientes)
 
-    @staticmethod
-    def enfriando(provider: dict) -> bool:
+    def enfriando(self, provider: dict) -> bool:
+        # Un proveedor SIN key no esta "enfriando": no va a andar nunca. Antes
+        # se le gastaban 3 intentos (LocalProtocolError por el header vacio)
+        # justo cuando los demas ya habian fallado.
+        if not str(provider.get("api_key") or "").strip() and any(
+                str(p.get("api_key") or "").strip() for p in self.config.PROVEEDORES_IA):
+            return True
         return time.monotonic() < _enfriado_hasta.get(provider["nombre"], 0.0)
 
     @staticmethod
@@ -131,9 +191,10 @@ class AIProvider:
             f"CAE AL RESPALDO: {next_provider}"
         )
 
-    async def post_json(self, payload: dict, intentos: int = MAX_INTENTOS_IA) -> dict:
+    async def post_json(self, payload: dict, intentos: int = MAX_INTENTOS_IA, inicio: int = 0) -> dict:
         last_error: Exception | None = None
-        primero = self.saltar_enfriados(0)
+        inicio = min(max(inicio, 0), len(self.config.PROVEEDORES_IA) - 1)
+        primero = self.saltar_enfriados(inicio)
         for provider_index, provider in enumerate(self.config.PROVEEDORES_IA):
             if provider_index < primero:
                 continue
@@ -211,6 +272,7 @@ class AIProvider:
             provider = self.config.PROVEEDORES_IA[provider_index]
             payload = self.body(payload_base, provider)
             buffer = ""
+            emitio_delta = False
             try:
                 yield sse_event({"tipo": "esperando", "intento": attempt + 1})
                 async with AsyncExitStack() as stack:
@@ -261,6 +323,8 @@ class AIProvider:
                             buffer += delta
                             partial = extraer_message_parcial(buffer)
                             if partial is not None:
+                                partial = quitar_muletillas(partial)
+                                emitio_delta = True
                                 # La emocion viene ANTES del mensaje en el JSON:
                                 # con ella la voz de las primeras frases ya sale
                                 # con su tono, sin esperar al final.
@@ -268,6 +332,10 @@ class AIProvider:
                                 yield sse_event({"tipo": "delta", "texto": partial,
                                                  **({"emotion": emo.group(1)} if emo else {})})
                 if not buffer:
+                    raise StreamVacio()
+                if not emitio_delta and not _salida_util(buffer):
+                    # Nada utilizable y todavia no se mostro nada: reintentar
+                    print(f"[IA] salida inutilizable de {provider['nombre']}: {buffer[:60]!r}")
                     raise StreamVacio()
                 break
             except (
@@ -348,7 +416,6 @@ class AIProvider:
                 return
         buffer = limpiar_json_ia(buffer)
         box["buffer"] = buffer
-        try:
-            box["salida"] = json.loads(buffer)
-        except Exception:
-            box["salida"] = {}
+        box["salida"] = rescatar_salida(buffer)
+        if isinstance(box["salida"].get("message"), str):
+            box["salida"]["message"] = quitar_muletillas(box["salida"]["message"])

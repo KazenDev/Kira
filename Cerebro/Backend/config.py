@@ -144,15 +144,18 @@ EMOCION_SERIAL = {
 #   - emociones vivas -> mas creatividad (chistes, exagerar)
 #   - emociones secas -> un pelin mas abajo, pero SIEMPRE hablado natural
 TEMPERATURAS = {
-    "happy": 1.25,
+    "happy": 1.1,      # 1.25 medido con eval_charla.py: palabras rotas ("Charies")
     "sad": 0.85,
     "angry": 0.9,
-    "surprised": 1.2,
+    "surprised": 1.1,
     "neutral": 1.0,
     "fastidio": 0.8,
     "miedo": 0.85,
     "cansado": 0.8,
 }
+# Con un dato REAL en la mano (tras una herramienta) se baja: a 1.0+ el modelo
+# escribia "noroeste... no, noreste" leyendo un "noreste" del resultado.
+TEMP_CON_DATO = 0.6
 TEMP_INICIAL = 1.0   # arranca en neutral
 RAMP_PASO = 0.1      # la temperatura sube/baja de a 0.1 por respuesta (transicion suave)
 

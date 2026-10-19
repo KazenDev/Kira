@@ -41,6 +41,7 @@ class BackendContext:
     transcribir: Callable[[Any], Awaitable[Any]]
     grabar: Callable[[dict], Awaitable[Any]]
     escuchar: Callable[[], Awaitable[Any]]
+    tts_tiempos: Callable[[str], list | None] | None = None
 
 
 def get_backend_context(request: Request) -> BackendContext:

@@ -59,6 +59,58 @@ def extraer_message_parcial(buffer: str) -> str | None:
         return match.group(1)
 
 
+# Muletillas de asistente que el modelo suelta igual aunque el prompt las
+# prohiba (medido con eval_charla.py: "buena esa" en 1 de cada 3 respuestas a
+# una pregunta). Se borran del texto ACUMULADO, asi pantalla, voz e historial
+# ven lo mismo.
+_MULETILLA = re.compile(
+    r"(^|[.!?…]\s+|,\s+)¡?(?:qu[eé]\s+)?buena\s+(?:pregunta|esa)\b(?:,\s*parce)?[.,:!?…]*\s*",
+    re.I,
+)
+
+
+# "che" es argentino: el voseo del prompt a veces arrastra al modelo para alla
+_CHE = re.compile(r",?\s*\bche\b(?!\s+guevara)(?=[\s,.!?…]|$),?", re.I)
+
+
+def quitar_muletillas(texto: str) -> str:
+    if texto and _CHE.search(texto):
+        texto = _CHE.sub("", texto).lstrip()
+        texto = texto[:1].upper() + texto[1:] if texto[:1].islower() else texto
+
+    def _cambio(m: re.Match) -> str:
+        return m.group(1) + "\0"   # marca: lo que sigue va con mayuscula/minuscula
+
+    limpio = _MULETILLA.sub(_cambio, texto or "")
+    if "\0" not in limpio:
+        return texto
+
+    partes = limpio.split("\0")
+    out = partes[0]
+    for resto in partes[1:]:
+        if resto:
+            despues_de_coma = out.rstrip().endswith(",")
+            resto = (resto[0].lower() if despues_de_coma else resto[0].upper()) + resto[1:]
+        out += resto
+    out = out.strip()
+    # "Ah, " + nada (la muletilla era todo lo que habia hasta ahora)
+    return out[:-1] if out.endswith(",") else out
+
+
+def como_objeto(salida):
+    """La salida de la IA tiene que ser UN objeto {emotion, message, tool}.
+    A veces el modelo devuelve una LISTA con el objeto adentro (medido: con el
+    ejemplo de varias herramientas en el prompt) y el backend se caia a mitad
+    de la respuesta con 'list' object has no attribute 'get'."""
+    if isinstance(salida, dict):
+        return salida
+    if isinstance(salida, list):
+        for item in salida:
+            if isinstance(item, dict) and ("message" in item or "emotion" in item or "tool" in item):
+                return item
+    return {}
+
+
 def sse_event(datos: dict) -> str:
     return f"data: {json.dumps(datos, ensure_ascii=False)}\n\n"
 

@@ -33,6 +33,9 @@ class SerialTransport:
         # con numero de secuencia y la web las pide con /api/eventos.
         self._eventos: collections.deque = collections.deque(maxlen=50)
         self._seq_evento = 0
+        # El ENTORNO que la placa mide sola cada 2 s (AMBIENTE:ruido:base:
+        # actividad:movimiento): no es un ACK ni un evento, es el estado.
+        self.ambiente: dict | None = None
         self._exclusive_request = threading.Lock()
         self._stop_event = threading.Event()
         self._ser: serial.Serial | None = None
@@ -397,6 +400,8 @@ class SerialTransport:
                     self.patron_leds = patron[:25]
                     self.patron_leds_time = time.time()
                 continue
+            if self._registrar_ambiente(texto):
+                continue
             self.ultimo_ack = texto
             self.ultimo_ack_time = time.time()
             self.respondiendo = True
@@ -424,6 +429,19 @@ class SerialTransport:
         with self._lock:
             self._seq_evento += 1
             self._eventos.append({"seq": self._seq_evento, "linea": texto, "t": time.time()})
+
+    def _registrar_ambiente(self, texto: str) -> bool:
+        if not texto.startswith("AMBIENTE:"):
+            return False
+        try:
+            ruido, base, actividad, mov = (int(x) for x in texto.split(":")[1:5])
+        except ValueError:
+            return True
+        with self._lock:
+            piso = base if not self.ambiente else min(self.ambiente.get("piso", base), base)
+            self.ambiente = {"ruido": ruido, "base": base, "actividad": actividad,
+                             "mov": mov, "piso": piso, "t": time.time()}
+        return True
 
     def eventos_desde(self, desde: int) -> tuple[int, list[dict]]:
         """(ultimo seq, eventos con seq > desde). desde<0 = solo el seq actual
@@ -549,6 +567,8 @@ class SerialTransport:
             if len(patron) >= 25:
                 self.patron_leds = patron[:25]
                 self.patron_leds_time = time.time()
+            return
+        if self._registrar_ambiente(texto):
             return
         # log del viaje placa -> server (los LED: son ruido, no se imprimen)
         print(f"[BLE RELAY] << {texto}")

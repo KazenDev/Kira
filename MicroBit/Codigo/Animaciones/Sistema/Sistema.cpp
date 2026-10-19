@@ -334,6 +334,7 @@ void procesarComando(ManagedString cmd)
             ms = ms * 10 + (c - '0');
         }
         if (ms > 0 && ms <= 20000) {
+            vidaOidoPausar();   // el grabador necesita el microfono solo
             grabarIniciar();
             uBit.sleep(ms);
             grabarDetener();
@@ -447,6 +448,19 @@ void procesarComando(ManagedString cmd)
     else if (cmd == "CLIMA:NORMAL") vidaClima(0);
     else if (cmd == "CLIMA:AUTO")   vidaClima(-1);
     else if (cmd == "PICAR")        vidaPicar();
+    // Lo que la IA muestra en los LEDs y hace sonar (herramientas):
+    // ICONO:<nombre>, TEXTO:<texto>, FLECHA:<grados 0-359>, TIMER:<segundos>
+    // (TIMER:0 lo cancela), MELODIA:<1-4>
+    else if (cmd.substring(0, 6) == "ICONO:") vidaIcono(cmd.substring(6, cmd.length() - 6).toCharArray(), 4500);
+    else if (cmd.substring(0, 6) == "TEXTO:") vidaTexto(cmd.substring(6, cmd.length() - 6).toCharArray());
+    else if (cmd.substring(0, 7) == "FLECHA:") vidaFlecha(leerNumero(cmd, 7) % 360, 12000);
+    else if (cmd.substring(0, 6) == "TIMER:")  vidaTimer((uint32_t)leerNumero(cmd, 6));
+    else if (cmd.substring(0, 8) == "MELODIA:") {
+        int n = leerNumero(cmd, 8);
+        if (n >= 1 && n <= 4) sonidoTocar((uint8_t)(S_MEL_CUMPLE + n - 1));
+    }
+    else if (cmd == "OIDO:ON")      vidaOido(true);
+    else if (cmd == "OIDO:OFF")     vidaOido(false);
     else if (cmd == "LUZ:ON")       vidaLuz(true);
     else if (cmd == "LUZ:OFF")      vidaLuz(false);
     else if (cmd == "VIDA:?")       vidaDiagnostico();

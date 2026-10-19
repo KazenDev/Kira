@@ -50,6 +50,8 @@ uint32_t duracionReaccion(uint8_t r)
         case R_ACALORADA:  return 2400;
         case R_DESLUMBRADA: return 1500;
         case R_CAIDA:      return 1500;
+        case R_ATENTA:     return 1500;
+        case R_APLAUSO:    return 1700;
         default:           return 0;    // DORMIR: hasta que alguien la despierte
     }
 }
@@ -385,6 +387,35 @@ static void caida(Lienzo &l, float te)
     px(l, 1, 4.3f, g, 0, dy);  px(l, 2, 4.3f, g, 0, dy);  px(l, 3, 4.3f, g, 0, dy);
 }
 
+static void atenta(Lienzo &l, float te)
+{
+    // "¿Quién anda ahí?": ojos que se abren, miran a un lado y al otro, y
+    // una ceja que se levanta
+    float q = te / 1.5f;
+    float mira = 0.7f * sinf(6.2831853f * q) * campana(q, 0.1f);
+    float alto = campana(q, 0.15f);
+    float dy = -0.2f * campana(q / 0.3f, 0.4f);
+    px(l, 1 + mira, 1, 1.0f, 0, dy);
+    px(l, 3 + mira, 1, 1.0f, 0, dy);
+    px(l, 1 + mira, 0, 0.7f * alto, 0, dy);
+    px(l, 3 + mira, 0, 0.7f * alto, 0, dy);
+    px(l, 2, 3, 0.75f, 0, dy);                  // boquita "o"
+}
+
+static void aplauso(Lienzo &l, float te)
+{
+    // Ojos ^ ^, sonrisa y brillitos que saltan por las esquinas
+    float dy = -0.25f * fabsf(sinf(6.2831853f * 2.0f * te));
+    px(l, 1, 0, 1.0f, 0, dy);  px(l, 3, 0, 1.0f, 0, dy);
+    px(l, 0, 1, 0.8f, 0, dy);  px(l, 2, 1, 0.8f, 0, dy);  px(l, 4, 1, 0.8f, 0, dy);
+    px(l, 0, 3, 0.8f, 0, dy);  px(l, 4, 3, 0.8f, 0, dy);
+    px(l, 1, 4, 0.9f, 0, dy);  px(l, 2, 4, 0.9f, 0, dy);  px(l, 3, 4, 0.9f, 0, dy);
+    float b1 = sinf(6.2831853f * 4.0f * te) > 0.5f ? 0.7f : 0.0f;
+    float b2 = sinf(6.2831853f * 4.0f * te + 2.1f) > 0.5f ? 0.7f : 0.0f;
+    px(l, 0, 0, b1, 0, 0);  px(l, 4, 0, b2, 0, 0);
+    px(l, 2, 2, b2 * 0.6f, 0, 0);
+}
+
 void dibujarReaccion(Lienzo &l, const EstadoCara &c, uint8_t r, uint32_t desde)
 {
     float te = (float)(c.t - desde) * 0.001f;
@@ -407,6 +438,8 @@ void dibujarReaccion(Lienzo &l, const EstadoCara &c, uint8_t r, uint32_t desde)
         case R_ACALORADA:  acalorada(l, te); break;
         case R_DESLUMBRADA: deslumbrada(l, te); break;
         case R_CAIDA:      caida(l, te); break;
+        case R_ATENTA:     atenta(l, te); break;
+        case R_APLAUSO:    aplauso(l, te); break;
         default: break;
     }
 }

@@ -188,8 +188,8 @@ def test_unitarios():
     )
     check(
         "el formato de brújula avisa cuando falta calibración",
-        "necesita calibración" in ks.formatear_sensor("leer_brujula", "BRUJULA:-1:4200:0")
-        and "rumbo 135" in ks.formatear_sensor("leer_brujula", "BRUJULA:135:4200:1"),
+        "NO está calibrada" in ks.formatear_sensor("leer_brujula", "BRUJULA:-1:4200:0")
+        and "sureste (135 grados" in ks.formatear_sensor("leer_brujula", "BRUJULA:135:4200:1"),
         ks.formatear_sensor("leer_brujula", "BRUJULA:-1:4200:0"),
     )
     check(
@@ -269,7 +269,7 @@ class _Stub:
         yield  # (hace que sea un async generator)
 
 
-async def _correr(stub: _Stub, ejecutar=None, pj_extra=None):
+async def _correr(stub: _Stub, ejecutar=None, pj_extra=None, mensaje="hola"):
     """Corre el endpoint /api/chat/stream con stubs. Devuelve el crudo SSE."""
     originals = {
         "stream": ks._stream_ia,
@@ -302,7 +302,7 @@ async def _correr(stub: _Stub, ejecutar=None, pj_extra=None):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as cliente:
             async with cliente.stream(
                 "POST", "/api/chat/stream",
-                json={"personaje": "kira", "mensaje": "hola", "historia": []},
+                json={"personaje": "kira", "mensaje": mensaje, "historia": []},
             ) as r:
                 return "".join([parte async for parte in r.aiter_text()])
     finally:
@@ -388,6 +388,38 @@ async def test_dedup():
     check("cerro con 'fin'", len(fin) == 1, crudo[:200])
 
 
+async def test_promesa():
+    print("\n== 8) ENDPOINT: dice 'ahi va' / 'ya te busco' SIN la herramienta -> ronda de aviso ==")
+    llamadas: list[str] = []
+
+    def tool_falsa(nombre, args=None):
+        llamadas.append(nombre)
+        return {"ok": True, "resultado": "Sonando 'cumpleaños' por tu parlante."}
+
+    stub = _Stub([
+        {"emotion": "happy", "message": "Ahí va la melodía.", "tool": None},
+        {"emotion": "happy", "message": "", "tool": {"nombre": "tocar_melodia", "cual": "cumpleaños"}},
+        {"emotion": "happy", "message": "¡Sonando!", "tool": None},
+    ])
+    await _correr(stub, ejecutar=tool_falsa, mensaje="tocame feliz cumpleaños")
+    check("pedido de melodia sin tool: se le avisa y la toca", llamadas == ["tocar_melodia"],
+          f"llamadas={llamadas} rondas={len(stub.rondas)}")
+    aviso = stub.rondas[1][-1] if len(stub.rondas) > 1 else ""
+    check("el aviso nombra la herramienta", "tocar_melodia" in aviso, aviso[:120])
+
+    llamadas.clear()
+    stub = _Stub([
+        {"emotion": "neutral", "message": "Dame un segundo que te averiguo.", "tool": None},
+        {"emotion": "neutral", "message": "Edison murió un día como hoy.", "tool": None},
+    ])
+    await _correr(stub, ejecutar=tool_falsa, mensaje="¿qué pasó un día como hoy?")
+    check("promesa de buscar: hay ronda de aviso", len(stub.rondas) == 2, f"rondas={len(stub.rondas)}")
+
+    stub = _Stub([{"emotion": "happy", "message": "¡Hola! ¿Cómo te llamás?", "tool": None}])
+    await _correr(stub, ejecutar=tool_falsa, mensaje="hola")
+    check("charla normal: UNA sola ronda", len(stub.rondas) == 1, f"rondas={len(stub.rondas)}")
+
+
 def main():
     global FALLOS
     solo_unitarios = "--solo-unitarios" in sys.argv
@@ -400,6 +432,7 @@ def main():
             asyncio.run(test_multi_tool())
             asyncio.run(test_tope())
             asyncio.run(test_dedup())
+            asyncio.run(test_promesa())
         else:
             print("\n(integracion de endpoint salteada)")
     except Exception:

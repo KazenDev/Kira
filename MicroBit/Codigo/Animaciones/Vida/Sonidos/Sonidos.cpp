@@ -24,6 +24,20 @@ static uint32_t ultimoGesto = 0;
 
 static char codigo[MAX_CODIGO];
 
+// Duracion REAL de un sonido codificado: la suma del campo de duracion
+// [9-12] de cada segmento (las melodias duran 5 s: el oido no tiene que
+// escucharlas como si fuera gente)
+static uint32_t duracionCodigo(const char *c, int n)
+{
+    uint32_t total = 0;
+    for (int i = 0; i + CHARS_NOTA <= n; i += CHARS_NOTA + 1) {
+        uint32_t d = 0;
+        for (int k = 9; k < 13; k++) d = d * 10 + (uint32_t)(c[i + k] - '0');
+        total += d;
+    }
+    return total;
+}
+
 static float azar01()
 {
     return (float)uBit.random(10000) / 10000.0f;
@@ -53,9 +67,7 @@ static void fibraSonidos()
                     uBit.audio.setSpeakerEnabled(true);
                     uBit.audio.setVolume(volumen);
                     uBit.audio.soundExpressions.playAsync(ManagedString(codigo));
-                    // Techo de duracion: el sonido mas largo del catalogo
-                    // (mareo, ~1,1 s con el azar)
-                    finSonando = uBit.systemTime() + 1500;
+                    finSonando = uBit.systemTime() + duracionCodigo(codigo, n) + 150;
                 }
             }
         }
@@ -102,6 +114,11 @@ void sonidoSilenciar(bool silencio)
 bool sonidoSilenciado()
 {
     return silenciado;
+}
+
+bool sonidoSonando()
+{
+    return pedido != S_NADA || (int32_t)(finSonando - uBit.systemTime()) > 0;
 }
 
 void sonidoVolumen(int v)

@@ -22,6 +22,7 @@
 # ================================================================================
 
 import asyncio
+import contextvars
 import json
 import os
 import random
@@ -43,6 +44,7 @@ from fastapi.staticfiles import StaticFiles
 import config
 from app.dependencies import BackendContext
 from app.domain.streaming import (
+    como_objeto,
     EMOCIONES_VALIDAS,
     REGEX_MESSAGE,
     SINONIMOS_EMOCION,
@@ -91,6 +93,7 @@ from app.intelligence.retrieval import (
 from app.main import create_app
 from app.services.auth import AuthStore
 from app.services import clima as clima_service
+from app.services import mundo as mundo_service
 from app.services import rastro as rastro_service
 from app.services.tenancy import (
     StatesProxy,
@@ -163,8 +166,25 @@ async def esperar_reintento(intento: int, respuesta: httpx.Response | None = Non
     await _ai_provider().esperar_reintento(intento, respuesta)
 
 
+# Tareas que nadie espera en vivo (memoria, reflexion, diario) arrancan por
+# el RESPALDO. Medido con eval_charla.py: cada turno disparaba 3-4 llamadas de
+# fondo al gateway y eso gastaba su limite gratis (429) en plena charla. Asi
+# el principal queda para lo que la persona esta esperando. Va por contexto
+# (y no por parametro) para que la firma de post_json_ia no cambie.
+_en_fondo: contextvars.ContextVar[bool] = contextvars.ContextVar("kira_ia_fondo", default=False)
+
+
+class en_fondo:
+    def __enter__(self):
+        self._token = _en_fondo.set(True)
+
+    def __exit__(self, *exc):
+        _en_fondo.reset(self._token)
+        return False
+
+
 async def post_json_ia(payload: dict, intentos: int = MAX_INTENTOS_IA) -> dict:
-    return await _ai_provider().post_json(payload, intentos)
+    return await _ai_provider().post_json(payload, intentos, inicio=1 if _en_fondo.get() else 0)
 
 
 # ---------------------------------------------------------------------------
@@ -270,19 +290,21 @@ IMPORTANCIA_SISTEMA = (
 
 
 async def texto_ia(
-    sistema: str, usuario: str, max_tokens: int = 200, temperatura: float = 0.5
+    sistema: str, usuario: str, max_tokens: int = 200, temperatura: float = 0.5,
 ) -> str:
     """Consulta de texto libre a la IA (sin JSON mode) con el mismo cliente
-    resiliente (reintentos + backoff) que el chat principal."""
-    r = await post_json_ia({
-        "model": config.MODELO_IA,
-        "messages": [
-            {"role": "system", "content": sistema},
-            {"role": "user", "content": usuario},
-        ],
-        "max_tokens": max(max_tokens, config.MIN_TOKENS_IA),
-        "temperature": temperatura,
-    })
+    resiliente (reintentos + backoff) que el chat principal. Se usa en tareas
+    de fondo (memo, reflexion...): por defecto va por el respaldo."""
+    with en_fondo():
+        r = await post_json_ia({
+            "model": config.MODELO_IA,
+            "messages": [
+                {"role": "system", "content": sistema},
+                {"role": "user", "content": usuario},
+            ],
+            "max_tokens": max(max_tokens, config.MIN_TOKENS_IA),
+            "temperature": temperatura,
+        })
     return str(r["choices"][0]["message"]["content"]).strip()
 
 
@@ -398,16 +420,18 @@ def _es_identidad_semantica(record: dict) -> bool:
     )
 
 
-async def memoria_extraer_factos(pj_id: str, nombre: str, turnos: list[dict]) -> list[dict]:
+async def memoria_extraer_factos(pj_id: str, nombre: str, turnos: list[dict],
+                                 sesion: str | None = None) -> list[dict]:
     """Pide al LLM hechos durables y sólo guarda los que tienen evidencia."""
     scope = current_scope()
     scope_key = scope.user_id if scope is not None else "legacy"
     lock = _memory_extraction_locks.setdefault(f"{scope_key}:{pj_id}", asyncio.Lock())
     async with lock:
-        return await _memoria_extraer_factos_locked(pj_id, nombre, turnos)
+        return await _memoria_extraer_factos_locked(pj_id, nombre, turnos, sesion)
 
 
-async def _memoria_extraer_factos_locked(pj_id: str, nombre: str, turnos: list[dict]) -> list[dict]:
+async def _memoria_extraer_factos_locked(pj_id: str, nombre: str, turnos: list[dict],
+                                         sesion: str | None = None) -> list[dict]:
     turnos = [turno for turno in turnos if isinstance(turno, dict)]
     usuario = [
         str(turno.get("contenido", ""))
@@ -427,16 +451,17 @@ async def _memoria_extraer_factos_locked(pj_id: str, nombre: str, turnos: list[d
         for turno in turnos[-8:]
     )
     try:
-        respuesta = await post_json_ia({
-            "model": config.MODELO_IA,
-            "messages": [
-                {"role": "system", "content": EXTRACCION_MEMORIA_SISTEMA.format(nombre=nombre)},
-                {"role": "user", "content": f"[Conversación]\n{transcripcion}"},
-            ],
-            "response_format": config.JSON_MODE,
-            "max_tokens": max(256, config.MIN_TOKENS_IA),
-            "temperature": 0.0,
-        })
+        with en_fondo():
+            respuesta = await post_json_ia({
+                "model": config.MODELO_IA,
+                "messages": [
+                    {"role": "system", "content": EXTRACCION_MEMORIA_SISTEMA.format(nombre=nombre)},
+                    {"role": "user", "content": f"[Conversación]\n{transcripcion}"},
+                ],
+                "response_format": config.JSON_MODE,
+                "max_tokens": max(256, config.MIN_TOKENS_IA),
+                "temperature": 0.0,
+            })
         message = respuesta["choices"][0]["message"]
         contenido = str(message.get("content") or message.get("reasoning_content") or "")
         datos = json.loads(limpiar_json_ia(contenido))
@@ -498,6 +523,9 @@ async def _memoria_extraer_factos_locked(pj_id: str, nombre: str, turnos: list[d
                 "source": "llm_memory_extraction",
                 "memory_class": "semantic",
                 "durable": True,
+                # De que charla salio: en la feria una misma cuenta la usa
+                # mucha gente, y el nombre de uno no es el del siguiente
+                **({"sesion": str(sesion)} if sesion else {}),
                 "confidence": round(confianza, 3),
                 "evidence": evidencia[:300],
                 "identity": tipo == "identidad",
@@ -571,7 +599,7 @@ def memoria_identidad_actual(pj_id: str) -> dict | None:
     return None
 
 
-def memoria_identidad_bloque(pj_id: str) -> str:
+def memoria_identidad_bloque(pj_id: str, sesion: str | None = None) -> str:
     record = memoria_identidad_actual(pj_id)
     if not record:
         return ""
@@ -579,6 +607,17 @@ def memoria_identidad_bloque(pj_id: str) -> str:
     if not texto:
         return ""
     frase = texto if texto.endswith((".", "!", "?")) else f"{texto}."
+    if sesion and str(record.get("sesion") or "") != str(sesion):
+        # Lo dijo en OTRA charla. En la feria la misma pantalla la usa mucha
+        # gente: medido con eval_charla.py, Kira le decia "Mateo" a todos los
+        # visitantes que vinieron despues del nene que se presento.
+        return (
+            "\n\n# ALGUIEN QUE CONOCISTE EN OTRA CHARLA\n"
+            f"{frase} Pero eso fue en otra charla, y desde esta pantalla te habla mucha "
+            "gente distinta: NO asumas que quien te habla ahora es esa persona ni la "
+            "llames por ese nombre. Si viene al caso, preguntá con gracia si es la misma "
+            "persona; si te confirma, ahí sí."
+        )
     return (
         "\n\n# IDENTIDAD RECORDADA POR EL USUARIO\n"
         f"{frase} Es un dato que el usuario te dio explícitamente; "
@@ -605,7 +644,7 @@ async def memoria_memo_post_charla(
             for t in turnos[-8:]
         )
         if recordar_hechos:
-            await memoria_extraer_factos(pj_id, nombre, turnos)
+            await memoria_extraer_factos(pj_id, nombre, turnos, sesion=sesion)
         if not recordar_experiencias:
             return
         memo = await texto_ia(
@@ -1004,19 +1043,20 @@ async def diario_fusionar(pj_id: str, nombre: str, pensamientos: list[dict]):
                 "sin texto de mas y sin cortarte: si te quedas sin espacio, "
                 "reducí opiniones pero cerrá el JSON."
             )
-            r = await post_json_ia({
-                "model": config.MODELO_IA,
-                "messages": [
-                    {"role": "system", "content": DIARIO_MERGE_SISTEMA.format(nombre=nombre) + extra},
-                    {"role": "user", "content": (
-                        f"[Su diario actual]\n{bloque_diario}\n\n"
-                        f"[Pensamientos nuevos de esta reflexion]\n{bloque_pensamientos}"
-                    )},
-                ],
-                "response_format": config.JSON_MODE,
-                "max_tokens": 1600,
-                "temperature": 0.6,
-            })
+            with en_fondo():
+                r = await post_json_ia({
+                    "model": config.MODELO_IA,
+                    "messages": [
+                        {"role": "system", "content": DIARIO_MERGE_SISTEMA.format(nombre=nombre) + extra},
+                        {"role": "user", "content": (
+                            f"[Su diario actual]\n{bloque_diario}\n\n"
+                            f"[Pensamientos nuevos de esta reflexion]\n{bloque_pensamientos}"
+                        )},
+                    ],
+                    "response_format": config.JSON_MODE,
+                    "max_tokens": 1600,
+                    "temperature": 0.6,
+                })
             try:
                 propuesta = _parsear(r["choices"][0]["message"]["content"])
                 break
@@ -1475,6 +1515,7 @@ backend_context = BackendContext(
     transcribir=_transcribir_desde_runtime,
     grabar=_grabar_desde_runtime,
     escuchar=_escuchar_desde_runtime,
+    tts_tiempos=lambda tts_id: speech_service.get_tiempos(tts_id),
 )
 
 app = create_app(backend_context, lifespan)
@@ -1551,7 +1592,7 @@ async def api_chat(body: dict):
             historial,
             incluir_recientes=not bool(historial),
         )
-    bloque_identidad = memoria_identidad_bloque(personaje) if usar_memoria and preferencias["hechos"] else ""
+    bloque_identidad = memoria_identidad_bloque(personaje, sesion) if usar_memoria and preferencias["hechos"] else ""
     bloque_diario = memoria_diario_bloque(personaje) if usar_memoria else ""
     messages = [{"role": "system", "content": pj["system_prompt"] + bloque_identidad + bloque_diario + bloque_recuerdos}]
     for h in historial[-8:]:  # contexto corto: las ultimas 8
@@ -1578,7 +1619,7 @@ async def api_chat(body: dict):
     try:
         r = await post_json_ia(payload_ia)
         content = r["choices"][0]["message"]["content"]
-        salida = json.loads(content)  # {emotion, message}
+        salida = como_objeto(json.loads(content))  # {emotion, message}
     except httpx.HTTPStatusError as e:
         raise HTTPException(502, f"La IA fallo ({e.response.status_code}): {e.response.text[:200]}")
     except (json.JSONDecodeError, KeyError) as e:
@@ -1743,6 +1784,58 @@ HERRAMIENTAS: dict[str, dict] = {
         "comando": None,
         "prefijo": None,
     },
+    "pronostico": {
+        "descripcion": (f"Pronóstico de {config.CLIMA_LOC}: si va a llover en las próximas horas, "
+                        "temperaturas que vienen, viento (de dónde viene y si te da de frente o de "
+                        "costado según tu brújula), índice UV, a qué hora sale y se pone el sol y en "
+                        "qué fase está la luna."),
+        "comando": None, "prefijo": None,
+    },
+    "calidad_aire": {
+        "descripcion": f"Calidad del aire ahora en {config.CLIMA_LOC} (índice y partículas finas).",
+        "comando": None, "prefijo": None,
+    },
+    "sismos_cercanos": {
+        "descripcion": f"Los últimos sismos registrados cerca de {config.CLIMA_LOC} (USGS): magnitud, cuándo y a qué distancia.",
+        "comando": None, "prefijo": None,
+    },
+    "wikipedia": {
+        "descripcion": ("Resumen de Wikipedia en español sobre un tema, persona, lugar, animal o "
+                        "concepto de ciencia (args: 'tema'). Úsala para datos que no sabés seguro."),
+        "comando": None, "prefijo": None,
+    },
+    "un_dia_como_hoy": {
+        "descripcion": "Qué pasó en la historia un día como hoy (Wikipedia).",
+        "comando": None, "prefijo": None,
+    },
+    "estacion_espacial": {
+        "descripcion": "Dónde está ahora la Estación Espacial Internacional: altura, velocidad y a qué distancia de acá.",
+        "comando": None, "prefijo": None,
+    },
+    "donde_queda": {
+        "descripcion": ("A qué distancia y hacia qué lado queda un lugar (ciudad, país) desde acá, "
+                        "y te muestra una FLECHA en tus LEDs que apunta hacia allá en vivo aunque te "
+                        "giren (args: 'lugar'; 'norte' también vale)."),
+        "comando": None, "prefijo": None,
+    },
+    "mostrar_en_leds": {
+        "descripcion": ("Muestra algo en tus 25 LEDs unos segundos: un 'icono' (corazon, sol, nube, "
+                        "lluvia, estrella, luna, si, no, casa, musica, rayo, pregunta, termometro) o "
+                        "un 'texto' corto que pasa como cartel (sin tildes, máximo 30 letras). "
+                        "Usalo para acompañar lo que decís, no en cada mensaje."),
+        "comando": None, "prefijo": None,
+    },
+    "temporizador": {
+        "descripcion": ("Pone un temporizador en tu placa: cuenta regresiva en los LEDs y suena al "
+                        "terminar (vos lo vas a anunciar). args: 'segundos' (1 a 3600), 'motivo' "
+                        "opcional. Con segundos 0 lo cancela."),
+        "comando": None, "prefijo": None,
+    },
+    "tocar_melodia": {
+        "descripcion": ("Toca una melodía por tu parlante: 'cancion' = cumpleaños, estrellita, "
+                        "escala o victoria."),
+        "comando": None, "prefijo": None,
+    },
     "reloj": {
         "descripcion": "Hora y fecha actuales del sistema (no usa el micro:bit).",
         "comando": None,
@@ -1805,6 +1898,39 @@ HERRAMIENTAS: dict[str, dict] = {
 # praxis 2025: 3-5 ejecuciones; aca se permite 3 y despues una ultima ronda
 # FORZADA (sin ejecutar nada) que le exige la respuesta final.
 MAX_RONDAS_HERR = 3
+
+# "Ahi te averiguo", "dame un segundo"... sin pedir herramienta: medido con
+# eval_charla.py, la IA a veces PROMETE buscar y no busca nada. Si pasa, una
+# ronda mas le avisa que no se busco y que pida la tool (o conteste sin prometer).
+PROMESA_SIN_TOOL = re.compile(
+    r"(te (lo )?averiguo|ya te (lo )?(busco|averiguo|miro|reviso)|"
+    r"d[eé]ja?me (buscar|averiguar|revisar|mirar|consultar|chequear)|"
+    r"dame un (segundo|momento|toque|ratico)|"
+    r"voy a (buscar|averiguar|revisar|consultar|chequear)|"
+    r"ah[ií] te (lo )?(busco|miro|averiguo|reviso)|ya (lo )?(busco|averiguo|reviso))",
+    re.I,
+)
+
+# Pedidos que SOLO se cumplen con una herramienta de la placa: si la IA
+# contesta "ahi va la melodia" sin pedirla, no sono nada (medido).
+PEDIDO_ACCION = (
+    ("tocar_melodia", re.compile(r"\b(t[oó]c[aá](me|nos|r)?|cant[aá](me|nos|r)?)\b.*\b(canci[oó]n|melod[ií]a|"
+                                 r"cumplea[ñn]os|estrellita|m[uú]sica|escala|algo)\b", re.I)),
+    ("temporizador", re.compile(r"\b(pon[eé]?(me|nos)?|pon[eé]|activ[aá](me)?|arm[aá](me)?)\b.*"
+                                r"\b(temporizador|timer|cron[oó]metro|alarma)\b|"
+                                r"\btemporizador de\b|\bavis[aá]me en\b", re.I)),
+    ("mostrar_en_leds", re.compile(r"\bdibuj[aá](me|nos)?\b|\bmostr[aá](me|nos)? en (tus )?(luces|leds|cara)\b",
+                                   re.I)),
+    ("donde_queda", re.compile(r"\bd[oó]nde queda\b|\bpara d[oó]nde (queda|est[aá])\b|"
+                               r"\bhacia d[oó]nde (queda|est[aá])\b", re.I)),
+)
+
+
+def accion_pedida(mensaje: str) -> str | None:
+    for nombre, patron in PEDIDO_ACCION:
+        if patron.search(mensaje or ""):
+            return nombre
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1895,6 +2021,94 @@ def _texto_temperatura(chip: str) -> str:
         f"calle, no de la pieza, asi que NO promedies los dos para inventar la "
         f"temperatura de la habitacion. Contalos como lo que son."
     )
+
+
+def _rumbo_kira() -> float | None:
+    """Hacia donde mira la placa (grados desde el norte) si la brujula esta
+    calibrada; None si no (no se calibra sola: es un juego de 30 s)."""
+    linea = serial_mgr.leer_sensor("SENSOR:BRUJULA", "BRUJULA:", timeout=2.0)
+    try:
+        rumbo, _campo, calibrada = linea.split(":", 1)[1].split(":")[:3]
+        if calibrada == "1" and not rumbo.startswith("-"):
+            return float(rumbo)
+    except (AttributeError, ValueError):
+        pass
+    return None
+
+
+_temporizador_motivo = {"texto": ""}
+
+
+def _donde_queda(lugar: str) -> dict:
+    lugar = lugar.strip()
+    if not lugar:
+        return {"ok": False, "resultado": "Falta el lugar (arg 'lugar')."}
+    rumbo_kira = _rumbo_kira()
+    if lugar.lower() in {"norte", "el norte"}:
+        r = {"ok": True, "rumbo": 0.0, "resultado": "El norte."}
+    else:
+        r = mundo_service.donde_queda(config.CLIMA_LAT, config.CLIMA_LON, lugar, rumbo_kira)
+    if r.get("ok"):
+        serial_mgr.enviar(f"FLECHA:{int(round(r['rumbo'])) % 360}")
+        if rumbo_kira is None:
+            r["resultado"] += (" Tu brújula NO está calibrada: en tus LEDs sale un '?' en vez de la "
+                               "flecha. Para calibrarla alguien tiene que inclinarte un rato hasta "
+                               "llenar la pantalla (pedíselo con onda si quieren ver la flecha).")
+        else:
+            r["resultado"] += " En tus LEDs ahora hay una flecha apuntando hacia allá."
+    return r
+
+
+def _sin_tildes(texto: str) -> str:
+    import unicodedata
+    plano = unicodedata.normalize("NFKD", texto)
+    return "".join(c for c in plano if c.isascii() and (c.isalnum() or c in " !?.,:-+=<>"))
+
+
+def _mostrar_en_leds(args: dict) -> dict:
+    icono = str(args.get("icono", "") or "").strip().lower()
+    texto = _sin_tildes(str(args.get("texto", "") or "")).strip()[:30]
+    validos = {"corazon", "sol", "nube", "lluvia", "estrella", "luna", "si", "no", "casa",
+               "musica", "rayo", "pregunta", "termometro"}
+    icono = _sin_tildes(icono)
+    if icono:
+        if icono not in validos:
+            return {"ok": False, "resultado": f"No tengo el icono '{icono}'. Tengo: {', '.join(sorted(validos))}."}
+        serial_mgr.enviar(f"ICONO:{icono.upper()}")
+        return {"ok": True, "resultado": f"En tus LEDs ahora se ve el icono {icono}."}
+    if texto:
+        serial_mgr.enviar(f"TEXTO:{texto}")
+        return {"ok": True, "resultado": f"En tus LEDs ahora pasa el texto '{texto}'."}
+    return {"ok": False, "resultado": "Falta 'icono' o 'texto'."}
+
+
+def _temporizador(args: dict) -> dict:
+    try:
+        seg = int(float(args.get("segundos", 0)))
+    except (TypeError, ValueError):
+        return {"ok": False, "resultado": "Los segundos tienen que ser un número."}
+    if seg <= 0:
+        serial_mgr.enviar("TIMER:0")
+        return {"ok": True, "resultado": "Temporizador cancelado."}
+    seg = min(seg, 3600)
+    _temporizador_motivo["texto"] = str(args.get("motivo", "") or "").strip()[:80]
+    serial_mgr.enviar(f"TIMER:{seg}")
+    m, s = divmod(seg, 60)
+    duracion = (f"{m} minuto{'s' if m != 1 else ''}" if m else "") + (f" y {s} segundos" if m and s else "") \
+        + ("" if m else f"{s} segundos")
+    return {"ok": True, "resultado": (
+        f"Temporizador de {duracion} andando en tu placa (cuenta en los LEDs y suena al final; "
+        "cuando termine te aviso para que lo anuncies).")}
+
+
+def _tocar_melodia(cancion: str) -> dict:
+    mapa = {"cumpleanos": 1, "cumpleaños": 1, "feliz cumpleanos": 1, "feliz cumpleaños": 1,
+            "estrellita": 2, "escala": 3, "do re mi": 3, "victoria": 4}
+    n = mapa.get(cancion.strip().lower())
+    if not n:
+        return {"ok": False, "resultado": "Sé tocar: cumpleaños, estrellita, escala o victoria."}
+    serial_mgr.enviar(f"MELODIA:{n}")
+    return {"ok": True, "resultado": f"Sonando '{cancion}' por tu parlante."}
 
 
 def ver_clima() -> dict:
@@ -1995,8 +2209,11 @@ def formatear_sensor(nombre: str, linea: str) -> str:
             if len(partes) >= 3:
                 rumbo, campo, calibrada = partes[:3]
                 if calibrada != "1" or rumbo.startswith("-"):
-                    return f"brújula: necesita calibración; campo magnético {campo}"
-                return f"brújula: rumbo {rumbo} grados; campo magnético {campo}"
+                    return (f"brújula: NO está calibrada (para calibrarla alguien tiene que "
+                            f"inclinarte un rato hasta llenar la pantalla); campo magnético {campo}")
+                return (f"brújula: mirás hacia el {mundo_service.cardinal(float(rumbo))} "
+                        f"({rumbo} grados desde el norte); campo magnético {campo}. Los imanes o el "
+                        f"metal cerca la desvían.")
             return f"brújula: {valor}"
         if nombre == "leer_toque":
             partes = valor.split(":")
@@ -2274,6 +2491,27 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
         )}
     if nombre == "ver_clima":
         return ver_clima()
+    lugar_aqui = (config.CLIMA_LAT, config.CLIMA_LON, config.CLIMA_LOC.split(",")[0])
+    if nombre == "pronostico":
+        return mundo_service.pronostico(*lugar_aqui, rumbo_kira=_rumbo_kira())
+    if nombre == "calidad_aire":
+        return mundo_service.calidad_aire(*lugar_aqui)
+    if nombre == "sismos_cercanos":
+        return mundo_service.sismos_cercanos(*lugar_aqui)
+    if nombre == "wikipedia":
+        return mundo_service.wikipedia(str((args or {}).get("tema", "") or (args or {}).get("query", "")))
+    if nombre == "un_dia_como_hoy":
+        return mundo_service.un_dia_como_hoy()
+    if nombre == "estacion_espacial":
+        return mundo_service.estacion_espacial(*lugar_aqui)
+    if nombre == "donde_queda":
+        return _donde_queda(str((args or {}).get("lugar", "")))
+    if nombre == "mostrar_en_leds":
+        return _mostrar_en_leds(args or {})
+    if nombre == "temporizador":
+        return _temporizador(args or {})
+    if nombre == "tocar_melodia":
+        return _tocar_melodia(str((args or {}).get("cancion", "")))
     if nombre == "buscar_en_web":
         if not config.EXA_API_KEY:
             return {"ok": False, "resultado": (
@@ -2427,7 +2665,7 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
             placa = "SIN conectar (ni cable USB ni Bluetooth)"
         ahora = datetime.now()
         return {"ok": True, "resultado": (
-            f"emocion actual: {emocion}; micro:bit: {placa}; "
+            f"emocion actual: {emocion} (hablás de vos en femenino: contenta, cansada...); micro:bit: {placa}; "
             f"hora: {ahora.strftime('%H:%M')} del {DIAS_ES[ahora.weekday()]} {ahora.day} de {MESES_ES[ahora.month - 1]}"
         )}
     if nombre == "controlar_metronomo":
@@ -2512,6 +2750,10 @@ EVENTOS_KIRA = {
     "EVENTO:ACALORADA": "tenés mucho calor",
     "EVENTO:DESLUMBRADA": "volvió la luz de golpe y te encandiló",
     "EVENTO:CAIDA": "te dejaron caer: estuviste en caída libre",
+    "EVENTO:VOCES": ("escuchaste gente hablando cerca tuyo, recién: alguien llegó o "
+                     "anda por ahí. Llamá su atención con onda, invitalo a charlar"),
+    "EVENTO:APLAUSO": "escuchaste un aplauso o un ruido fuerte de golpe",
+    "EVENTO:TIMER": "terminó el temporizador que te pidieron (ya sonó y titiló tu pantalla)",
     "SILENCIO": ("hace un rato que nadie te habla, pero la pantalla sigue abierta: "
                  "alguien anda por ahí. Sacá charla vos, con algo espontáneo (un "
                  "recuerdo, una curiosidad, una pregunta). Sin reprochar el silencio"),
@@ -2519,8 +2761,113 @@ EVENTOS_KIRA = {
 }
 
 
+# ---------------------------------------------------------------------------
+#  TU ENTORNO AHORA: lo que Kira sabe del lugar SIN tener que preguntar
+#
+# Antes solo sabia del mundo si decidia llamar una herramienta. Una persona
+# sabe todo el tiempo si es de noche, si hay ruido o si alguien se acerco: este
+# bloque va en CADA turno (barato: nada de esto llama a la IA) para que lo
+# comente sola cuando viene al caso.
+# ---------------------------------------------------------------------------
+_dia_charlas = {"fecha": "", "sesiones": set()}
+_ultimo_turno_persona = {"t": 0.0}
+
+
+def anotar_charla(sesion) -> None:
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    if _dia_charlas["fecha"] != hoy:
+        _dia_charlas["fecha"] = hoy
+        _dia_charlas["sesiones"] = set()
+    if sesion:
+        _dia_charlas["sesiones"].add(str(sesion))
+    _ultimo_turno_persona["t"] = time.time()
+
+
+def _momento_del_dia(h: int) -> str:
+    if h < 6:
+        return "madrugada"
+    if h < 12:
+        return "mañana"
+    if h < 19:
+        return "tarde"
+    return "noche"
+
+
+async def bloque_entorno() -> str:
+    ahora = datetime.now()
+    # Sin la hora exacta: medido con eval_charla.py, "a esta hora todavia hay
+    # gente" abria la mitad de los saludos. Para la hora esta la tool reloj.
+    lineas = [f"- Es {DIAS_ES[ahora.weekday()]}, de {_momento_del_dia(ahora.hour)}."]
+    try:
+        # Del cache del clima (15 min); si no esta, no se espera mas de 1,2 s
+        c = await asyncio.wait_for(asyncio.to_thread(
+            clima_service.temperatura_externa, config.CLIMA_LAT, config.CLIMA_LON), 1.2)
+    except Exception:
+        c = None
+    if c:
+        cielo = f", {c['cielo']}" if c.get("cielo") else ""
+        lineas.append(f"- Afuera en {config.CLIMA_LOC}: {c['temp']} grados{cielo}.")
+    amb = getattr(serial_mgr, "ambiente", None)
+    if amb and time.time() - amb.get("t", 0) < 10:
+        if amb.get("actividad", 0) >= 12:
+            lineas.append("- Escuchás gente hablando cerca tuyo ahora mismo.")
+        elif amb.get("base", 0) - amb.get("piso", 0) >= 15:
+            lineas.append("- Hay bastante bullicio alrededor (mucha gente o música).")
+        else:
+            lineas.append("- Alrededor está tranquilo.")
+        if amb.get("mov", 0) >= 150:
+            lineas.append("- Te están moviendo o te tienen en la mano.")
+    elif not getattr(serial_mgr, "conectado", True):
+        lineas.append("- Tu placa no está conectada ahora: no sentís el entorno.")
+    n = len(_dia_charlas["sesiones"]) if _dia_charlas["fecha"] == ahora.strftime("%Y-%m-%d") else 0
+    if n >= 2:
+        lineas.append(f"- Hoy ya charlaste con unas {n} personas distintas.")
+    quieto = time.time() - _ultimo_turno_persona["t"] if _ultimo_turno_persona["t"] else 0
+    if quieto > 180:
+        lineas.append(f"- Hacía {int(quieto // 60)} minutos que nadie te hablaba.")
+    return ("\n\n# TU ENTORNO AHORA (lo sabés sin preguntar)\n" + "\n".join(lineas)
+            + "\nComentalo SOLO si viene al caso, como lo haría una persona, y casi nunca: "
+            "no abras un mensaje con la hora ni con el clima, y no lo repitas en la charla.")
+
+
+def contenido_para_ia(h: dict) -> str:
+    """Un turno del historial como lo ve la IA. Las respuestas de Kira van en
+    SU formato (el JSON que ella misma produce), no como texto suelto: medido
+    con eval_charla.py, en modo JSON y tras varios turnos de texto plano el
+    modelo a veces se descolocaba y devolvia basura ('[2]', '[true]', o solo
+    espacios) en vez de contestar."""
+    contenido = h.get("contenido", "")
+    if h.get("rol") != "assistant" or not isinstance(contenido, str):
+        return contenido
+    emocion = h.get("emotion") if h.get("emotion") in EMOCIONES_VALIDAS else "neutral"
+    return json.dumps({"emotion": emocion, "message": contenido, "tool": None}, ensure_ascii=False)
+
+
+def bloque_variedad(historial: list) -> str:
+    """Como empezaron las ultimas respuestas de Kira, para que no empiece
+    igual (medido con eval_charla.py: 'Uy,' abria casi todas). Las guias de
+    voz recomiendan esto desde el codigo: el prompt solo no alcanza."""
+    aperturas = []
+    for h in reversed(historial or []):
+        if h.get("rol") != "assistant":
+            continue
+        palabras = quitar_tags_audio(str(h.get("contenido", ""))).split()
+        if palabras:
+            aperturas.append(" ".join(palabras[:3]))
+        if len(aperturas) >= 4:
+            break
+    if not aperturas:
+        return ""
+    return ("\n\n# NO EMPIECES IGUAL\nTus últimas respuestas empezaron así: "
+            + ", ".join(f"«{a}»" for a in aperturas)
+            + ". Empezá distinto (otra palabra, otra forma), y si venís cerrando con "
+            "pregunta, esta vez cerrá con un comentario tuyo.")
+
+
 def describir_evento(linea: str) -> str | None:
     linea = (linea or "").strip()
+    if linea == "EVENTO:TIMER" and _temporizador_motivo["texto"]:
+        return f"{EVENTOS_KIRA[linea]}, para: {_temporizador_motivo['texto']}"
     if linea in EVENTOS_KIRA:
         return EVENTOS_KIRA[linea]
     partes = linea.split(":")
@@ -2597,14 +2944,18 @@ async def api_chat_stream(body: dict):
             historial,
             incluir_recientes=not bool(historial),
         )
-    bloque_identidad = memoria_identidad_bloque(personaje) if usar_memoria and preferencias["hechos"] else ""
+    bloque_identidad = memoria_identidad_bloque(personaje, sesion) if usar_memoria and preferencias["hechos"] else ""
     bloque_diario = memoria_diario_bloque(personaje) if usar_memoria else ""
+    bloque_lugar = await bloque_entorno()
+    if not descripcion_evento:
+        anotar_charla(sesion)
     messages = [{"role": "system", "content": pj["system_prompt"] + catalogo_herramientas(
         permitir_memoria=preferencias["recordar"],
         permitir_consulta_memoria=preferencias["usar"],
-    ) + bloque_identidad + bloque_diario + bloque_recuerdos}]
+    ) + bloque_identidad + bloque_diario + bloque_recuerdos + bloque_lugar
+        + bloque_variedad(historial)}]
     for h in historial[-8:]:  # contexto corto: las ultimas 8
-        messages.append({"role": h.get("rol", "user"), "content": h.get("contenido", "")})
+        messages.append({"role": h.get("rol", "user"), "content": contenido_para_ia(h)})
     # el turno actual: con foto va como content-array (texto + image_url); el
     # aviso del final es lo que hace que la IA sepa que tiene que MIRARLA
     messages.append({"role": "user", "content": mensaje_con_foto(mensaje, foto)})
@@ -2636,7 +2987,10 @@ async def api_chat_stream(body: dict):
                 dicho_total.append(frase)
                 url = f"/api/tts-stream/{tts_id}"
                 audios.append(url)
-                eventos.append({"tipo": "audio", "url": url, "orden": orden_audio[0]})
+                # texto = lo que se VE de esta frase: la web lo escribe
+                # mientras suena (sincronizado con /api/tts-tiempos)
+                eventos.append({"tipo": "audio", "url": url, "orden": orden_audio[0],
+                                "texto": quitar_tags_audio(frase)})
                 orden_audio[0] += 1
             return eventos
         herramientas_turno: list[dict] = []   # debug: tools usadas en este turno
@@ -2753,8 +3107,47 @@ async def api_chat_stream(body: dict):
                     f"(emotion + message) integrando ese dato de forma natural. No digas 'usé una "
                     f"herramienta' ni nombres técnicos.")
 
+        promesa_revisada = False
         while True:
             pedidas = [] if forzada else extraer_tools(salida.get("tool"))
+            accion = None if (descripcion_evento or ronda_herr) else accion_pedida(mensaje)
+            if accion and accion not in HERRAMIENTAS:
+                accion = None
+            if (not pedidas and ronda_herr == 0 and not promesa_revisada
+                    and (accion or PROMESA_SIN_TOOL.search(message))):
+                # prometio (o le pidieron) algo que solo hace una herramienta y
+                # no pidio nada: lo que ya sono por TTS queda como "ya va" y
+                # esta ronda lo hace de verdad
+                promesa_revisada = True
+                print(f"[TOOL] {_t(t0)} {'pedido de ' + accion if accion else 'prometio buscar'} "
+                      f"SIN pedir herramienta: ronda de aviso")
+                if accion:
+                    aviso_promesa = (
+                        f"[AVISO DEL SISTEMA] Lo que te pidió la persona se HACE con la herramienta "
+                        f"'{accion}' y no la pediste: en tu placa no pasó nada. Si de verdad te lo "
+                        f"pidió, pedila AHORA (tool) con message vacío; si no era un pedido, "
+                        f"respondé normal.")
+                else:
+                    aviso_promesa = (
+                        "[AVISO DEL SISTEMA] Dijiste que ibas a buscar o averiguar algo, pero NO "
+                        "pediste ninguna herramienta: no se buscó nada. Si una herramienta del "
+                        "catálogo te da ese dato, pedila AHORA (tool) con message vacío. Si ninguna "
+                        "sirve, respondé con lo que sabés, sin volver a prometer que vas a buscar.")
+                messages.append({"role": "assistant", "content": caja["buffer"]})
+                messages.append({"role": "user", "content": aviso_promesa})
+                caja = {}
+                async for ev in _ronda(_stream_ia(messages, caja, estado.temp)):
+                    yield ev
+                if "error" in caja:
+                    return
+                if not caja.get("salida"):
+                    yield sse_event({"tipo": "error", "mensaje": motivo_sin_salida(caja)})
+                    return
+                salida = caja["salida"]
+                emotion = normalizar_emocion(salida.get("emotion"))
+                message = str(salida.get("message", "")).strip()
+                texto_ronda1 = True
+                continue
             if not pedidas:
                 break    # respondio sin pedir nada (o ya se forzo): ciclo listo
             ronda_herr += 1
@@ -2777,7 +3170,7 @@ async def api_chat_stream(body: dict):
                 print(f"[TOOL] {_t(t0)} TOPE ({MAX_RONDAS_HERR} rondas de herramientas): "
                       f"ultima ronda FORZADA sin ejecutar nada")
                 caja = {}
-                async for ev in _ronda(_stream_ia(messages, caja, estado.temp)):
+                async for ev in _ronda(_stream_ia(messages, caja, min(estado.temp, config.TEMP_CON_DATO))):
                     yield ev
                 if "error" in caja:
                     return
@@ -2878,7 +3271,7 @@ async def api_chat_stream(body: dict):
                   f"{'ok' if any(r.get('ok') for r in cache_tools.values()) else 'FALLO'}: "
                   f"{((cache_tools and next(iter(cache_tools.values())).get('resultado', '')) or '')[:70]!r})")
             caja = {}
-            async for ev in _ronda(_stream_ia(messages, caja, estado.temp)):
+            async for ev in _ronda(_stream_ia(messages, caja, min(estado.temp, config.TEMP_CON_DATO))):
                 yield ev
             if "error" in caja:
                 return

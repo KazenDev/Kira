@@ -20,11 +20,15 @@
  *      aburrimiento -> dormir -> despertar, clima calor/frio.
  *   7. Minijuegos: los tres terminan solos y dan un resultado valido.
  *   8. Sonidos: todo el catalogo se codifica en el formato de CODAL.
+ *   9. Oido: nota a la gente que llega hablando y los aplausos, no se
+ *      dispara con el bullicio constante ni con su propia voz.
  */
 #include "Animaciones/Vida/Nucleo/Cara.h"
 #include "Animaciones/Vida/Nucleo/Juegos.h"
 #include "Animaciones/Vida/Nucleo/Catalogo.h"
 #include "Animaciones/Vida/Nucleo/SonidoId.h"
+#include "Animaciones/Vida/Nucleo/Oido.h"
+#include "Animaciones/Vida/Nucleo/Pantalla.h"
 #include "Animaciones/Emociones/Emociones.h"
 #include <stdio.h>
 #include <string.h>
@@ -470,6 +474,153 @@ static void testSonidos()
     printf("  %d codificaciones revisadas\n", total);
 }
 
+// --- 9: el oido -----------------------------------------------------------------
+// Ruido simulado: ventanas cada 50 ms, nivel 0..100 con un poco de ruido
+static int oirDurante(DetectorOido &d, uint32_t &t, uint32_t ms, float nivel, float jitter,
+                      bool sordo, int *voces, int *aplausos, unsigned semilla)
+{
+    unsigned x = semilla;
+    for (uint32_t fin = t + ms; t < fin; t += 50) {
+        x = x * 1103515245u + 12345u;
+        float j = ((float)((x >> 16) % 1000) / 1000.0f - 0.5f) * 2.0f * jitter;
+        int ev = oidoMuestra(d, nivel + j, t, sordo);
+        if (ev == OIDO_VOCES) (*voces)++;
+        if (ev == OIDO_APLAUSO) (*aplausos)++;
+    }
+    return 0;
+}
+
+static void testOido()
+{
+    printf("[9] Oido (solo el nivel de ruido)\n");
+    DetectorOido d;
+    uint32_t t = 1000;
+    oidoIniciar(d, t);
+    int v = 0, a = 0;
+    oirDurante(d, t, 60000, 30, 3, false, &v, &a, 1);
+    CHEQUEAR(v == 0 && a == 0, "un minuto tranquilo: ningun evento (voces %d, aplausos %d)", v, a);
+
+    uint32_t antes = t;
+    int v0 = v;
+    oirDurante(d, t, 3000, 52, 5, false, &v, &a, 2);
+    CHEQUEAR(v == v0 + 1, "alguien llega hablando: UN aviso de voces (hubo %d)", v - v0);
+    (void)antes;
+
+    v0 = v;
+    oirDurante(d, t, 120000, 52, 6, false, &v, &a, 3);
+    CHEQUEAR(v == v0, "siguen hablando 2 min: no repite el aviso (%d de mas)", v - v0);
+    CHEQUEAR(d.base > 44.0f, "la base se acostumbra al bullicio (base %.1f)", d.base);
+
+    // Bullicio de feria constante desde el arranque: nunca es un evento
+    DetectorOido f;
+    uint32_t tf = 1000;
+    oidoIniciar(f, tf);
+    int vf = 0, af = 0;
+    oirDurante(f, tf, 300000, 62, 6, false, &vf, &af, 4);
+    CHEQUEAR(vf == 0 && af == 0, "feria ruidosa constante 5 min: sin eventos (voces %d, aplausos %d)", vf, af);
+
+    // Sorda mientras Kira habla: su propia voz no cuenta, ni lo que sigue
+    DetectorOido s;
+    uint32_t ts = 1000;
+    oidoIniciar(s, ts);
+    int vs = 0, as = 0;
+    oirDurante(s, ts, 60000, 30, 3, false, &vs, &as, 5);
+    oirDurante(s, ts, 4000, 60, 5, true, &vs, &as, 6);     // Kira hablando
+    oirDurante(s, ts, 3000, 55, 5, false, &vs, &as, 7);    // y le contestan enseguida
+    CHEQUEAR(vs == 0, "su propia voz no la despierta (voces %d)", vs);
+
+    // Aplauso: un golpe brusco sobre la calma
+    DetectorOido g;
+    uint32_t tg = 1000;
+    oidoIniciar(g, tg);
+    int vg = 0, ag = 0;
+    oirDurante(g, tg, 20000, 30, 3, false, &vg, &ag, 8);
+    oirDurante(g, tg, 150, 85, 2, false, &vg, &ag, 9);
+    CHEQUEAR(ag == 1, "un aplauso fuerte: UN aviso de aplauso (hubo %d)", ag);
+
+    // La cara: voces -> despierta si dormia, si no "¿quien anda ahi?"
+    EstadoCara c;
+    Lienzo l;
+    uint32_t tc = 1000;
+    caraIniciar(c, personalidadDe(0), tc, 77u, false);
+    Estimulos q = quietos();
+    for (int i = 0; i < 40; i++) { caraFrame(c, tc, q, l); tc += 16; }
+    Estimulos ev = quietos(); ev.voces = true;
+    caraFrame(c, tc, ev, l); tc += 16;
+    caraFrame(c, tc, q, l); tc += 16;
+    CHEQUEAR(c.eventoReaccion == R_ATENTA, "voces con la cara despierta: ATENTA (%d)", c.eventoReaccion);
+    for (int i = 0; i < 160; i++) { caraFrame(c, tc, q, l); tc += 16; }   // que termine ATENTA
+    caraForzarReaccion(c, R_DORMIR, tc);
+    for (int i = 0; i < 40; i++) { caraFrame(c, tc, q, l); tc += 16; }
+    CHEQUEAR(c.reaccion == R_DORMIR, "(preparacion) quedo dormida (%d)", c.reaccion);
+    caraFrame(c, tc, ev, l); tc += 16;
+    caraFrame(c, tc, q, l); tc += 16;
+    CHEQUEAR(c.eventoReaccion == R_DESPERTAR, "voces con la cara dormida: se DESPIERTA (%d)", c.eventoReaccion);
+}
+
+// --- 10: la pantalla (iconos, texto, flecha, temporizador) ---------------------
+static const uint8_t *glifoPrueba(char c)
+{
+    static const uint8_t lleno[5] = {0x1F, 0x1F, 0x1F, 0x1F, 0x1F};
+    return c == ' ' ? 0 : lleno;
+}
+
+static int encendidos(const Lienzo &l)
+{
+    int n = 0;
+    for (int y = 0; y < 5; y++)
+        for (int x = 0; x < 5; x++) if (l.v[y][x] > 0.3f) n++;
+    return n;
+}
+
+static void testPantalla()
+{
+    printf("[10] Pantalla: iconos, texto, flecha, temporizador\n");
+    CHEQUEAR(pantallaIconoPorNombre("corazon") == IC_CORAZON && pantallaIconoPorNombre("LLUVIA") == IC_LLUVIA,
+             "los iconos se encuentran por nombre (mayus o minus)");
+    CHEQUEAR(pantallaIconoPorNombre("dinosaurio") < 0, "un icono que no existe da -1");
+
+    EstadoPantalla p;
+    Lienzo l;
+    pantallaIniciar(p);
+    uint32_t t = 1000;
+    pantallaIcono(p, IC_CORAZON, t, 4000);
+    bool tapa = pantallaFrame(p, t + 1000, -1, glifoPrueba, l);
+    CHEQUEAR(tapa && encendidos(l) >= 12, "el corazon se dibuja y tapa la cara (%d leds)", encendidos(l));
+    CHEQUEAR(!pantallaFrame(p, t + 4100, -1, glifoPrueba, l), "a los 4 s el icono se va solo");
+
+    // Flecha: el objetivo es el norte (0). Si Kira mira al este (90), el norte
+    // le queda a la izquierda -> flecha al oeste (fila 2 entera prendida y
+    // la punta en la columna 0)
+    pantallaFlecha(p, 0, t, 10000);
+    pantallaFrame(p, t + 500, 90, glifoPrueba, l);
+    CHEQUEAR(l.v[2][0] > 0.3f && l.v[2][4] > 0.3f && l.v[1][1] > 0.3f && l.v[1][3] < 0.3f,
+             "mirando al este, la flecha al norte apunta a la izquierda");
+    pantallaFrame(p, t + 600, 0, glifoPrueba, l);
+    CHEQUEAR(l.v[0][2] > 0.3f && l.v[4][2] > 0.3f && l.v[1][1] > 0.3f && l.v[3][1] < 0.3f,
+             "mirando al norte, la flecha apunta para arriba");
+    pantallaFrame(p, t + 700, -1, glifoPrueba, l);
+    CHEQUEAR(l.v[4][2] > 0.3f && l.v[0][1] > 0.3f, "sin brujula calibrada muestra el '?'");
+    pantallaCancelar(p);
+
+    // Texto: pasa entero y termina
+    pantallaTexto(p, "HOLA", t);
+    CHEQUEAR(pantallaFrame(p, t + 300, -1, glifoPrueba, l), "el texto se ve mientras pasa");
+    CHEQUEAR(!pantallaFrame(p, t + (4 * 6 + 5) * 95 + 50, -1, glifoPrueba, l), "y al terminar devuelve la cara");
+
+    // Temporizador de 20 s: cara libre casi todo el tiempo, asoma, cuenta y suena UNA vez
+    pantallaIniciar(p);
+    pantallaTimer(p, 20, t);
+    int tapadas = 0, frames = 0, finales = 0;
+    for (uint32_t k = t; k < t + 24000; k += 16) {
+        if (pantallaFrame(p, k, -1, glifoPrueba, l)) tapadas++;
+        if (p.eventos & EVP_TIMER_FIN) finales++;
+        frames++;
+    }
+    CHEQUEAR(finales == 1, "el temporizador avisa UNA vez al terminar (%d)", finales);
+    CHEQUEAR(tapadas < frames * 0.6, "durante el temporizador la cara sigue viva la mayor parte (%d/%d)", tapadas, frames);
+}
+
 int main()
 {
     testPersonalidades();
@@ -477,6 +628,8 @@ int main()
     testSentidos();
     testJuegos();
     testSonidos();
+    testOido();
+    testPantalla();
     printf("\n%d chequeos, %d fallas\n", pruebas, fallas);
     return fallas ? 1 : 0;
 }

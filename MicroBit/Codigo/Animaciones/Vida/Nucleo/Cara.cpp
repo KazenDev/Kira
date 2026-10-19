@@ -111,6 +111,7 @@ static uint8_t prioridad(uint8_t r)
         case R_CARINO:
         case R_PERDON:
         case R_MOLESTA:
+        case R_APLAUSO:
         case R_DESLUMBRADA: return 3;
         case R_DORMIR:      return 1;
         case R_NINGUNA:     return 0;
@@ -427,6 +428,19 @@ static void sentir(EstadoCara &c, const Estimulos &e, uint32_t t)
             reaccionar(c, R_MOLESTA, t);
             sumarLlama(c, t);
         }
+    }
+
+    // EL OIDO: gente que llega hablando -> se despierta o mira "¿quién
+    // anda ahí?"; un aplauso -> se emociona. Las dos cuentan como compania:
+    // con gente cerca no se aburre.
+    if (e.voces) {
+        bool dormida = c.reaccion == R_DORMIR;
+        caraActividad(c, t);                  // si dormia, esto la despierta
+        if (!dormida) reaccionar(c, R_ATENTA, t);
+    }
+    if (e.aplauso) {
+        caraActividad(c, t);
+        reaccionar(c, R_APLAUSO, t);
     }
 
     // TERMOMETRO
