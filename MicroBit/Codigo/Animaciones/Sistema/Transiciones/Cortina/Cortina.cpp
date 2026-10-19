@@ -11,7 +11,7 @@
  */
 #include "Cortina.h"
 
-#define FRAMES_COL 21      // frames por par de columnas; 6 pares x 22 = 132
+#define FRAMES_COL 9       // frames por par de columnas; 6 pares x 10 = 60 (~1 s)
 
 // ---------------------------------------------------------------------------
 // Apaga (cerrar) o enciende (abrir) un par de columnas con fade.

@@ -1,34 +1,15 @@
 /**
- * Miedo.h - Modulo de la emocion MIEDO 😨 (en reposo)
+ * Miedo.h - La personalidad MIEDO 😨
  *
- * Una emocion = una carpeta con su animacion compleja y unica.
- * Esta carpeta contiene:
- *   Miedo.cpp        -> el miedo en reposo (corazon acelerado, tiembla,
- *                       mira al centro, parpadea rapido, labios temblan)
- *   HablarMiedo.cpp  -> la boca tartamudeando (lip-sync) via TALK
- *
- * PATRON DE FRAME: animarMiedo() muestra UN frame (~16 ms) y vuelve, como
- * Alegria, Triste y Cansado. El bucle de Principal.cpp la llama ~60 veces por
- * segundo y el estado vive en el RELOJ, no en una cadena de sleep(). Antes
- * eran 590 ms de franja sorda (el corason acelerado son 720 ms sin un solo
- * revisarSerial()). Ver Miedo.cpp.
- *
- * Es la cara mas grande de las ocho: 14 pixeles en uso (2 cejas + 2 ojos en
- * las esquinas + 8 de boca abierta + 2 pupilas que van al centro).
+ * Ojos en las esquinas que saltan sin parar (miradas nerviosas cada
+ * 0,4-1 s), cejas levantadas, boca abierta en "O" de grito y un temblor
+ * permanente en toda la cara. Habla rapido y entrecortado.
  */
 #ifndef MIEDO_H
 #define MIEDO_H
 
-#include "MicroBit.h"
+#include "../../Vida/Nucleo/Cara.h"
 
-// La instancia global del micro:bit se define en Principal.cpp
-extern MicroBit uBit;
-
-// Muestra UN frame de la animacion de miedo (bucle en Principal.cpp)
-void animarMiedo();
-
-// Para las TRANSICIONES (y CALLA): dibuja la cara en reposo y ancla el ciclo
-// de la animacion en este instante.
-void mostrarCaraMiedo();
+extern const Personalidad PERS_MIEDO;
 
 #endif // MIEDO_H

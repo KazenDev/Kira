@@ -6,8 +6,9 @@
 #include "Sistema.h"
 // Ruta relativa: Sistema.cpp esta en Animaciones/Sistema/, las emociones en ../Emociones/
 #include "../Emociones/Emociones.h"
-#include "../Emociones/Alegria/Alegria.h"
-#include "../Emociones/Alegria/Hablar.h"
+#include "../Vida/Vida.h"              // el motor de vida: la cara, el habla y los sentidos
+#include "../Vida/Sonidos/Sonidos.h"   // SONIDO:ON/OFF, VOLUMEN:<n>, SONAR:<n>
+#include "../Vida/Nucleo/SonidoId.h"
 #include "Loading/Loading.h"   // las animaciones de carga (patrones de luz)
 #include "Loading/Luz/Luz.h"      // recalibrarLuz() para el comando CALIB
 #include "Transiciones/Transiciones.h"   // efectos entre emociones (60 FPS)
@@ -63,42 +64,45 @@ static void responder(ManagedString texto)
 }
 
 // ---------------------------------------------------------------------------
-// Demo automatica (prueba del codigo sin necesitar la IA)
+// Cambio de emocion
 // ---------------------------------------------------------------------------
+void cambiarEmocion(EmocionActual e)
+{
+    // El sonido sale YA (en su fibra) y la transicion corre mientras suena:
+    // la llegada se escucha y se ve a la vez. Si un TALK llega a mitad de la
+    // transicion, la corta; la cara nueva arranca hablando igual.
+    sonidoTocar((uint8_t)(S_ENTRADA_ALEGRIA + (int)e));
+    emocionActual = e;
+    hacerTransicion(e);
+    vidaPonerEmocion(e, true);
+}
+
+// ---------------------------------------------------------------------------
+// Demo automatica (prueba del codigo sin necesitar la IA)
+// Cada emocion vive 3 s con el motor de vida; cualquier comando la corta.
+// ---------------------------------------------------------------------------
+static bool demoVivir(uint32_t ms)
+{
+    uint32_t hasta = uBit.systemTime() + ms;
+    while ((int32_t)(hasta - uBit.systemTime()) > 0) {
+        if (revisarSerial()) return false;
+        vidaFrame();
+    }
+    return true;
+}
+
 void demoAutomatica()
 {
-    for (int i = 0; i < 2; i++) {
-        // La demo tambien usa las TRANSICIONES entre emociones (60 FPS)
-        //
-        // Alegria ahora es una FUNCION DE FRAME (una llamada = un frame), asi
-        // que para que la demo la deje respirar hay que correrla un rato, no
-        // llamarla una sola vez. Las otras 7 emociones siguen siendo
-        // secuencias con sleeps y conservan la llamada simple.
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA;
-        {
-            uint32_t hasta = uBit.systemTime() + 1300;
-            while (uBit.systemTime() < hasta) animarAlegria();
-        }
-        uBit.sleep(300);
-        hacerTransicion(EM_TRISTE); emocionActual = EM_TRISTE; animarTriste();
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
-        hacerTransicion(EM_ENOJADO); emocionActual = EM_ENOJADO; animarEnojado();
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
-        hacerTransicion(EM_SORPRENDIDO); emocionActual = EM_SORPRENDIDO; animarSorprendido();
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
-        hacerTransicion(EM_NEUTRAL); emocionActual = EM_NEUTRAL; animarNeutral();
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
-        hacerTransicion(EM_FASTIDIO); emocionActual = EM_FASTIDIO; animarFastidio();
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
-        hacerTransicion(EM_MIEDO); emocionActual = EM_MIEDO; animarMiedo();
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
-        hacerTransicion(EM_CANSADO); emocionActual = EM_CANSADO; animarCansado();
-        hacerTransicion(EM_ALEGRIA); emocionActual = EM_ALEGRIA; animarAlegria(); uBit.sleep(300);
-        mostrarLoadingRandom(2);   // carga con patron aleatorio
+    static const EmocionActual ORDEN[8] = {
+        EM_ALEGRIA, EM_TRISTE, EM_ENOJADO, EM_SORPRENDIDO,
+        EM_NEUTRAL, EM_FASTIDIO, EM_MIEDO, EM_CANSADO
+    };
+    for (int i = 0; i < 8; i++) {
+        cambiarEmocion(ORDEN[i]);
+        if (!demoVivir(3000)) return;
     }
-    // Al terminar la demo, vuelve a la alegria en reposo
-    hacerTransicion(EM_ALEGRIA);
-    emocionActual = EM_ALEGRIA;
+    mostrarLoadingRandom(2);   // carga con patron aleatorio
+    cambiarEmocion(EM_ALEGRIA);
 }
 
 // ---------------------------------------------------------------------------
@@ -225,6 +229,18 @@ bool revisarSerial()
     return false;
 }
 
+// Lee un entero sin signo desde la posicion 'desde' (para "VOLUMEN:120")
+static int leerNumero(ManagedString cmd, int desde)
+{
+    int n = 0;
+    for (int i = desde; i < cmd.length(); i++) {
+        char c = cmd.charAt(i);
+        if (c < '0' || c > '9') break;
+        n = n * 10 + (c - '0');
+    }
+    return n;
+}
+
 void procesarComando(ManagedString cmd)
 {
     // RX SANO: una linea con bytes de control no es un comando. Se queda solo
@@ -251,6 +267,7 @@ void procesarComando(ManagedString cmd)
     // correr la animacion (que puede tardar 2-6s). Asi la IA siempre
     // recibe respuesta al instante y nada se siente "desincronizado".
     responder(ManagedString("ACK:" + cmd + "\n"));
+    vidaActividad();
 
     if (cmd == "TALK") {
         // EL METRÓNOMO MANDA 🎵: si el péndulo corre, la confirmación de
@@ -267,22 +284,10 @@ void procesarComando(ManagedString cmd)
         detenerLoading();
         detenerVoz();   // si estaba el aro de voz, lo apaga (y el mic)
         metroDetener(); // si estaba el metronomo, lo corta (TALK manda)
-        if (emocionActual == EM_TRISTE)
-            iniciarHablarTriste();
-        else if (emocionActual == EM_ENOJADO)
-            iniciarHablarEnojado();
-        else if (emocionActual == EM_SORPRENDIDO)
-            iniciarHablarSorprendido();
-        else if (emocionActual == EM_NEUTRAL)
-            iniciarHablarNeutral();
-        else if (emocionActual == EM_FASTIDIO)
-            iniciarHablarFastidio();
-        else if (emocionActual == EM_MIEDO)
-            iniciarHablarMiedo();
-        else if (emocionActual == EM_CANSADO)
-            iniciarHablarCansado();
-        else
-            iniciarHablar();
+        vidaTerminarJuego();   // la IA habla: el juego espera
+        // UNA boca para todas: la mueve el motor de vida con la prosodia de
+        // la personalidad activa (triste lento, miedo rapido, enojo ladra).
+        iniciarHablar();
     }
     else if (cmd == "CALIB") {
         // Re-calibra el sensor de luz del patron 9 SIN cortar el
@@ -309,6 +314,7 @@ void procesarComando(ManagedString cmd)
     // El primer A abre el micro; el segundo A envía; B cancela.
     else if (cmd == "ESCUCHAR") {
         metroDetener();
+        sonidoCallar();   // que el microfono no grabe a Kira
         escucharArmar();
     }
     // RECORD:<ms> -> GRABADOR: manda el audio crudo del microfono por
@@ -415,6 +421,39 @@ void procesarComando(ManagedString cmd)
             responder(ManagedString("SENSOR:?\n"));
         }
     }
+    // --- Motor de vida: ajustes y pruebas (no cortan el habla ni nada) ---
+    // SONIDO:ON / SONIDO:OFF, VOLUMEN:<0-255>, BRILLO:<10-255>,
+    // SENTIDOS:ON / SENTIDOS:OFF (reacciones a tocar/sacudir/inclinar...),
+    // REACCION:<1-18>, GESTO:<0-7>, SONAR:<id> (prueba un sonido)
+    else if (cmd == "SONIDO:ON")  sonidoSilenciar(false);
+    else if (cmd == "SONIDO:OFF") sonidoSilenciar(true);
+    else if (cmd == "SENTIDOS:ON")  vidaSentidos(true);
+    else if (cmd == "SENTIDOS:OFF") vidaSentidos(false);
+    else if (cmd.substring(0, 8) == "VOLUMEN:") sonidoVolumen(leerNumero(cmd, 8));
+    else if (cmd.substring(0, 7) == "BRILLO:")  vidaBrillo(leerNumero(cmd, 7));
+    else if (cmd.substring(0, 9) == "REACCION:") vidaReaccion(leerNumero(cmd, 9));
+    else if (cmd.substring(0, 6) == "GESTO:")   vidaGesto(leerNumero(cmd, 6));
+    else if (cmd.substring(0, 6) == "SONAR:")   sonidoTocar((uint8_t)leerNumero(cmd, 6));
+    // CLIMA:CALOR / CLIMA:FRIO / CLIMA:NORMAL fuerzan el clima (para mostrar
+    // las reacciones sin cambiar la temperatura de la sala); CLIMA:AUTO
+    // vuelve al termometro
+    else if (cmd == "CLIMA:CALOR")  vidaClima(1);
+    else if (cmd == "CLIMA:FRIO")   vidaClima(2);
+    else if (cmd == "CLIMA:NORMAL") vidaClima(0);
+    else if (cmd == "CLIMA:AUTO")   vidaClima(-1);
+    else if (cmd == "PICAR")        vidaPicar();
+    else if (cmd == "LUZ:ON")       vidaLuz(true);
+    else if (cmd == "LUZ:OFF")      vidaLuz(false);
+    else if (cmd == "VIDA:?")       vidaDiagnostico();
+    // JUEGO / JUEGO:1 (dado) / JUEGO:2 (piedra-papel-tijera) / JUEGO:3 (reflejos)
+    else if (cmd == "JUEGO") {
+        detenerLoading(); detenerVoz(); escucharDetener(); metroDetener();
+        vidaJugar(0);
+    }
+    else if (cmd.substring(0, 6) == "JUEGO:") {
+        detenerLoading(); detenerVoz(); escucharDetener(); metroDetener();
+        vidaJugar(leerNumero(cmd, 6));
+    }
     else {
         // Cualquier OTRO comando cancela el habla Y el loading (y el aro
         // de voz, la escucha en curso y el metronomo): la fibra muere en
@@ -425,42 +464,35 @@ void procesarComando(ManagedString cmd)
         detenerVoz();
         escucharDetener();
         metroDetener();
+        vidaTerminarJuego();
 
         // Las emociones CAMBIAN la emocion activa (persiste en el bucle).
         // ANTES de cambiar se reproduce una TRANSICION aleatoria (60 FPS)
         // que deja el primer frame de la cara nueva dibujado; el bucle
         // principal (Principal.cpp) sigue animando desde ahi.
         if (cmd == "HAPPY") {
-            hacerTransicion(EM_ALEGRIA);
-            emocionActual = EM_ALEGRIA;
+            cambiarEmocion(EM_ALEGRIA);
         }
         else if (cmd == "SAD") {
-            hacerTransicion(EM_TRISTE);
-            emocionActual = EM_TRISTE;
+            cambiarEmocion(EM_TRISTE);
         }
         else if (cmd == "ANGRY") {
-            hacerTransicion(EM_ENOJADO);
-            emocionActual = EM_ENOJADO;
+            cambiarEmocion(EM_ENOJADO);
         }
         else if (cmd == "SURPRISED") {
-            hacerTransicion(EM_SORPRENDIDO);
-            emocionActual = EM_SORPRENDIDO;
+            cambiarEmocion(EM_SORPRENDIDO);
         }
         else if (cmd == "NEUTRAL") {
-            hacerTransicion(EM_NEUTRAL);
-            emocionActual = EM_NEUTRAL;
+            cambiarEmocion(EM_NEUTRAL);
         }
         else if (cmd == "FASTIDIO" || cmd == "ANNOYED") {
-            hacerTransicion(EM_FASTIDIO);
-            emocionActual = EM_FASTIDIO;
+            cambiarEmocion(EM_FASTIDIO);
         }
         else if (cmd == "MIEDO" || cmd == "SCARED") {
-            hacerTransicion(EM_MIEDO);
-            emocionActual = EM_MIEDO;
+            cambiarEmocion(EM_MIEDO);
         }
         else if (cmd == "CANSADO" || cmd == "TIRED") {
-            hacerTransicion(EM_CANSADO);
-            emocionActual = EM_CANSADO;
+            cambiarEmocion(EM_CANSADO);
         }
         // LOADING: BUCLE INFINITO (repite un patron al azar) hasta que
         // llegue otra emocion o STOP. Transitorio: no cambia la emocion.
@@ -497,8 +529,7 @@ void procesarComando(ManagedString cmd)
         else if (cmd.substring(0, 6) == "METRO:") {
             ManagedString resto = cmd.substring(6, cmd.length());
             if (resto == "STOP") {
-                hacerTransicion(EM_ALEGRIA);
-                emocionActual = EM_ALEGRIA;
+                cambiarEmocion(EM_ALEGRIA);
             }
             else {
                 // Parsear "<bpm>[:<acento>]" (lo mismo que hace RECORD)
@@ -525,8 +556,7 @@ void procesarComando(ManagedString cmd)
         else if (cmd == "TEST")  demoAutomatica();
         // STOP: vuelve a la alegria (con transicion, como cualquier cambio)
         else if (cmd == "STOP")  {
-            hacerTransicion(EM_ALEGRIA);
-            emocionActual = EM_ALEGRIA;
+            cambiarEmocion(EM_ALEGRIA);
         }
         // CALLA: la boca para AL INSTANTE y la cara queda quieta en su
         // emocion actual, SIN transicion. Lo manda el frontend cuando el
@@ -534,7 +564,6 @@ void procesarComando(ManagedString cmd)
         // hasta el proximo comando (la cara hablaba sola en silencio).
         else if (cmd == "CALLA") {
             detenerHablar();
-            dibujarCaraDestino(emocionActual);
         }
         // TRANS: una transicion aleatoria de prueba (sin cambiar de emocion)
         else if (cmd == "TRANS") hacerTransicion(emocionActual);

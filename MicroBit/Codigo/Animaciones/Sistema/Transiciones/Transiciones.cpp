@@ -9,7 +9,7 @@
 #include "Morfosis/Morfosis.h"
 #include "Cortina/Cortina.h"
 #include "Fundido/Fundido.h"
-#include "../../Emociones/Emociones.h"   // las mostrarCaraX de todas
+#include "../../Vida/Vida.h"   // vidaDibujarCara(): como se ve cada emocion
 
 // ---------------------------------------------------------------------------
 // Dibuja el primer frame (cara base) de la emocion destino.
@@ -17,17 +17,7 @@
 // ---------------------------------------------------------------------------
 void dibujarCaraDestino(EmocionActual destino)
 {
-    switch (destino) {
-        case EM_ALEGRIA:     mostrarCaraAlegria(); break;
-        case EM_TRISTE:      mostrarCaraTriste(); break;
-        case EM_ENOJADO:     mostrarCaraEnojado(); break;
-        case EM_SORPRENDIDO: mostrarCaraSorprendido(); break;
-        case EM_NEUTRAL:     mostrarCaraNeutral(); break;
-        case EM_FASTIDIO:    mostrarCaraFastidio(); break;
-        case EM_MIEDO:       mostrarCaraMiedo(); break;
-        case EM_CANSADO:     mostrarCaraCansado(); break;
-        default:             mostrarCaraAlegria(); break;
-    }
+    vidaDibujarCara(destino);
 }
 
 // ---------------------------------------------------------------------------

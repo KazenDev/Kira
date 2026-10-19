@@ -9,7 +9,7 @@
  */
 #include "Fundido.h"
 
-#define FRAMES_BR 62      // frames por mitad (63 x 2 = 126 frames)
+#define FRAMES_BR 27      // frames por mitad (28 x 2 = 56 frames, ~0,9 s)
 
 // ---------------------------------------------------------------------------
 // El QUANTUM REAL del PWM del display

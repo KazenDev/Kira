@@ -17,7 +17,8 @@
 #include "Animaciones/Sistema/Escuchar/Escuchar.h"
 #include "Animaciones/Sistema/Metronomo/Metronomo.h"
 #include "Animaciones/Sistema/BleUart/BleUart.h"
-#include "Animaciones/Emociones/Emociones.h"
+#include "Animaciones/Vida/Vida.h"
+#include "Animaciones/Vida/Sonidos/Sonidos.h"
 
 MicroBit uBit;
 
@@ -42,6 +43,12 @@ void atenderBotonesEscucha()
     // En metronomo A/B ya tienen su propio control de tempo.
     if (modoMetro) return;
 
+    // En un minijuego A y B son del juego (no abren el microfono).
+    if (vidaJugando()) {
+        vidaBotonesJuego(pulsoA, pulsoB);
+        return;
+    }
+
     if (modoEscuchar) {
         if (pulsoB) {
             // B manda siempre: cancela y descarta, incluso si A+B aparecen.
@@ -52,6 +59,7 @@ void atenderBotonesEscucha()
                 escucharDetener();
             } else {
                 // Primer A después de ESCUCHAR: abrir el micrófono.
+                sonidoCallar();
                 escucharIniciar();
             }
         }
@@ -60,8 +68,13 @@ void atenderBotonesEscucha()
         detenerHablar();
         detenerLoading();
         detenerVoz();
+        sonidoCallar();   // que el microfono no grabe a Kira
         escucharIniciar();
     }
+
+    // B fuera de la escucha es de Kira: toque corto = picarla, mantenerlo =
+    // minijuego (la escucha manda: si A abrio el microfono, B cancela).
+    if (!modoEscuchar) vidaBotonB(b);
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +98,9 @@ int main()
     // Solo la animacion Barra lo vuelve a prender con micFftIniciar().
     micFftDetener();
 
+    // La cara arranca viva (y saluda por el parlante)
+    vidaIniciar();
+
     // Mensaje de bienvenida (se lee con la consola serial de la PC)
     uBit.serial.send("micro:bit emociones listo\n");
 
@@ -94,62 +110,24 @@ int main()
         revisarSerial();
         atenderBotonesEscucha();
 
-        // Renderiza la emocion ACTIVA:
-        //  - TALK: la boca habla con LA BOCA DE LA EMOCION ACTIVA (los
-        //    ojos los mueve su fibra en paralelo)
-        //  - LOADING: el patron gira EN BUCLE hasta otra emocion o STOP
-        //  - ALEGRIA / TRISTE: animaciones vivas (se abortan solas si llega
-        //    un comando serial)
-        //  - Las demas: cara estatica ya dibujada, solo espera un poco
-        if (modoHablar) {
-            if (emocionActual == EM_TRISTE)
-                animarBocaTriste();
-            else if (emocionActual == EM_ENOJADO)
-                animarBocaEnojada();
-            else if (emocionActual == EM_SORPRENDIDO)
-                animarBocaSorprendida();
-            else if (emocionActual == EM_NEUTRAL)
-                animarBocaNeutral();
-            else if (emocionActual == EM_FASTIDIO)
-                animarBocaFastidio();
-            else if (emocionActual == EM_MIEDO)
-                animarBocaMiedo();
-            else if (emocionActual == EM_CANSADO)
-                animarBocaCansado();
-            else
-                animarBocaHablando();
-        }
-        else if (modoLoading)
+        // Lo que se ve, por prioridad: LOADING, escucha manual, aro de voz y
+        // metronomo son modos que toman la pantalla entera. Si no hay
+        // ninguno, la CARA VIVE: el motor de vida corre la personalidad de
+        // la emocion activa (y su boca, si la IA esta hablando).
+        if (modoLoading)
             mostrarLoadingBucle();
         // ESCUCHA MANUAL: el aro reacciona al nivel real del microfono.
         // No se llama al VAD: A envia y B cancela mediante el handler de
         // botones de arriba.
-        else if (modoEscuchar) {
+        else if (modoEscuchar)
             escucharFrame();
-        }
         else if (modoVoz)
             mostrarVozBucle();
         // METRONOMO: pendulo + click (fibra propia marca el pulso; aqui
         // se dibuja el vaiven a 60fps y se atienden los botones A/B)
         else if (modoMetro)
             metroFrame();
-        else if (emocionActual == EM_ALEGRIA)
-            animarAlegria();
-        else if (emocionActual == EM_TRISTE)
-            animarTriste();
-        else if (emocionActual == EM_ENOJADO)
-            animarEnojado();
-        else if (emocionActual == EM_SORPRENDIDO)
-            animarSorprendido();
-        else if (emocionActual == EM_NEUTRAL)
-            animarNeutral();
-        else if (emocionActual == EM_FASTIDIO)
-            animarFastidio();
-        else if (emocionActual == EM_MIEDO)
-            animarMiedo();
-        else if (emocionActual == EM_CANSADO)
-            animarCansado();
         else
-            uBit.sleep(50);
+            vidaFrame();
     }
 }

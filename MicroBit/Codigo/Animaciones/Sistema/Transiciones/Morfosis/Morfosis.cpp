@@ -25,7 +25,7 @@
 struct Px { int x, y; };
 
 #define MAX_PX 25
-#define FRAMES 125     // ~2s a 16ms/frame (60 FPS)
+#define FRAMES 56      // ~0,9 s a 16ms/frame (60 FPS)
 
 // ---------------------------------------------------------------------------
 // Lee la pantalla actual: devuelve los pixeles encendidos (>100 de brillo)

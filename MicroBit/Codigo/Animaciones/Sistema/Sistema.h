@@ -51,6 +51,10 @@ void procesarComando(ManagedString cmd);  // recibe "HAPPY", "SAD", etc.
 bool revisarSerial();
 void demoAutomatica();                    // muestra todas las emociones
 
+// Cambia de emocion: sonido de llegada + transicion + la cara nueva viva.
+// Es el UNICO camino para cambiar emocionActual (comandos, STOP, metronomo).
+void cambiarEmocion(EmocionActual e);
+
 // Botones A/B de la escucha manual (definida en Principal.cpp). La llama el
 // bucle principal una vez por frame; tambien la llaman, frame por frame, los
 // golpes dramaticos de un disparo que se exentan del lote, para que exentarse

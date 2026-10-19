@@ -26,7 +26,7 @@
 #include "../Loading/Loading.h"               // detenerLoading() (limpieza A+B)
 #include "../Voz/Voz.h"                       // detenerVoz()
 #include "../Escuchar/Escuchar.h"             // escucharDetener()
-#include "../Emociones/Emociones.h"           // modoHablar / detenerHablar()
+#include "../../Vida/Vida.h"                  // modoHablar / detenerHablar()
 #include <stdio.h>
 #include <math.h>
 
@@ -233,8 +233,7 @@ void metroFrame()
         detenerVoz();
         if (modoEscuchar) escucharDetener();
         metroDetener();
-        hacerTransicion(EM_ALEGRIA);
-        emocionActual = EM_ALEGRIA;
+        cambiarEmocion(EM_ALEGRIA);
         return;   // el bucle principal ya renderiza la alegria
     }
     // Flanco (apretar, no mantener): A baja, B sube, de a 5 BPM

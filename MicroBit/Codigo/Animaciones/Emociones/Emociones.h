@@ -1,44 +1,31 @@
 /**
- * Emociones.h - Modulo de EMOCIONES (las caras del micro:bit)
+ * Emociones.h - Las 8 PERSONALIDADES (las caras del micro:bit)
  *
- * CADA emocion vive en su propia carpeta con su animacion compleja:
- *   Alegria/        -> la alegria (Alegria.cpp + Hablar.cpp)  [ya creado]
- *   Triste/         -> la tristeza (Triste.cpp)                [ya creado]
- *   Enojado/        -> el enojo (Enojado.cpp)                  [ya creado]
- *   Sorprendido/    -> la sorpresa (Sorprendido.cpp)           [ya creado]
- *   Neutral/        -> el neutral bruh (Neutral.cpp)            [ya creado]
- *   Fastidio/       -> el fastidio (Fastidio.cpp)               [ya creado]
- *   Miedo/          -> el miedo (Miedo.cpp)                     [ya creado]
- *   Cansado/        -> el cansado (Cansado.cpp)                 [ya creado]
- *   (las demas emociones iran a sus propias carpetas)
+ * CADA emocion vive en su propia carpeta con su personalidad para el motor
+ * de vida (Animaciones/Vida/): como parpadea, como mira, como habla, sus
+ * gestos y su dibujo. El motor es el mismo para todas.
  *
- * Este header incluye todas las emociones disponibles.
+ *   Alegria/  Triste/  Enojado/  Sorprendido/
+ *   Neutral/  Fastidio/  Miedo/  Cansado/
+ *
+ * Este header es PURO (no incluye CODAL): el bench de host lo compila tal
+ * cual. El orden de la tabla es el del enum EmocionActual (Sistema.h).
  */
 #ifndef EMOCIONES_H
 #define EMOCIONES_H
 
-#include "MicroBit.h"
+#include "Alegria/Alegria.h"
+#include "Triste/Triste.h"
+#include "Enojado/Enojado.h"
+#include "Sorprendido/Sorprendido.h"
+#include "Neutral/Neutral.h"
+#include "Fastidio/Fastidio.h"
+#include "Miedo/Miedo.h"
+#include "Cansado/Cansado.h"
 
-// La instancia global del micro:bit se define en Principal.cpp
-// (extern = "existe en otro archivo, usala aqui")
-extern MicroBit uBit;
+#define NUM_EMOCIONES 8
 
-// --- Cada emocion en su propia carpeta ---
-#include "Alegria/Alegria.h"     // animarAlegria()
-#include "Alegria/Hablar.h"      // animarBocaHablando(), modoHablar
-#include "Triste/Triste.h"       // animarTriste()
-#include "Triste/HablarTriste.h" // animarBocaTriste(), iniciarHablarTriste()
-#include "Enojado/Enojado.h"     // animarEnojado()
-#include "Enojado/HablarEnojado.h" // animarBocaEnojada(), iniciarHablarEnojado()
-#include "Sorprendido/Sorprendido.h"   // animarSorprendido()
-#include "Sorprendido/HablarSorprendido.h" // animarBocaSorprendida(), iniciarHablarSorprendido()
-#include "Neutral/Neutral.h"   // animarNeutral()
-#include "Neutral/HablarNeutral.h" // animarBocaNeutral(), iniciarHablarNeutral()
-#include "Fastidio/Fastidio.h"   // animarFastidio()
-#include "Fastidio/HablarFastidio.h" // animarBocaFastidio(), iniciarHablarFastidio()
-#include "Miedo/Miedo.h"   // animarMiedo()
-#include "Miedo/HablarMiedo.h" // animarBocaMiedo(), iniciarHablarMiedo()
-#include "Cansado/Cansado.h"   // animarCansado()
-#include "Cansado/HablarCansado.h" // animarBocaCansado(), iniciarHablarCansado()
+// La personalidad de cada emocion, en el orden de EmocionActual
+const Personalidad *personalidadDe(int emocion);
 
 #endif // EMOCIONES_H
