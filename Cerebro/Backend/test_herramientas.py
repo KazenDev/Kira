@@ -326,6 +326,14 @@ def test_tools_nuevas():
     check("hoy -> '¡Es hoy!'", mundo.dias_hasta("18/10", hoy)["resultado"].startswith("¡Es hoy!"))
     check("fecha imposible -> ok False", mundo.dias_hasta("31/02", hoy)["ok"] is False)
     check("basura -> pide el formato", mundo.dias_hasta("el finde", hoy)["ok"] is False)
+    import kira_server as _ks
+    check("arg con otro nombre ('q') igual llega", _ks._arg_texto({"q": " clima "}, "query") == "clima")
+    check("sin el nombre esperado: el primer texto", _ks._arg_texto({"consulta_web": "Liceo"}, "query") == "Liceo")
+    check("nunca toma el nombre de la tool ni el personaje",
+          _ks._arg_texto({"nombre": "buscar_en_web", "personaje": "kira"}, "query") == "")
+    check("args basura -> vacio", _ks._arg_texto(None, "query") == "" and _ks._arg_texto({"n": 3}, "query") == "")
+    check("calcular con 'operacion' en vez de 'expresion'",
+          "4" in str(_ks.ejecutar_herramienta("calcular", {"operacion": "2+2"}).get("resultado")))
     r = mundo.hora_en("Bogotá", "America/Bogota")
     check("hora_en misma zona -> 'la misma hora'", "la misma hora" in r["resultado"], r["resultado"])
     r = mundo.hora_en("Tokio", "Asia/Tokyo")

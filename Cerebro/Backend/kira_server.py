@@ -1878,7 +1878,7 @@ HERRAMIENTAS: dict[str, dict] = {
         "prefijo": None,
     },
     "buscar_en_web": {
-        "descripcion": "Busca en internet informacion actual y devuelve resultados con titulo, enlace y extracto (para citar fuentes de verdad).",
+        "descripcion": "Busca en internet informacion actual y devuelve resultados con titulo, enlace y extracto (para citar fuentes de verdad). args: 'query' (lo que buscás, en palabras claras, ej. 'Liceo Sur Andino Pitalito').",
         "comando": None,
         "prefijo": None,
     },
@@ -2329,7 +2329,9 @@ def buscar_en_web(query: str) -> dict:
     Corre en un hilo (via asyncio.to_thread): es una llamada HTTP sincrona."""
     query = (query or "").strip()
     if not query:
-        return {"ok": False, "resultado": "Falta el query de la búsqueda.", "fuentes": []}
+        return {"ok": False, "resultado": ("La búsqueda salió vacía porque no le pasaste qué buscar (arg 'query'). "
+                                           "Volvé a llamar buscar_en_web con la consulta; NO digas que falló internet."),
+                "fuentes": []}
     try:
         r = httpx.post(
             f"{config.EXA_BASE_URL}/search",
@@ -2570,6 +2572,23 @@ async def ejecutar_lote(
     return [(clave, por_clave[clave]) for clave, _ in pedidas]
 
 
+def _arg_texto(args: dict | None, *nombres: str) -> str:
+    """El argumento de texto de una tool, aunque la IA le haya puesto otro
+    nombre ('q', 'consulta', 'busqueda'...): primero los nombres esperados y,
+    si no, el primer texto que haya. Antes un nombre distinto = busqueda vacia
+    y Kira inventaba que "se trabó el internet"."""
+    args = args if isinstance(args, dict) else {}
+    for n in nombres:
+        v = args.get(n)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    for k, v in args.items():
+        # 'nombre' es la tool misma y 'personaje' lo agrega el servidor
+        if k not in ("nombre", "personaje") and isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+
 def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
     """Ejecuta una herramienta y devuelve {'ok': bool, 'resultado': str}.
     Corre en un hilo (via asyncio.to_thread): el serial bloquea hasta 4s
@@ -2593,15 +2612,15 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
     if nombre == "sismos_cercanos":
         return mundo_service.sismos_cercanos(*lugar_aqui)
     if nombre == "wikipedia":
-        return mundo_service.wikipedia(str((args or {}).get("tema", "") or (args or {}).get("query", "")))
+        return mundo_service.wikipedia(_arg_texto(args, "tema", "query", "titulo", "consulta"))
     if nombre == "un_dia_como_hoy":
         return mundo_service.un_dia_como_hoy()
     if nombre == "estacion_espacial":
         return mundo_service.estacion_espacial(*lugar_aqui)
     if nombre == "donde_queda":
-        return _donde_queda(str((args or {}).get("lugar", "")))
+        return _donde_queda(_arg_texto(args, "lugar", "ciudad", "pais", "país", "destino"))
     if nombre in {"clima_en", "hora_en", "sol_y_luna"}:
-        lugar_txt = str((args or {}).get("lugar", "") or "").strip()
+        lugar_txt = _arg_texto(args, "lugar", "ciudad", "pais", "país")
         if nombre == "sol_y_luna" and not lugar_txt:
             return mundo_service.sol_y_luna(*lugar_aqui)
         if not lugar_txt:
@@ -2617,9 +2636,9 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
             return mundo_service.clima_en(u["lat"], u["lon"], u["nombre"])
         return mundo_service.sol_y_luna(u["lat"], u["lon"], u["nombre"])
     if nombre == "dias_hasta":
-        return mundo_service.dias_hasta(str((args or {}).get("fecha", "") or (args or {}).get("cuando", "")))
+        return mundo_service.dias_hasta(_arg_texto(args, "fecha", "cuando", "dia", "día"))
     if nombre == "jugar_en_placa":
-        return _jugar_en_placa(str((args or {}).get("juego", "")))
+        return _jugar_en_placa(_arg_texto(args, "juego"))
     if nombre == "calibrar_brujula":
         return _calibrar_brujula()
     if nombre == "mostrar_en_leds":
@@ -2627,19 +2646,17 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
     if nombre == "temporizador":
         return _temporizador(args or {})
     if nombre == "tocar_melodia":
-        return _tocar_melodia(str((args or {}).get("cancion", "")))
+        return _tocar_melodia(_arg_texto(args, "cancion", "canción", "melodia", "melodía"))
     if nombre == "buscar_en_web":
         if not config.EXA_API_KEY:
             return {"ok": False, "resultado": (
                 "Hoy no tenés búsqueda en internet (no está configurada). Decilo "
                 "simple y ofrecé lo que sí sabés o podés medir.")}
-        query = (args or {}).get("query", "")
-        return buscar_en_web(query)
+        return buscar_en_web(_arg_texto(args, "query", "q", "consulta", "busqueda", "búsqueda", "pregunta", "tema"))
     if nombre == "calcular":
-        expresion = (args or {}).get("expresion", "")
-        return calcular(expresion)
+        return calcular(_arg_texto(args, "expresion", "expresión", "operacion", "operación", "cuenta"))
     if nombre == "leer_url":
-        return leer_url(str((args or {}).get("url", "")))
+        return leer_url(_arg_texto(args, "url", "enlace", "link"))
     if nombre == "guardar_recuerdo":
         texto = str((args or {}).get("texto", "")).strip()
         if not texto:
