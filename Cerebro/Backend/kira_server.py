@@ -1557,7 +1557,7 @@ def _preferencias_memoria(body: dict) -> dict[str, bool]:
 async def api_chat(body: dict):
     personaje = str(body.get("personaje", "kira")).lower()
     mensaje = str(body.get("mensaje", "")).strip()
-    historial = body.get("historia", [])  # [{rol, contenido}]
+    historial = historia_sana(body.get("historia"))  # [{rol, contenido}]
     sesion = body.get("sesion")
     preferencias = _preferencias_memoria(body)
     # FOTO: los ojos de la IA (camara del celular). Puede venir SIN texto:
@@ -2948,6 +2948,20 @@ def contenido_para_ia(h: dict) -> str:
     return json.dumps({"emotion": emocion, "message": contenido, "tool": None}, ensure_ascii=False)
 
 
+def historia_sana(historia) -> list[dict]:
+    """El historial viene del navegador: puede traer cualquier cosa (medido
+    con test_robustez.py: [1, "dos", null] tumbaba el turno con un 500). Solo
+    pasan objetos con rol de texto; el contenido se fuerza a texto."""
+    if not isinstance(historia, list):
+        return []
+    sana = []
+    for h in historia[-60:]:
+        if not isinstance(h, dict) or not isinstance(h.get("rol"), str):
+            continue
+        sana.append({**h, "contenido": "" if h.get("contenido") is None else str(h.get("contenido"))})
+    return sana
+
+
 def bloque_variedad(historial: list) -> str:
     """Como empezaron las ultimas respuestas de Kira, para que no empiece
     igual (medido con eval_charla.py: 'Uy,' abria casi todas). Las guias de
@@ -3008,7 +3022,7 @@ async def api_chat_stream(body: dict):
         raise HTTPException(400, "evento desconocido")
     if descripcion_evento:
         mensaje = mensaje_de_evento(descripcion_evento)
-    historial = body.get("historia", [])  # [{rol, contenido}]
+    historial = historia_sana(body.get("historia"))  # [{rol, contenido}]
     sesion = body.get("sesion")  # id del chat (para el historial debug)
     preferencias = _preferencias_memoria(body)
     # FOTO (vision): la camara del celular. El turno puede venir con texto,

@@ -21,12 +21,15 @@ def marcas_de_alineacion(caracteres: list[str], inicios: list[float],
                          fin: float | None = None) -> list[list[float]]:
     """De la alineacion de ElevenLabs (tiempo de cada caracter del texto que
     se le mando) a marcas [segundo, letras VISIBLES ya dichas], una por
-    palabra. Los audio tags ([laughs]...) suenan pero no se ven: no cuentan.
-    Con esto la pantalla revela el texto al ritmo de la voz."""
-    marcas: list[list[float]] = [[0.0, 0]]
-    visibles = 0
+    palabra. Con esto la pantalla revela el texto al ritmo de la voz.
+
+    "Visible" = exactamente lo que deja quitar_tags_audio (se probo con
+    fuzzing en test_robustez.py): los audio tags ([laughs]) suenan pero no se
+    ven, los espacios dobles se juntan, el espacio antes de la puntuacion se
+    va ("hola ... chau" se ve "hola... chau") y los bordes no cuentan."""
+    # 1) sin los audio tags
+    pares: list[tuple[str, float]] = []
     en_tag = False
-    previo_espacio = True       # al inicio, un espacio no se ve
     for c, t in zip(caracteres, inicios):
         if c == "[":
             en_tag = True
@@ -34,16 +37,32 @@ def marcas_de_alineacion(caracteres: list[str], inicios: list[float],
         if en_tag:
             en_tag = c != "]"
             continue
-        if c.isspace():
-            if previo_espacio:
-                continue        # "jaja [laughs] no" se ve "jaja no": un solo espacio
-            if marcas[-1][1] != visibles:
-                marcas.append([round(float(t), 3), visibles])
-        previo_espacio = c.isspace()
-        visibles += 1
-    if fin is not None and visibles:
-        marcas.append([round(float(fin), 3), visibles])
+        pares.append((c, float(t)))
+    # 2) la misma limpieza de espacios que la pantalla
+    limpio: list[tuple[str, float]] = []
+    for i, (c, t) in enumerate(pares):
+        if c in " \t":
+            if not limpio or limpio[-1][0] in " \t\n":
+                continue                       # inicio o espacio repetido
+            sig = next((x for x, _ in pares[i + 1:] if not x.isspace()), None)
+            if sig is None or sig in ",.;:!?…":
+                continue                       # al final, o antes de puntuacion
+        elif c.isspace() and (not limpio or sig_es_puntuacion(pares, i)):
+            continue
+        limpio.append((c, t))
+    # 3) una marca por palabra
+    marcas: list[list[float]] = [[0.0, 0]]
+    for k, (c, t) in enumerate(limpio):
+        if c.isspace() and marcas[-1][1] != k:
+            marcas.append([round(t, 3), k])
+    if fin is not None and limpio:
+        marcas.append([round(float(fin), 3), len(limpio)])
     return marcas
+
+
+def sig_es_puntuacion(pares: list[tuple[str, float]], i: int) -> bool:
+    sig = next((x for x, _ in pares[i + 1:] if not x.isspace()), None)
+    return sig is None or sig in ",.;:!?…"
 
 
 class SpeechService:

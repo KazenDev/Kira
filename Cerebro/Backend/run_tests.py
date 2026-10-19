@@ -24,6 +24,7 @@ DETERMINISTIC = (
     ("test_relay.py", ()),
     ("test_respaldo_ia.py", ()),
     ("test_herramientas.py", ()),
+    ("test_robustez.py", ()),
     ("test_stream_deterministic.py", ()),
     ("test_tts.py", ()),
     ("test_rag_charla.py", ()),
