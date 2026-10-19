@@ -1836,6 +1836,39 @@ HERRAMIENTAS: dict[str, dict] = {
                         "escala o victoria."),
         "comando": None, "prefijo": None,
     },
+    "clima_en": {
+        "descripcion": ("El clima AHORA en otra ciudad o país (temperatura, cielo, humedad, lluvia). "
+                        "args: 'lugar' (ej. 'Bogotá', 'Madrid, España'). Para Pitalito usá ver_clima."),
+        "comando": None, "prefijo": None,
+    },
+    "sol_y_luna": {
+        "descripcion": ("A qué hora sale y se pone el sol, cuántas horas de luz hay, el UV máximo y "
+                        "la fase de la luna. args: 'lugar' opcional (por defecto Pitalito)."),
+        "comando": None, "prefijo": None,
+    },
+    "hora_en": {
+        "descripcion": ("Qué hora es AHORA en otra ciudad o país y cuántas horas de diferencia hay "
+                        "con Colombia. args: 'lugar' (ej. 'Tokio', 'Madrid, España')."),
+        "comando": None, "prefijo": None,
+    },
+    "dias_hasta": {
+        "descripcion": ("Cuántos días faltan para una fecha y qué día de la semana cae (las cuentas "
+                        "con fechas NO las hagas de cabeza). args: 'fecha' = '2026-12-25', '25/12' o "
+                        "una conocida: navidad, año nuevo, halloween, velitas, 20 de julio..."),
+        "comando": None, "prefijo": None,
+    },
+    "jugar_en_placa": {
+        "descripcion": ("Arranca un minijuego EN TU PLACA para jugar con la persona: 'juego' = dado "
+                        "(tirás un dado en los LEDs), ppt (piedra, papel o tijera con los botones) o "
+                        "reflejos (apretar B apenas se prende). El resultado te llega solo después."),
+        "comando": None, "prefijo": None,
+    },
+    "calibrar_brujula": {
+        "descripcion": ("Arranca la calibración de tu brújula: en tus LEDs aparece un juego y alguien "
+                        "tiene que inclinar la placa para todos lados hasta llenar la pantalla "
+                        "(unos 30 segundos). Usala si te piden la flecha y la brújula no está calibrada."),
+        "comando": None, "prefijo": None,
+    },
     "reloj": {
         "descripcion": "Hora y fecha actuales del sistema (no usa el micro:bit).",
         "comando": None,
@@ -1921,6 +1954,9 @@ PEDIDO_ACCION = (
                                 r"\btemporizador de\b|\bavis[aá]me en\b", re.I)),
     ("mostrar_en_leds", re.compile(r"\bdibuj[aá](me|nos)?\b|\bmostr[aá](me|nos)? en (tus )?(luces|leds|cara)\b",
                                    re.I)),
+    ("jugar_en_placa", re.compile(r"\b(juguemos|jugar|jug[aá](me|mos)?)\b.*\b(dado|piedra|ppt|reflejos?)\b|"
+                                  r"\b(tir[aá](me)?|lanz[aá](me)?)\b.*\bdados?\b", re.I)),
+    ("calibrar_brujula", re.compile(r"\bcalibr[aá](r|te|la|mos)?\b.*\bbr[uú]jula\b", re.I)),
     ("donde_queda", re.compile(r"\bd[oó]nde queda\b|\bpara d[oó]nde (queda|est[aá])\b|"
                                r"\bhacia d[oó]nde (queda|est[aá])\b", re.I)),
 )
@@ -2059,6 +2095,47 @@ def _donde_queda(lugar: str) -> dict:
     return r
 
 
+def _placa_viva() -> bool:
+    """¿Hay placa del otro lado? (cable o el puente Bluetooth del celu). Las
+    tools que dibujan o suenan en la placa no pueden decir "ya se ve" si no."""
+    try:
+        return bool(getattr(serial_mgr, "conectado", False) or serial_mgr.relay_vivo())
+    except Exception:
+        return False
+
+
+_SIN_PLACA = ("Tu placa no está conectada ahora (ni por cable ni por Bluetooth): eso no se puede "
+              "hacer. Decilo simple, sin inventar que pasó.")
+
+
+def _jugar_en_placa(juego: str) -> dict:
+    j = _sin_tildes(juego).strip().lower()
+    mapa = {"dado": 1, "dados": 1, "ppt": 2, "piedra papel tijera": 2, "piedra, papel o tijera": 2,
+            "piedra papel o tijera": 2, "reflejos": 3, "reflejo": 3}
+    n = mapa.get(j) or mapa.get(j.replace(",", ""))
+    if not n:
+        return {"ok": False, "resultado": "Sé jugar: dado, ppt (piedra, papel o tijera) o reflejos."}
+    if not _placa_viva():
+        return {"ok": False, "resultado": _SIN_PLACA}
+    serial_mgr.enviar(f"JUEGO:{n}")
+    como = {1: "Se tira el dado en tus LEDs ahora mismo (con B o sacudiéndote se tira de nuevo).",
+            2: ("Arrancó piedra, papel o tijera: tus LEDs van mostrando las tres opciones y la "
+                "persona aprieta A o B cuando sale la suya; después mostrás la tuya."),
+            3: ("Arrancó reflejos: esperás concentrada y cuando tus LEDs hacen ¡flash! hay que "
+                "apretar un botón lo más rápido posible (si aprieta antes, es trampa).")}[n]
+    return {"ok": True, "resultado": como + " El resultado te va a llegar solo cuando termine: no lo inventes."}
+
+
+def _calibrar_brujula() -> dict:
+    if not _placa_viva():
+        return {"ok": False, "resultado": _SIN_PLACA}
+    serial_mgr.enviar("CALIBRAR:BRUJULA")
+    return {"ok": True, "resultado": (
+        "Arrancó la calibración: en tus LEDs aparece un puntito y hay que inclinar la placa para "
+        "todos lados hasta llenar la pantalla entera (unos 30 segundos). Mientras tanto tu cara no "
+        "se mueve. Explicáselo corto y con onda.")}
+
+
 def _sin_tildes(texto: str) -> str:
     import unicodedata
     plano = unicodedata.normalize("NFKD", texto)
@@ -2066,6 +2143,8 @@ def _sin_tildes(texto: str) -> str:
 
 
 def _mostrar_en_leds(args: dict) -> dict:
+    if not _placa_viva():
+        return {"ok": False, "resultado": _SIN_PLACA}
     icono = str(args.get("icono", "") or "").strip().lower()
     texto = _sin_tildes(str(args.get("texto", "") or "")).strip()[:30]
     validos = {"corazon", "sol", "nube", "lluvia", "estrella", "luna", "si", "no", "casa",
@@ -2083,6 +2162,8 @@ def _mostrar_en_leds(args: dict) -> dict:
 
 
 def _temporizador(args: dict) -> dict:
+    if not _placa_viva():
+        return {"ok": False, "resultado": _SIN_PLACA}
     try:
         seg = int(float(args.get("segundos", 0)))
     except (TypeError, ValueError):
@@ -2102,6 +2183,8 @@ def _temporizador(args: dict) -> dict:
 
 
 def _tocar_melodia(cancion: str) -> dict:
+    if not _placa_viva():
+        return {"ok": False, "resultado": _SIN_PLACA}
     mapa = {"cumpleanos": 1, "cumpleaños": 1, "feliz cumpleanos": 1, "feliz cumpleaños": 1,
             "estrellita": 2, "escala": 3, "do re mi": 3, "victoria": 4}
     n = mapa.get(cancion.strip().lower())
@@ -2506,6 +2589,28 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
         return mundo_service.estacion_espacial(*lugar_aqui)
     if nombre == "donde_queda":
         return _donde_queda(str((args or {}).get("lugar", "")))
+    if nombre in {"clima_en", "hora_en", "sol_y_luna"}:
+        lugar_txt = str((args or {}).get("lugar", "") or "").strip()
+        if nombre == "sol_y_luna" and not lugar_txt:
+            return mundo_service.sol_y_luna(*lugar_aqui)
+        if not lugar_txt:
+            return {"ok": False, "resultado": "Falta el lugar (arg 'lugar')."}
+        # para la HORA del mundo, "Madrid" es España (umbral bajo): el que
+        # pregunta la hora de afuera casi nunca habla del pueblo homonimo
+        u = mundo_service.ubicar(lugar_txt, umbral=5 if nombre == "hora_en" else 50)
+        if not u:
+            return {"ok": False, "resultado": f"No encontré '{lugar_txt}' en el mapa."}
+        if nombre == "hora_en":
+            return mundo_service.hora_en(u["nombre"], u["tz"])
+        if nombre == "clima_en":
+            return mundo_service.clima_en(u["lat"], u["lon"], u["nombre"])
+        return mundo_service.sol_y_luna(u["lat"], u["lon"], u["nombre"])
+    if nombre == "dias_hasta":
+        return mundo_service.dias_hasta(str((args or {}).get("fecha", "") or (args or {}).get("cuando", "")))
+    if nombre == "jugar_en_placa":
+        return _jugar_en_placa(str((args or {}).get("juego", "")))
+    if nombre == "calibrar_brujula":
+        return _calibrar_brujula()
     if nombre == "mostrar_en_leds":
         return _mostrar_en_leds(args or {})
     if nombre == "temporizador":
@@ -3372,7 +3477,11 @@ async def api_chat_stream(body: dict):
         # categoria "criada". La diferencia importa, porque una lista vacia es
         # ambigua (¿no busco o me fallo la busqueda?) y "no consulto nada" es
         # una respuesta. Ver app/services/rastro.py.
-        rastro_final = rastro_turno or [rastro_service.sin_fuentes(herramientas_turno)]
+        rastro_final = list(rastro_turno)
+        if foto:
+            # miro la foto de verdad: eso ES una fuente (no "lo sabia")
+            rastro_final.insert(0, rastro_service.de_la_foto())
+        rastro_final = rastro_final or [rastro_service.sin_fuentes(herramientas_turno)]
 
         yield sse_event({
             "tipo": "fin",

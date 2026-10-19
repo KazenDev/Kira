@@ -34,6 +34,8 @@ ESCENARIOS: dict[str, list[str]] = {
     "util": ["¿va a llover hoy?", "¿dónde queda Bogotá desde acá?",
              "poneme un temporizador de un minuto para la sopa", "tocame feliz cumpleaños",
              "¿hubo temblores por acá?", "¿qué pasó un día como hoy?"],
+    "mundo": ["¿qué hora es en Tokio?", "¿y cómo está el clima en Bogotá?", "¿cuánto falta para navidad?",
+              "¿a qué hora se pone el sol hoy?", "juguemos al dado"],
     "seco": ["hola", "sí", "normal", "nada", "no sé"],
     "molesto": ["sos fea", "callate", "jaja sos una tonta", "bueno perdón"],
     "triste": ["hola Kira", "estoy triste porque se murió mi perro", "se llamaba Toby", "gracias"],

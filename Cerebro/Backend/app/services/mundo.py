@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import math
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 from urllib.parse import quote
@@ -37,6 +38,11 @@ def _get_json(url: str, ttl: float, timeout: float = 5.0):
     data = r.json()
     _cache[url] = (ahora, data)
     return data
+
+
+def _sin_acentos(t: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", t.lower()) if unicodedata.category(c) != "Mn")
 
 
 def _falla(que: str) -> dict:
@@ -272,7 +278,7 @@ def estacion_espacial(lat: float, lon: float, lugar: str) -> dict:
 
 # --- Lugares (geocodificacion) -----------------------------------------------------
 
-def ubicar(lugar: str, cerca: tuple[float, float] | None = None) -> dict | None:
+def ubicar(lugar: str, cerca: tuple[float, float] | None = None, umbral: float = 50) -> dict | None:
     """Coordenadas de un lugar por nombre (Open-Meteo geocoding, gratis).
 
     Primero busca EN COLOMBIA y se queda con el mas poblado (la capital le gana
@@ -284,6 +290,10 @@ def ubicar(lugar: str, cerca: tuple[float, float] | None = None) -> dict | None:
     lugar = (lugar or "").strip()
     if not lugar:
         return None
+    # "Madrid, España": el pais despues de la coma filtra los resultados
+    pais = ""
+    if "," in lugar:
+        lugar, pais = (x.strip() for x in lugar.split(",", 1))
     base = ("https://geocoding-api.open-meteo.com/v1/search?count=10&language=es&format=json"
             f"&name={quote(lugar)}")
     def buscar(url):
@@ -299,6 +309,12 @@ def ubicar(lugar: str, cerca: tuple[float, float] | None = None) -> dict | None:
 
     en_colombia = buscar(base + "&countryCode=CO")
     en_el_mundo = buscar(base)
+    if pais:
+        def es_del_pais(x):
+            p = _sin_acentos(pais)
+            return p in _sin_acentos(x.get("country") or "") or p in _sin_acentos(x.get("admin1") or "")
+        en_el_mundo = [x for x in en_el_mundo if es_del_pais(x)] or en_el_mundo
+        en_colombia = [x for x in en_colombia if es_del_pais(x)]
     if not en_colombia and not en_el_mundo:
         return None
     r = max(en_colombia, key=peso) if en_colombia else max(en_el_mundo, key=peso)
@@ -306,10 +322,11 @@ def ubicar(lugar: str, cerca: tuple[float, float] | None = None) -> dict | None:
         # "Paris" es Francia aunque haya un caserio Paris en Antioquia: gana el
         # del mundo solo si es MUCHISIMO mas grande (50x)
         famoso = max(en_el_mundo, key=peso)
-        if (famoso.get("population") or 0) > 50 * max(r.get("population") or 0, 1000):
+        if (famoso.get("population") or 0) > umbral * max(r.get("population") or 0, 1000):
             r = famoso
     nombre = ", ".join(x for x in (r.get("name"), r.get("admin1"), r.get("country")) if x)
-    return {"lat": r["latitude"], "lon": r["longitude"], "nombre": nombre}
+    return {"lat": r["latitude"], "lon": r["longitude"], "nombre": nombre,
+            "tz": r.get("timezone") or "America/Bogota"}
 
 
 def donde_queda(lat: float, lon: float, lugar: str, rumbo_kira: float | None = None) -> dict:
@@ -329,3 +346,138 @@ def donde_queda(lat: float, lon: float, lugar: str, rumbo_kira: float | None = N
                 "adelante a tu izquierda")
         texto += f" Según tu brújula, te queda {lado}."
     return {"ok": True, "resultado": texto, "rumbo": rumbo}
+
+
+# --- Clima en otra ciudad, sol y luna, hora en el mundo, cuanto falta -------
+
+from app.services.clima import CIELO_WMO  # noqa: E402  (mismo mapa de codigos WMO)
+
+
+def clima_en(lat: float, lon: float, lugar: str) -> dict:
+    """El clima AHORA en cualquier lugar (Pitalito tiene su propia tool)."""
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}&timezone=auto"
+        "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,"
+        "wind_speed_10m,is_day,precipitation"
+        "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=1"
+    )
+    try:
+        d = _get_json(url, ttl=900)
+    except Exception:
+        return _falla(f"el clima de {lugar}")
+    cur = d.get("current") or {}
+    if cur.get("temperature_2m") is None:
+        return _falla(f"el clima de {lugar}")
+    cielo = CIELO_WMO.get(int(cur.get("weather_code") or 0), "")
+    partes = [f"{round(cur['temperature_2m'])} grados"
+              + (f" (se sienten {round(cur['apparent_temperature'])})"
+                 if cur.get("apparent_temperature") is not None
+                 and abs(cur["apparent_temperature"] - cur["temperature_2m"]) >= 2 else "")]
+    if cielo:
+        partes.append(cielo + (" y es de noche" if cur.get("is_day") == 0 else ""))
+    if cur.get("relative_humidity_2m") is not None:
+        partes.append(f"humedad {round(cur['relative_humidity_2m'])}%")
+    if (cur.get("precipitation") or 0) > 0:
+        partes.append("está lloviendo")
+    dia = d.get("daily") or {}
+    if dia.get("temperature_2m_max"):
+        partes.append(f"hoy entre {round(dia['temperature_2m_min'][0])} y {round(dia['temperature_2m_max'][0])} grados")
+    if dia.get("precipitation_probability_max") and dia["precipitation_probability_max"][0] is not None:
+        partes.append(f"lluvia hoy hasta {dia['precipitation_probability_max'][0]}%")
+    return {"ok": True, "resultado": f"Ahora en {lugar}: " + ", ".join(partes) + "."}
+
+
+def sol_y_luna(lat: float, lon: float, lugar: str) -> dict:
+    """Amanecer, atardecer, horas de luz, UV y la luna de hoy."""
+    url = (
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}&timezone=auto"
+        "&daily=sunrise,sunset,daylight_duration,uv_index_max,moon_phase&forecast_days=2"
+    )
+    try:
+        d = _get_json(url, ttl=3600)
+    except Exception:
+        return _falla("el sol y la luna")
+    dia = d.get("daily") or {}
+    if not dia.get("sunrise"):
+        return _falla("el sol y la luna")
+    partes = [f"hoy el sol sale a las {_hora(dia['sunrise'][0])} y se pone a las {_hora(dia['sunset'][0])}"]
+    if dia.get("daylight_duration"):
+        h, m = divmod(round(dia["daylight_duration"][0] / 60), 60)
+        partes.append(f"{h} horas y {m} minutos de luz")
+    if len(dia["sunrise"]) > 1:
+        partes.append(f"mañana amanece a las {_hora(dia['sunrise'][1])}")
+    if dia.get("uv_index_max"):
+        uv = round(dia["uv_index_max"][0], 1)
+        nivel = "extremo" if uv >= 11 else "muy alto" if uv >= 8 else "alto" if uv >= 6 else "moderado" if uv >= 3 else "bajo"
+        partes.append(f"UV máximo {uv} ({nivel})")
+    if dia.get("moon_phase"):
+        partes.append(f"la luna está en {fase_luna(float(dia['moon_phase'][0]))}")
+    return {"ok": True, "resultado": f"En {lugar}: " + "; ".join(partes) + "."}
+
+
+def hora_en(nombre: str, tz: str, tz_aca: str = "America/Bogota") -> dict:
+    """Qué hora es en otro lugar y cuántas horas de diferencia hay con acá."""
+    try:
+        alla = datetime.now(ZoneInfo(tz))
+        aca = datetime.now(ZoneInfo(tz_aca))
+    except Exception:
+        return {"ok": False, "resultado": f"No sé la zona horaria de {nombre}."}
+    dif = round((alla.utcoffset().total_seconds() - aca.utcoffset().total_seconds()) / 3600, 1)
+    dif_txt = ("la misma hora que acá" if dif == 0 else
+               f"{abs(dif):g} hora{'s' if abs(dif) != 1 else ''} {'más' if dif > 0 else 'menos'} que acá")
+    dia_txt = ""
+    if alla.date() != aca.date():
+        dia_txt = " (allá ya es mañana)" if alla.date() > aca.date() else " (allá todavía es ayer)"
+    return {"ok": True, "resultado": (
+        f"En {nombre} son las {alla.strftime('%H:%M')}{dia_txt}: {dif_txt}.")}
+
+
+_FECHAS_CONOCIDAS = {
+    "navidad": (12, 25), "nochebuena": (12, 24), "ano nuevo": (1, 1), "año nuevo": (1, 1),
+    "fin de ano": (12, 31), "fin de año": (12, 31), "halloween": (10, 31),
+    "san valentin": (2, 14), "san valentín": (2, 14), "dia de las velitas": (12, 7),
+    "velitas": (12, 7), "20 de julio": (7, 20), "independencia": (7, 20),
+    "batalla de boyaca": (8, 7), "batalla de boyacá": (8, 7), "dia de la mujer": (3, 8),
+    "día de la mujer": (3, 8),
+}
+_DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+
+
+def dias_hasta(cuando: str, hoy: date | None = None) -> dict:
+    """Cuánto falta para una fecha ('2026-12-25', '25/12', '25-12') o una
+    fecha conocida ('navidad'). Las cuentas con fechas el modelo las erra."""
+    hoy = hoy or datetime.now(ZoneInfo("America/Bogota")).date()
+    texto = (cuando or "").strip().lower()
+    objetivo = None
+    if texto in _FECHAS_CONOCIDAS:
+        m, d = _FECHAS_CONOCIDAS[texto]
+        objetivo = date(hoy.year, m, d)
+    else:
+        import re
+        iso = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", texto)
+        dm = re.fullmatch(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", texto)
+        try:
+            if iso:
+                objetivo = date(int(iso[1]), int(iso[2]), int(iso[3]))
+            elif dm:
+                anio = int(dm[3]) if dm[3] else hoy.year
+                anio = anio + 2000 if anio < 100 else anio
+                objetivo = date(anio, int(dm[2]), int(dm[1]))
+        except ValueError:
+            return {"ok": False, "resultado": f"'{cuando}' no es una fecha que exista."}
+    if objetivo is None:
+        return {"ok": False, "resultado": (
+            "Pasame la fecha como 2026-12-25 o 25/12 (o una conocida: navidad, año nuevo, halloween...).")}
+    if objetivo < hoy and not (texto[:4].isdigit() and "-" in texto):
+        objetivo = objetivo.replace(year=objetivo.year + 1)   # "navidad" que ya paso: la que viene
+    n = (objetivo - hoy).days
+    cae = _DIAS[objetivo.weekday()]
+    if n == 0:
+        return {"ok": True, "resultado": f"¡Es hoy! ({cae} {objetivo.day}/{objetivo.month})."}
+    if n < 0:
+        return {"ok": True, "resultado": f"Eso ya pasó: fue hace {-n} días, un {cae}."}
+    semanas = f" (unas {n // 7} semanas)" if n >= 14 else ""
+    return {"ok": True, "resultado": (
+        f"Faltan {n} día{'s' if n != 1 else ''}{semanas}: cae {cae} {objetivo.day}/{objetivo.month}/{objetivo.year}.")}

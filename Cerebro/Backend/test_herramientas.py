@@ -313,6 +313,50 @@ async def _correr(stub: _Stub, ejecutar=None, pj_extra=None, mensaje="hola"):
         ks.ejecutar_herramienta = originals["ejecutar"]
 
 
+def test_tools_nuevas():
+    print("\n== 9) tools nuevas: dias_hasta, hora_en, juegos y la placa ausente ==")
+    from datetime import date
+    from app.services import mundo
+    hoy = date(2026, 10, 18)
+    r = mundo.dias_hasta("navidad", hoy)
+    check("navidad desde el 18-oct-2026: 68 dias, viernes", "68 días" in r["resultado"] and "viernes" in r["resultado"],
+          r["resultado"])
+    r = mundo.dias_hasta("1/1", hoy)
+    check("'1/1' ya paso este año -> el que viene (2027)", "2027" in r["resultado"], r["resultado"])
+    check("hoy -> '¡Es hoy!'", mundo.dias_hasta("18/10", hoy)["resultado"].startswith("¡Es hoy!"))
+    check("fecha imposible -> ok False", mundo.dias_hasta("31/02", hoy)["ok"] is False)
+    check("basura -> pide el formato", mundo.dias_hasta("el finde", hoy)["ok"] is False)
+    r = mundo.hora_en("Bogotá", "America/Bogota")
+    check("hora_en misma zona -> 'la misma hora'", "la misma hora" in r["resultado"], r["resultado"])
+    r = mundo.hora_en("Tokio", "Asia/Tokyo")
+    check("hora_en Tokio -> 14 horas más", "14 horas más" in r["resultado"], r["resultado"])
+    check("zona inexistente -> ok False", mundo.hora_en("X", "Marte/Olimpo")["ok"] is False)
+
+    original = ks._placa_viva
+    enviados = []
+    original_enviar = ks.serial_mgr.enviar
+    ks.serial_mgr.enviar = lambda cmd: enviados.append(cmd)
+    try:
+        ks._placa_viva = lambda: False
+        for nombre, args in [("tocar_melodia", {"cancion": "estrellita"}), ("temporizador", {"segundos": 60}),
+                             ("mostrar_en_leds", {"icono": "sol"}), ("jugar_en_placa", {"juego": "dado"}),
+                             ("calibrar_brujula", {})]:
+            r = ks.ejecutar_herramienta(nombre, args)
+            check(f"sin placa, {nombre} NO dice que lo hizo", r["ok"] is False and "no está conectada" in r["resultado"],
+                  r["resultado"][:80])
+        check("sin placa no se manda nada", enviados == [], str(enviados))
+        ks._placa_viva = lambda: True
+        r = ks.ejecutar_herramienta("jugar_en_placa", {"juego": "piedra, papel o tijera"})
+        check("con placa: ppt -> JUEGO:2", r["ok"] and enviados[-1:] == ["JUEGO:2"], str(enviados))
+        r = ks.ejecutar_herramienta("jugar_en_placa", {"juego": "ajedrez"})
+        check("juego que no existe -> lista los que hay", not r["ok"] and "dado" in r["resultado"])
+        r = ks.ejecutar_herramienta("calibrar_brujula", {})
+        check("calibrar -> CALIBRAR:BRUJULA", r["ok"] and enviados[-1:] == ["CALIBRAR:BRUJULA"], str(enviados))
+    finally:
+        ks._placa_viva = original
+        ks.serial_mgr.enviar = original_enviar
+
+
 async def test_multi_tool():
     print("\n== 5) ENDPOINT multi-tool: lista de 2 tools -> UN bloque consolidado ==")
     stub = _Stub([
@@ -428,6 +472,7 @@ def main():
     print("=" * 62)
     try:
         test_unitarios()
+        test_tools_nuevas()
         if not solo_unitarios:
             asyncio.run(test_multi_tool())
             asyncio.run(test_tope())

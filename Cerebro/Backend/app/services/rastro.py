@@ -69,6 +69,12 @@ ETIQUETAS: dict[str, tuple[str, str]] = {
     "wikipedia": ("web", "leyó Wikipedia"),
     "un_dia_como_hoy": ("web", "las efemérides de Wikipedia"),
     "estacion_espacial": ("web", "la posición de la Estación Espacial"),
+    "clima_en": ("clima", "el clima de allá (Open-Meteo)"),
+    "sol_y_luna": ("clima", "el sol y la luna (Open-Meteo)"),
+    "hora_en": ("sistema", "el reloj del mundo"),
+    "dias_hasta": ("calculo", "contó los días"),
+    "jugar_en_placa": ("accion", "un juego en su placa"),
+    "calibrar_brujula": ("accion", "la calibración de su brújula"),
     "donde_queda": ("calculo", "calculó dónde queda (y su brújula)"),
     "mostrar_en_leds": ("accion", "sus LEDs"),
     "temporizador": ("accion", "su temporizador"),
@@ -125,6 +131,18 @@ def item_para_herramienta(nombre: str, resultado: dict) -> dict:
         "detalle": detalle,
         "valor": valor,
         "ok": bool(resultado.get("ok")) if resultado else False,
+    }
+
+
+def de_la_foto() -> dict:
+    """El turno trajo una foto y la IA la miro: es un sentido, no memoria."""
+    return {
+        "tipo": "sensor",
+        "herramienta": "foto",
+        "etiqueta": "Tu foto",
+        "detalle": "la miró con la cámara del celular",
+        "valor": "",
+        "ok": True,
     }
 
 

@@ -177,6 +177,12 @@ export const ANIM_HERRAMIENTA: Record<string, string> = {
   calcular: 'calculo',
   reloj: 'reloj',
   mostrar_en_leds: 'latido',
+  clima_en: 'sol',
+  sol_y_luna: 'sol',
+  hora_en: 'reloj',
+  dias_hasta: 'calculo',
+  jugar_en_placa: 'latido',
+  calibrar_brujula: 'flecha',
 };
 
 const FLECHAS = [
