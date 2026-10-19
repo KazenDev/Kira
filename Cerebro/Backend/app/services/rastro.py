@@ -74,6 +74,7 @@ ETIQUETAS: dict[str, tuple[str, str]] = {
     "hora_en": ("sistema", "el reloj del mundo"),
     "dias_hasta": ("calculo", "contó los días"),
     "jugar_en_placa": ("accion", "un juego en su placa"),
+    "experimento": ("sensor", "un experimento medido en su placa"),
     "calibrar_brujula": ("accion", "la calibración de su brújula"),
     "donde_queda": ("calculo", "calculó dónde queda (y su brújula)"),
     "mostrar_en_leds": ("accion", "sus LEDs"),

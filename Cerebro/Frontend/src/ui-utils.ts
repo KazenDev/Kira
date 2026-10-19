@@ -151,6 +151,7 @@ const LABELS_HERRAMIENTA: Record<string, string> = {
   dias_hasta: 'contando los días…',
   jugar_en_placa: 'preparando el juego…',
   calibrar_brujula: 'preparando la brújula…',
+  experimento: '¡experimento en marcha: ahora!',
   buscar_recuerdos: 'buscando en su memoria…',
 };
 

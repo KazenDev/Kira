@@ -183,6 +183,7 @@ export const ANIM_HERRAMIENTA: Record<string, string> = {
   hora_en: 'reloj',
   dias_hasta: 'calculo',
   jugar_en_placa: 'latido',
+  experimento: 'latido',
   calibrar_brujula: 'flecha',
 };
 

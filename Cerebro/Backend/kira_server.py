@@ -96,6 +96,7 @@ from app.services.auth import AuthStore
 from app.services import clima as clima_service
 from app.services import mundo as mundo_service
 from app.services import rastro as rastro_service
+from app.services import experimentos as experimentos_service
 from app.services.tenancy import (
     StatesProxy,
     StoreProxy,
@@ -1866,6 +1867,16 @@ HERRAMIENTAS: dict[str, dict] = {
                         "reflejos (apretar B apenas se prende). El resultado te llega solo después."),
         "comando": None, "prefijo": None,
     },
+    "experimento": {
+        "descripcion": ("Un EXPERIMENTO de feria con la persona, medido de verdad en tu placa: 'tipo' = luz "
+                        "(te tapan los LEDs con la mano; si está oscuro, te alumbran con la linterna del "
+                        "celular), sonido (el ruido más fuerte que puedan: gritar, "
+                        "aplaudir, soplarte) o fuerza (sacudirte fuerte). Mide unos 5 segundos y te devuelve "
+                        "el número, el RÉCORD del día y la ciencia detrás. ANTES explicá el reto y esperá que "
+                        "digan que están listos; recién ahí la llamás (lo hacen apenas sale el ícono). "
+                        "'quien' = el nombre de la persona si lo sabés (para el récord)."),
+        "comando": None, "prefijo": None,
+    },
     "calibrar_brujula": {
         "descripcion": ("Arranca la calibración de tu brújula: en tus LEDs aparece un juego y alguien "
                         "tiene que inclinar la placa para todos lados hasta llenar la pantalla "
@@ -2135,6 +2146,60 @@ def _jugar_en_placa(juego: str) -> dict:
             3: ("Arrancó reflejos: esperás concentrada y cuando tus LEDs hacen ¡flash! hay que "
                 "apretar un botón lo más rápido posible (si aprieta antes, es trampa).")}[n]
     return {"ok": True, "resultado": como + " El resultado te va a llegar solo cuando termine: no lo inventes."}
+
+
+RECORDS_EXPERIMENTOS = os.path.join(MEMORIA_DIR, "records_experimentos.json")
+
+
+def _experimento(args: dict) -> dict:
+    """Mide un reto de feria: linea de base, el icono de "¡YA!" en los LEDs con
+    su sonido, y ~5 s de lecturas mientras la persona hace lo suyo."""
+    tipo = experimentos_service.normalizar_tipo(_arg_texto(args, "tipo", "experimento", "reto"))
+    if not tipo:
+        return {"ok": False, "resultado": "Sé hacer tres experimentos: luz, sonido o fuerza (arg 'tipo')."}
+    if not _placa_viva():
+        return {"ok": False, "resultado": _SIN_PLACA}
+    comando, prefijo, icono = experimentos_service.TIPOS[tipo]
+
+    tiempos: list[int] = []
+
+    def leer(timeout: float = 1.0):
+        t = time.time()
+        linea = serial_mgr.leer_sensor(comando, prefijo, timeout=timeout)
+        tiempos.append(int((time.time() - t) * 1000))
+        return experimentos_service.valor_de(tipo, linea)
+
+    # la base ANTES del "¡ya!": la MEDIANA de tres (la primera lectura del
+    # micrófono recién despierto sale muy baja y armaba récords falsos). Para
+    # la fuerza, la base es la gravedad quieta.
+    bases = sorted(v for v in (leer(2.5), leer(), leer()) if v is not None)
+    base = bases[len(bases) // 2] if bases else None
+    if tipo == "fuerza":
+        base = 1000.0
+    serial_mgr.enviar(f"ICONO:{icono}")
+    serial_mgr.enviar("SONAR:45")                     # el "¡ya!" de los juegos
+    if tipo == "sonido":
+        time.sleep(0.7)       # su propio parlante: el pitido no cuenta como grito
+    muestras: list[float] = []
+    fin = time.time() + 5.0
+    while time.time() < fin - 0.3:
+        v = leer()
+        if v is not None:
+            muestras.append(v)
+        if tipo != "sonido":
+            time.sleep(0.05)                          # el micro ya tarda lo suyo
+    quien = _arg_texto(args, "quien", "nombre_persona", "persona")[:30]
+    records = experimentos_service.leer_records(RECORDS_EXPERIMENTOS)
+    resultado, nuevos = experimentos_service.resumir(tipo, base, muestras, records, quien)
+    if nuevos != records:
+        try:
+            experimentos_service.guardar_records(RECORDS_EXPERIMENTOS, nuevos)
+        except OSError as e:
+            print(f"[EXPERIMENTO] no pude guardar el récord: {e}")
+        if "NUEVO RÉCORD" in resultado.get("resultado", ""):
+            serial_mgr.enviar("SONAR:41")             # fanfarria de ganar
+    print(f"[EXPERIMENTO] {tipo}: base={base} muestras={len(muestras)} ms={tiempos} -> {resultado.get('puntaje')}")
+    return resultado
 
 
 def _calibrar_brujula() -> dict:
@@ -2487,7 +2552,7 @@ def es_tool_placa(nombre: str) -> bool:
     h = HERRAMIENTAS.get(nombre)
     if h is None:
         return False
-    return bool(h.get("comando")) or nombre == "controlar_metronomo"
+    return bool(h.get("comando")) or nombre in ("controlar_metronomo", "experimento")
 
 
 def catalogo_herramientas(
@@ -2641,6 +2706,8 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
         return _jugar_en_placa(_arg_texto(args, "juego"))
     if nombre == "calibrar_brujula":
         return _calibrar_brujula()
+    if nombre == "experimento":
+        return _experimento(args or {})
     if nombre == "mostrar_en_leds":
         return _mostrar_en_leds(args or {})
     if nombre == "temporizador":
@@ -2884,7 +2951,8 @@ EVENTOS_KIRA = {
     "EVENTO:DESLUMBRADA": "volvió la luz de golpe y te encandiló",
     "EVENTO:CAIDA": "te dejaron caer: estuviste en caída libre",
     "EVENTO:VOCES": ("escuchaste gente hablando cerca tuyo, recién: alguien llegó o "
-                     "anda por ahí. Llamá su atención con onda, invitalo a charlar"),
+                     "anda por ahí. Llamá su atención con onda: invitá a charlar o proponé un "
+                     "reto corto (romper tu récord de grito, taparte la luz, un minijuego)"),
     "EVENTO:APLAUSO": "escuchaste un aplauso o un ruido fuerte de golpe",
     "EVENTO:TIMER": "terminó el temporizador que te pidieron (ya sonó y titiló tu pantalla)",
     "SILENCIO": ("hace un rato que nadie te habla, pero la pantalla sigue abierta: "
@@ -2952,6 +3020,8 @@ async def bloque_entorno() -> str:
             lineas.append("- Te están moviendo o te tienen en la mano.")
     elif not getattr(serial_mgr, "conectado", True):
         lineas.append("- Tu placa no está conectada ahora: no sentís el entorno.")
+    lineas.append("- Récords de experimentos de hoy: " + experimentos_service.records_del_dia(
+        experimentos_service.leer_records(RECORDS_EXPERIMENTOS)) + ".")
     n = len(_dia_charlas["sesiones"]) if _dia_charlas["fecha"] == ahora.strftime("%Y-%m-%d") else 0
     if n >= 2:
         lineas.append(f"- Hoy ya charlaste con unas {n} personas distintas.")
@@ -3039,6 +3109,12 @@ async def observar_mundo(cada_seg: float = 180.0) -> None:
 def describir_evento(linea: str) -> str | None:
     linea = (linea or "").strip()
     if linea == "SILENCIO":
+        # a veces, en vez de un dato, un RETO: lo que mas engancha en una feria
+        if random.random() < 0.35:
+            return EVENTOS_KIRA["SILENCIO"] + (
+                ". Esta vez, en vez de un dato, proponé un RETO a quien esté: un experimento "
+                "(luz, sonido o fuerza, con tu récord del día) o un minijuego en tu placa. "
+                "Explicalo y esperá que digan que sí")
         # una semilla REAL para sacar charla (no un generico "¿qué andás haciendo?")
         try:
             semilla = mundo_service.semilla_charla(config.CLIMA_LAT, config.CLIMA_LON, random)

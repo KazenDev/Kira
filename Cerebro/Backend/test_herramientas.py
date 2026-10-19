@@ -326,6 +326,36 @@ def test_tools_nuevas():
     check("hoy -> '¡Es hoy!'", mundo.dias_hasta("18/10", hoy)["resultado"].startswith("¡Es hoy!"))
     check("fecha imposible -> ok False", mundo.dias_hasta("31/02", hoy)["ok"] is False)
     check("basura -> pide el formato", mundo.dias_hasta("el finde", hoy)["ok"] is False)
+    from app.services import experimentos as ex
+    check("alias: 'gritar' -> sonido, 'sacudir' -> fuerza, 'tapar' -> luz",
+          ex.normalizar_tipo("gritar") == "sonido" and ex.normalizar_tipo("sacudir") == "fuerza"
+          and ex.normalizar_tipo("tapar") == "luz" and ex.normalizar_tipo("bailar") is None)
+    check("lecturas: LUZ, MIC y la magnitud del ACCEL",
+          ex.valor_de("luz", "LUZ:120") == 120 and ex.valor_de("sonido", "MIC:77:1:2:3:4:5:9") == 77
+          and round(ex.valor_de("fuerza", "ACCEL:0:0:-1000:0:0")) == 1000 and ex.valor_de("luz", "ACK:X") is None)
+    d1, d2 = date(2026, 10, 19), date(2026, 10, 20)
+    r, rec = ex.resumir("sonido", 10, [20, 82, 80, 60], {}, "Sofi", d1)
+    check("primer grito del dia = record", "PRIMER intento" in r["resultado"] and rec["sonido"]["valor"] == 80, r["resultado"])
+    r, _ = ex.resumir("sonido", 10, [12, 99, 14], {}, "", d1)
+    check("un pico suelto no es un grito", "Casi no cambió" in r["resultado"], r["resultado"])
+    r, rec2 = ex.resumir("sonido", 10, [30, 95, 96], rec, "Juan", d1)
+    check("lo supera -> NUEVO RECORD y nombra a quien perdio", "NUEVO RÉCORD" in r["resultado"] and "Sofi" in r["resultado"]
+          and rec2["sonido"]["quien"] == "Juan", r["resultado"])
+    r, rec3 = ex.resumir("sonido", 10, [40, 50, 50], rec2, "Ana", d1)
+    check("no lo alcanza -> el record sigue", "no alcanzó" in r["resultado"] and rec3 == rec2, r["resultado"])
+    r, rec4 = ex.resumir("sonido", 10, [40, 50, 50], rec2, "Ana", d2)
+    check("otro dia arranca de cero", "PRIMER intento" in r["resultado"] and rec4["sonido"]["valor"] == 50)
+    r, rec5 = ex.resumir("luz", 150, [148, 145], rec2, "Ana", d1)
+    check("si no hicieron nada: no compite ni pisa el record", "Casi no cambió" in r["resultado"] and rec5 == rec2)
+    r, _ = ex.resumir("luz", 200, [20], {}, "", d1)
+    check("luz: % de oscuridad (200 -> 20 = 90%)", "90%" in r["resultado"], r["resultado"])
+    r, recl = ex.resumir("luz", 3, [5, 190], {}, "Leo", d1)
+    check("luz a oscuras -> reto de linterna con su propio record", "linterna" in r["resultado"]
+          and recl.get("linterna", {}).get("valor") == 187 and "luz" not in recl, r["resultado"])
+    check("records del dia en una linea, con el nombre",
+          "grito 95" in ex.records_del_dia(rec2, d1) and "Juan" in ex.records_del_dia(rec2, d1))
+    check("sin records hoy -> lo dice (no inventa)", "nadie" in ex.records_del_dia(rec2, d2))
+    check("sin lecturas -> ok False", ex.resumir("fuerza", 1000, [], {}, "", d1)[0]["ok"] is False)
     import kira_server as _ks
     check("arg con otro nombre ('q') igual llega", _ks._arg_texto({"q": " clima "}, "query") == "clima")
     check("sin el nombre esperado: el primer texto", _ks._arg_texto({"consulta_web": "Liceo"}, "query") == "Liceo")
