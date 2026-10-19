@@ -423,6 +423,9 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   // (voz muda + nunca se mandaba TALK al micro:bit). Un UNICO elemento de
   // audio, desbloqueado al primer toque, reutilizado para siempre.
   const audioElRef = useRef<HTMLAudioElement | null>(null);
+  // cada reproduccion tiene su numero: el vigia de un audio viejo (cortado con
+  // stop o reemplazado por la frase siguiente) se da cuenta y no toca nada
+  const turnoAudioRef = useRef(0);
   const vozActivadaRef = useRef(ajustesLocales.voz);
   const volumenVozRef = useRef(ajustesLocales.volumenVoz);
 
@@ -432,6 +435,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     const audio = audioElRef.current;
     if (audio) audio.volume = ajustesLocales.volumenVoz;
     if (!ajustesLocales.voz && audio && !audio.paused) {
+      turnoAudioRef.current += 1; // apagaron la voz: el vigia no sigue la cola
       audio.pause();
       colaAudioRef.current = [];
       reproduciendoAudioRef.current = false;
@@ -474,6 +478,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   const jugarAudio = useCallback((url: string, alTerminar?: () => void, siguePara?: () => boolean) => {
     const audio = audioElRef.current ?? new Audio();
     audioElRef.current = audio;
+    const miTurno = ++turnoAudioRef.current;
     if (!audio.paused) audio.pause();
     if (!vozActivadaRef.current) {
       // La respuesta textual/TTS ya llegó, pero el usuario apagó la voz:
@@ -500,7 +505,12 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     // al terminar la voz, la boca CALLA al instante y la cara queda quieta
     // en su emocion (antes la boca quedaba en bucle infinito hasta el
     // proximo comando: la cara hablaba sola en silencio)
+    let terminado = false;
+    let vigia = 0;
     const terminarAudio = () => {
+      if (terminado) return; // ended + error + vigia: una sola vez
+      terminado = true;
+      window.clearInterval(vigia);
       setEscribiendo(false);
       setHablando(false);
       if (callaTimerRef.current) {
@@ -527,6 +537,31 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     };
     audio.onended = terminarAudio;
     audio.onerror = terminarAudio;
+    // VIGIA: a veces el navegador deja el audio TRABADO a mitad de una frase
+    // sin avisar ni 'ended' ni 'error' (paso en vivo: quedo en "¿Vos los ha"
+    // y el texto y la cola de voz esperaron para siempre). Si no avanza, se
+    // da por terminado y la charla sigue (el texto se completa solo).
+    let ultimoT = -1;
+    let ultimoAvance = Date.now();
+    vigia = window.setInterval(() => {
+      if (turnoAudioRef.current !== miTurno) {
+        window.clearInterval(vigia); // otra frase o un stop: ya no es mio
+        return;
+      }
+      const t = audio.currentTime;
+      if (document.hidden || t !== ultimoT) {
+        ultimoT = t;
+        ultimoAvance = Date.now();
+        return;
+      }
+      // antes de arrancar se banca la carga (streaming); ya sonando, menos
+      const paciencia = t > 0 ? 3500 : 9000;
+      if (Date.now() - ultimoAvance > paciencia) {
+        console.warn('[voz] audio trabado: lo salteo', url);
+        audio.pause();
+        terminarAudio();
+      }
+    }, 500);
     // si el audio NO puede arrancar (autoplay bloqueado, TTS vacio, etc) el
     // loading no debe quedarse colgado: cortamos escribiendo. Un timeout de
     // respaldo por si ni onplaying ni onerror llegan.
@@ -656,7 +691,14 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       }, hayOtro);
       return;
     }
-    obtenerBlobAudio(cabeza.url)
+    // una descarga colgada tambien trababa la cola para siempre: 15 s y se saltea
+    const conTope = Promise.race([
+      obtenerBlobAudio(cabeza.url),
+      new Promise<never>((_, rechazar) =>
+        window.setTimeout(() => rechazar(new Error('audio: descarga trabada')), 15000)
+      ),
+    ]);
+    conTope
       .then(({ blob, marcas }) => {
         blobsAudioRef.current.delete(cabeza.url);
         const objUrl = URL.createObjectURL(blob);
@@ -816,6 +858,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       clearTimeout(callaTimerRef.current);
       callaTimerRef.current = null;
     }
+    turnoAudioRef.current += 1; // el vigia del audio cortado no debe seguir la cola
     if (audioElRef.current && !audioElRef.current.paused) audioElRef.current.pause();
     postSilencioso('/api/calla');
   }, [detenerTypewriter, liberarVoz]);
