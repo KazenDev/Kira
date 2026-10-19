@@ -62,6 +62,28 @@ def _redondea(v: float) -> int:
     return int(round(v))
 
 
+# Codigos WMO del estado del cielo (los que usa Open-Meteo en weather_code)
+CIELO_WMO = {
+    0: "despejado", 1: "casi despejado", 2: "parcialmente nublado", 3: "nublado",
+    45: "con niebla", 48: "con niebla helada",
+    51: "con llovizna suave", 53: "con llovizna", 55: "con llovizna fuerte",
+    56: "con llovizna helada", 57: "con llovizna helada fuerte",
+    61: "con lluvia suave", 63: "con lluvia", 65: "con lluvia fuerte",
+    66: "con lluvia helada", 67: "con lluvia helada fuerte",
+    71: "con nieve suave", 73: "con nieve", 75: "con nieve fuerte", 77: "con granizo fino",
+    80: "con chubascos suaves", 81: "con chubascos", 82: "con chubascos fuertes",
+    85: "con chubascos de nieve", 86: "con chubascos de nieve fuertes",
+    95: "con tormenta", 96: "con tormenta y granizo", 99: "con tormenta fuerte y granizo",
+}
+
+
+def describir_cielo(codigo) -> str | None:
+    try:
+        return CIELO_WMO.get(int(codigo))
+    except (TypeError, ValueError):
+        return None
+
+
 def temperatura_externa(
     lat: float,
     lon: float,
@@ -71,8 +93,9 @@ def temperatura_externa(
     """
     Temperatura del aire AFUERA del punto indicado.
 
-    Devuelve {"temp": int, "sensacion": int, "hora": str} o None si la API no
-    respondio. None es un caso NORMAL, no una excepcion: el backend tiene que
+    Devuelve {"temp": int, "sensacion": int, "hora": str, "cielo": str|None,
+    "humedad": int|None, "lluvia_mm": float|None, "viento_kmh": int|None,
+    "es_de_dia": bool|None} o None si la API no respondio. None es un caso NORMAL, no una excepcion: el backend tiene que
     poder seguir operando sin clima, y la IA simplemente no recibe el segundo
     numero (que es como venia funcionando todo este tiempo).
 
@@ -86,7 +109,8 @@ def temperatura_externa(
     url = (
         "https://api.open-meteo.com/v1/forecast"
         f"?latitude={lat}&longitude={lon}"
-        "&current=temperature_2m,apparent_temperature"
+        "&current=temperature_2m,apparent_temperature,weather_code,"
+        "relative_humidity_2m,precipitation,wind_speed_10m,is_day"
         "&timezone=auto"
     )
     try:
@@ -97,10 +121,19 @@ def temperatura_externa(
         if temp is None:
             return None
         sens = actual.get("apparent_temperature")
+        hum = actual.get("relative_humidity_2m")
+        lluvia = actual.get("precipitation")
+        viento = actual.get("wind_speed_10m")
+        dia = actual.get("is_day")
         valor = {
             "temp": _redondea(float(temp)),
             "sensacion": _redondea(float(sens)) if sens is not None else None,
             "hora": str(actual.get("time", "")),
+            "cielo": describir_cielo(actual.get("weather_code")),
+            "humedad": _redondea(float(hum)) if hum is not None else None,
+            "lluvia_mm": round(float(lluvia), 1) if lluvia is not None else None,
+            "viento_kmh": _redondea(float(viento)) if viento is not None else None,
+            "es_de_dia": bool(dia) if dia is not None else None,
         }
     except Exception as exc:  # httpx, json, timeout... cualquier cosa
         # No se propaga: el clima es un extra, no un requisito. Si Open-Meteo

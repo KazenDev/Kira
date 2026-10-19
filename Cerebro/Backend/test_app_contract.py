@@ -106,6 +106,7 @@ async def test_app() -> None:
         "/api/talk": {"post"},
         "/api/calla": {"post"},
         "/api/emocion": {"post"},
+        "/api/eventos": {"get"},   # autonomia: lo que la placa aviso sola
         "/api/sync": {"post"},
         "/api/stop": {"post"},
         "/api/cancelar": {"post"},
@@ -116,7 +117,7 @@ async def test_app() -> None:
     }
     openapi = ks.app.openapi()
     actual = {ruta: set(metodos) for ruta, metodos in openapi["paths"].items()}
-    chequear(actual == esperado, "las 36 rutas API conservan path y método", sorted(actual.items()))
+    chequear(actual == esperado, "las 37 rutas API conservan path y método", sorted(actual.items()))
 
     print("\n== 2) endpoints movidos a routers ==")
     transport = httpx.ASGITransport(app=ks.app)

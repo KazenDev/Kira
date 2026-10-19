@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack
 from typing import Any
@@ -21,6 +22,25 @@ TIMEOUT_IA = httpx.Timeout(connect=8.0, read=20.0, write=15.0, pool=8.0)
 ESTADOS_REINTENTABLES = {408, 409, 429, 500, 502, 503, 504}
 ESTADOS_SIN_REINTENTO = {401, 402, 403}
 MAX_INTENTOS_IA = 3
+_EMOCION_PARCIAL = __import__("re").compile(r'"emotion"\s*:\s*"([a-zA-Z]+)"')
+
+# CORTACIRCUITO por proveedor. Medido en una bateria real (eval_ia.py): el
+# plan gratuito del gateway responde 429 cuando se le pregunta seguido, y con
+# la politica vieja (reintentar el MISMO proveedor respetando Retry-After)
+# un turno tardaba 40-60 s: Kira muda un minuto en plena feria. Ahora un 429
+# con respaldo disponible salta al respaldo AL INSTANTE y deja al proveedor
+# "enfriando": las preguntas siguientes van directo al respaldo sin volver a
+# pagar el 429. Lo mismo con una key mala o sin saldo, por mas tiempo.
+# Vive a nivel de modulo porque AIProvider se crea de nuevo en cada llamada.
+ENFRIA_LIMITE_S = 20.0      # 429 sin Retry-After
+ENFRIA_MIN_S, ENFRIA_MAX_S = 5.0, 60.0
+ENFRIA_SIN_ACCESO_S = 300.0  # 401/402/403: no se arregla solo en segundos
+_enfriado_hasta: dict[str, float] = {}
+
+
+def reiniciar_enfriamientos() -> None:
+    """Para los tests: olvida los proveedores enfriados."""
+    _enfriado_hasta.clear()
 
 
 class StreamVacio(Exception):
@@ -76,6 +96,33 @@ class AIProvider:
     def has_fallback(self, index: int) -> bool:
         return index + 1 < len(self.config.PROVEEDORES_IA)
 
+    @staticmethod
+    def enfriando(provider: dict) -> bool:
+        return time.monotonic() < _enfriado_hasta.get(provider["nombre"], 0.0)
+
+    @staticmethod
+    def enfriar(provider: dict, response: httpx.Response | None) -> None:
+        code = getattr(response, "status_code", None)
+        if code in ESTADOS_SIN_REINTENTO:
+            segundos = ENFRIA_SIN_ACCESO_S
+        else:
+            segundos = ENFRIA_LIMITE_S
+            try:
+                pedido = float((response.headers if response is not None else {}).get("retry-after", ""))
+                segundos = min(max(pedido, ENFRIA_MIN_S), ENFRIA_MAX_S)
+            except (TypeError, ValueError):
+                pass
+        _enfriado_hasta[provider["nombre"]] = time.monotonic() + segundos
+        print(f"[IA] {provider['nombre']} queda enfriando {segundos:.0f}s (HTTP {code})")
+
+    def saltar_enfriados(self, index: int) -> int:
+        """Primer proveedor desde 'index' que no este enfriando. Si todos lo
+        estan, se queda con el ultimo: nunca se deja de intentar."""
+        while self.has_fallback(index) and self.enfriando(self.config.PROVEEDORES_IA[index]):
+            print(f"[IA] {self.config.PROVEEDORES_IA[index]['nombre']} enfriando -> salto al respaldo")
+            index += 1
+        return index
+
     def warn_fallback(self, index: int, error: Exception | None) -> None:
         current = self.config.PROVEEDORES_IA[index]["nombre"]
         next_provider = self.config.PROVEEDORES_IA[index + 1]["nombre"]
@@ -86,7 +133,10 @@ class AIProvider:
 
     async def post_json(self, payload: dict, intentos: int = MAX_INTENTOS_IA) -> dict:
         last_error: Exception | None = None
+        primero = self.saltar_enfriados(0)
         for provider_index, provider in enumerate(self.config.PROVEEDORES_IA):
+            if provider_index < primero:
+                continue
             body = self.body(payload, provider)
             for attempt in range(intentos):
                 try:
@@ -100,6 +150,12 @@ class AIProvider:
                             json=body,
                             timeout=TIMEOUT_IA,
                         )
+                        if response.status_code == 429 and self.has_fallback(provider_index):
+                            # Limite de velocidad: esperar es Kira muda. Al respaldo ya.
+                            self.enfriar(provider, response)
+                            last_error = httpx.HTTPStatusError(
+                                "HTTP 429", request=getattr(response, "request", None), response=response)
+                            break
                         if response.status_code in ESTADOS_REINTENTABLES and attempt < intentos - 1:
                             print(
                                 f"[IA] HTTP {response.status_code} ({provider['nombre']}), "
@@ -127,6 +183,8 @@ class AIProvider:
                         )
                         await self.sleep(attempt)
                         continue
+                    if code in ESTADOS_SIN_REINTENTO and self.has_fallback(provider_index):
+                        self.enfriar(provider, response)
                     break
             if self.has_fallback(provider_index):
                 self.warn_fallback(provider_index, last_error)
@@ -147,7 +205,7 @@ class AIProvider:
             "stream": True,
         }
         buffer = ""
-        provider_index = 0
+        provider_index = self.saltar_enfriados(0)
         attempt = 0
         while True:
             provider = self.config.PROVEEDORES_IA[provider_index]
@@ -166,6 +224,15 @@ class AIProvider:
                         json=payload,
                         timeout=TIMEOUT_IA,
                     ) as response:
+                        if response.status_code == 429 and self.has_fallback(provider_index):
+                            # Limite de velocidad: al respaldo YA (ver ENFRIA_*)
+                            self.enfriar(provider, response)
+                            self.warn_fallback(provider_index, httpx.HTTPStatusError(
+                                "HTTP 429", request=getattr(response, "request", None), response=response))
+                            provider_index = self.saltar_enfriados(provider_index + 1)
+                            attempt = 0
+                            yield sse_event({"tipo": "reintento", "intento": 1, "estado": "429"})
+                            continue
                         if response.status_code in ESTADOS_REINTENTABLES and attempt < MAX_INTENTOS_IA - 1:
                             print(
                                 f"[IA] HTTP {response.status_code} en stream ({provider['nombre']}), "
@@ -194,7 +261,12 @@ class AIProvider:
                             buffer += delta
                             partial = extraer_message_parcial(buffer)
                             if partial is not None:
-                                yield sse_event({"tipo": "delta", "texto": partial})
+                                # La emocion viene ANTES del mensaje en el JSON:
+                                # con ella la voz de las primeras frases ya sale
+                                # con su tono, sin esperar al final.
+                                emo = _EMOCION_PARCIAL.search(buffer)
+                                yield sse_event({"tipo": "delta", "texto": partial,
+                                                 **({"emotion": emo.group(1)} if emo else {})})
                 if not buffer:
                     raise StreamVacio()
                 break
@@ -221,8 +293,10 @@ class AIProvider:
                     attempt += 1
                     continue
                 if self.has_fallback(provider_index):
+                    if no_retry:
+                        self.enfriar(provider, response)
                     self.warn_fallback(provider_index, error)
-                    provider_index += 1
+                    provider_index = self.saltar_enfriados(provider_index + 1)
                     attempt = 0
                     yield sse_event(
                         {

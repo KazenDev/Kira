@@ -45,6 +45,21 @@ export interface FuenteWeb {
   url: string;
 }
 
+/** De dónde salió una cosa que dijo Kira. Cinco clases, y la última es la
+ *  más importante: 'criada' significa que NO consultó nada y el número sale de
+ *  su conocimiento de entrenamiento, que no tiene fuente. Mostrar eso es lo
+ *  que hace auditable la diferencia entre "afirmó" y "consultó". */
+export type TipoRastro = 'web' | 'sensor' | 'calculo' | 'memoria' | 'estado' | 'sistema' | 'accion' | 'criada' | 'otro';
+
+export interface RastroItem {
+  tipo: TipoRastro;
+  herramienta: string;
+  etiqueta: string;
+  detalle: string;
+  valor: string;
+  ok: boolean;
+}
+
 export interface MensajeChat {
   id: string;
   rol: 'usuario' | 'kira';
@@ -53,6 +68,10 @@ export interface MensajeChat {
   audio_url?: string | null;
   audio_urls?: string[] | null;
   fuentes?: FuenteWeb[] | null;
+  /** De dónde salió lo que dijo en este turno. Se muestra plegado bajo el
+   *  mensaje y además viaja de vuelta al backend en la historia, para que
+   *  Kira sepa citar sus propias fuentes si le repreguntan. */
+  rastro?: RastroItem[] | null;
   /** FOTO que mandó el usuario (data URL JPEG reducido, ~200 KB). Se muestra
    * en su burbuja y se guarda con el chat: es lo que él mismo mandó. */
   imagen?: string | null;
@@ -371,7 +390,10 @@ export async function cerrarSesion(): Promise<void> {
 export async function enviarMensaje(
   personaje: string,
   mensaje: string,
-  historial: { rol: string; contenido: string }[],
+  // El historial lleva `rastro` a proposito: es lo que vuelve a Kira en el
+  // siguiente turno para que sepa de donde salio lo que dijo antes. Sin esto
+  // ella ve las fuentes en la burbuja pero no las tiene en la memoria.
+  historial: TurnoHistorial[],
   imagen?: string | null,
   preferencias?: PreferenciasMemoria
 ): Promise<MensajeIA> {
@@ -393,6 +415,14 @@ export async function enviarMensaje(
   return r.json();
 }
 
+/** Un turno del historial que viaja al backend. `rastro` es lo que le permite
+ *  a Kira citar sus propias fuentes cuando le repreguntan de dónde lo sacó. */
+export interface TurnoHistorial {
+  rol: string;
+  contenido: string;
+  rastro?: RastroItem[] | null;
+}
+
 // Resultado final de un chat STREAMING
 interface ResultadoStream {
   emotion: string;
@@ -401,6 +431,7 @@ interface ResultadoStream {
   tts_urls?: string[] | null; // TTS POR FRASES: la cola completa en orden
   personaje: string;
   fuentes?: FuenteWeb[] | null;
+  rastro?: RastroItem[] | null;
 }
 
 // Chat STREAMING real: consume /api/chat/stream (SSE) y llama onDelta con el
@@ -410,7 +441,10 @@ interface ResultadoStream {
 export async function enviarMensajeStream(
   personaje: string,
   mensaje: string,
-  historial: { rol: string; contenido: string }[],
+  // El historial lleva `rastro` a proposito: es lo que vuelve a Kira en el
+  // siguiente turno para que sepa de donde salio lo que dijo antes. Sin esto
+  // ella ve las fuentes en la burbuja pero no las tiene en la memoria.
+  historial: TurnoHistorial[],
   onDelta: (texto: string) => void,
   onFin: (r: ResultadoStream) => void,
   onError: (e: Error) => void,
@@ -425,7 +459,10 @@ export async function enviarMensajeStream(
   // puntos genéricos durante la espera
   onTool?: (nombre: string) => void,
   // privacidad/memoria se decide en el navegador y viaja en cada turno
-  preferencias?: PreferenciasMemoria
+  preferencias?: PreferenciasMemoria,
+  // AUTONOMIA: un turno que nadie escribio (la placa avisó que la tocaron,
+  // que la marearon... o hace rato que nadie habla). Ver /api/eventos.
+  evento?: string | null
 ): Promise<void> {
   try {
     const r = await fetchKira('/api/chat/stream', {
@@ -438,6 +475,7 @@ export async function enviarMensajeStream(
         sesion: sesion ?? null,
         imagen: imagen ?? null,
         memoria_config: preferencias ?? PREFERENCIAS_MEMORIA_POR_DEFECTO,
+        evento: evento ?? null,
       }),
       signal,
     });
@@ -493,6 +531,7 @@ export async function enviarMensajeStream(
             tts_urls: Array.isArray(datos.tts_urls) ? datos.tts_urls : null,
             personaje: String(datos.personaje ?? personaje),
             fuentes: Array.isArray(datos.fuentes) ? datos.fuentes : null,
+            rastro: Array.isArray(datos.rastro) ? datos.rastro : null,
           });
           return;
         }
@@ -607,4 +646,21 @@ export async function generarTitulo(
   if (!r.ok) throw new Error('No se pudo generar el titulo');
   const d = await r.json();
   return d.title ?? primerMensaje.slice(0, 30);
+}
+
+
+// --------------------------------------------------------------------------
+// AUTONOMIA: lo que la placa avisó por su cuenta (EVENTO:..., JUEGO:...)
+// desde el número de secuencia 'desde' (-1 = solo saber en qué número va).
+// --------------------------------------------------------------------------
+export interface EventoPlaca {
+  seq: number;
+  linea: string;
+  t: number;
+}
+
+export async function obtenerEventos(desde: number): Promise<{ seq: number; eventos: EventoPlaca[] }> {
+  const r = await fetchKira(`/api/eventos?desde=${desde}`);
+  if (!r.ok) throw new Error(`eventos ${r.status}`);
+  return r.json();
 }

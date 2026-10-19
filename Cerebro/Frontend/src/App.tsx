@@ -18,6 +18,7 @@ import {
   PREFERENCIAS_MEMORIA_POR_DEFECTO,
   PersonajeInfo,
   MensajeChat,
+  obtenerEventos,
 } from './api';
 import Avatar from './Avatar';
 import Logo from './Logo';
@@ -65,11 +66,13 @@ type AjustesLocales = {
   voz: boolean;
   volumenVoz: number;
   memoria: PreferenciasMemoria;
+  autonomia: boolean;   // Kira habla sola (eventos de la placa, silencios)
 };
 
 const AJUSTES_INICIALES: AjustesLocales = {
   voz: true,
   volumenVoz: 0.8,
+  autonomia: true,
   memoria: { ...PREFERENCIAS_MEMORIA_POR_DEFECTO },
 };
 
@@ -84,6 +87,7 @@ function cargarAjustes(userId: string): AjustesLocales {
     const volumen = Number(parsed.volumenVoz);
     return {
       voz: parsed.voz !== false,
+      autonomia: parsed.autonomia !== false,
       volumenVoz: Number.isFinite(volumen) ? Math.max(0, Math.min(1, volumen)) : AJUSTES_INICIALES.volumenVoz,
       memoria: {
         recordar: memoria.recordar !== false,
@@ -435,7 +439,11 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     return () => document.removeEventListener('pointerdown', desbloquear, { capture: true });
   }, []);
 
-  const jugarAudio = useCallback((url: string, alTerminar?: () => void) => {
+  // siguePara(): ¿ya hay OTRO clip de esta respuesta esperando? Si lo hay, al
+  // terminar este clip NO se manda CALLA: antes la boca del micro:bit se
+  // cerraba entre frase y frase (justo en los "..."), y se veia y se oia
+  // como que la voz se cortaba y volvia.
+  const jugarAudio = useCallback((url: string, alTerminar?: () => void, siguePara?: () => boolean) => {
     const audio = audioElRef.current ?? new Audio();
     audioElRef.current = audio;
     if (!audio.paused) audio.pause();
@@ -471,7 +479,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         clearTimeout(callaTimerRef.current);
         callaTimerRef.current = null;
       }
-      postSilencioso('/api/calla');
+      if (!siguePara?.()) postSilencioso('/api/calla');
       alTerminar?.(); // cadena: TTS por frases -> suena la siguiente
     };
     // CALLA ANTICIPADO: el elemento conoce su duracion; programamos el
@@ -483,7 +491,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       if (ms > 800) {
         callaTimerRef.current = setTimeout(() => {
           callaTimerRef.current = null;
-          postSilencioso('/api/calla');
+          if (!siguePara?.()) postSilencioso('/api/calla');
         }, ms - 350);
       }
     };
@@ -503,6 +511,19 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   // AVANZAR LA COLA DE VOZ: reproduce el siguiente chunk en orden (si ya
   // llegó), con prefetch del siguiente mientras suena (calienta el caché
   // del server: la generación Fish del próximo arranca antes).
+  const blobsAudioRef = useRef<Map<string, Promise<Blob>>>(new Map());
+  const obtenerBlobAudio = useCallback((url: string): Promise<Blob> => {
+    const ya = blobsAudioRef.current.get(url);
+    if (ya) return ya;
+    const p = fetchKira(url).then((r) => {
+      if (!r.ok) throw new Error(`audio ${r.status}`);
+      return r.blob();
+    });
+    p.catch(() => blobsAudioRef.current.delete(url));
+    blobsAudioRef.current.set(url, p);
+    return p;
+  }, []);
+
   const avanzarColaAudio = useCallback(() => {
     if (reproduciendoAudioRef.current) return;
     const cabeza = colaAudioRef.current[0];
@@ -510,26 +531,23 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     colaAudioRef.current.shift();
     reproduciendoAudioRef.current = true;
     const miOrden = cabeza.orden;
-    const siguiente = colaAudioRef.current.find((c) => c.orden === miOrden + 1);
-    if (siguiente) {
-      // prefetch: calienta la generación en el server (se descarta el cuerpo)
-      fetchKira(siguiente.url)
-        .then((r) => r.arrayBuffer())
-        .catch(() => {});
-    }
-    fetchKira(cabeza.url)
-      .then((r) => {
-        if (!r.ok) throw new Error(`audio ${r.status}`);
-        return r.blob();
-      })
+    // PRECARGA DE VERDAD: los dos clips siguientes se bajan YA y el blob se
+    // GUARDA (antes se descargaba y se tiraba, y al tocarle se volvia a
+    // bajar entero: ese era el hueco entre frase y frase).
+    colaAudioRef.current
+      .filter((c) => c.orden > miOrden && c.orden <= miOrden + 2)
+      .forEach((c) => obtenerBlobAudio(c.url));
+    const hayOtro = () => colaAudioRef.current.some((c) => c.orden === miOrden + 1);
+    obtenerBlobAudio(cabeza.url)
       .then((blob) => {
+        blobsAudioRef.current.delete(cabeza.url);
         const objUrl = URL.createObjectURL(blob);
         jugarAudio(objUrl, () => {
           URL.revokeObjectURL(objUrl);
           reproduciendoAudioRef.current = false;
           ordenAudioRef.current = miOrden + 1;
           avanzarColaAudio();
-        });
+        }, hayOtro);
       })
       .catch(() => {
         // chunk fallido (Fish se atragantó): se salta y sigue con el próximo
@@ -537,7 +555,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         ordenAudioRef.current = miOrden + 1;
         avanzarColaAudio();
       });
-  }, [jugarAudio]);
+  }, [jugarAudio, obtenerBlobAudio]);
 
   // Replay manual: reutiliza la cola y el MISMO elemento de audio. No se permite
   // mientras Kira todavía está respondiendo o hablando para no cortar frases.
@@ -1026,6 +1044,14 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     });
   };
 
+  const cambiarAutonomia = (v: boolean) => {
+    setAjustesLocales((actual) => {
+      const siguiente = { ...actual, autonomia: v };
+      guardarAjustes(usuario.id, siguiente);
+      return siguiente;
+    });
+  };
+
   const cambiarVolumenVoz = (v: number) => {
     const volumen = Math.max(0, Math.min(1, v));
     setAjustesLocales((actual) => {
@@ -1161,8 +1187,24 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     return () => window.clearInterval(id);
   }, [escuchando]);
 
-  const enviar = async (textoDesdeVoz?: string, reemplazarId?: string) => {
+  // ------------------------------------------------------------------------
+  // AUTONOMIA: Kira habla SOLA cuando le pasa algo en la placa (la tocaron,
+  // la marearon, terminó un juego...) o cuando hace rato que nadie le habla
+  // con la pantalla abierta ("oye... sé que andás por ahí").
+  // Frenos: nunca mientras alguien escribe, graba o ella habla; como mucho
+  // una vez cada AUTONOMIA_PAUSA_MS; y se apaga en Ajustes.
+  // ------------------------------------------------------------------------
+  const ultimaActividadRef = useRef(Date.now());
+  const ultimoProactivoRef = useRef(0);
+  const seqEventosRef = useRef(-1);
+  const ocultaDesdeRef = useRef<number | null>(null);
+  const enviarRef = useRef<((t?: string, r?: string, e?: string) => Promise<void>) | null>(null);
+
+  // evento: turno de AUTONOMIA (nadie escribio: la placa avisó algo o hubo
+  // un silencio largo). No hay burbuja del usuario ni loading en la placa.
+  const enviar = async (textoDesdeVoz?: string, reemplazarId?: string, evento?: string) => {
     if (!elegido || escribiendo || streamPendienteRef.current) return;
+    if (!evento) ultimaActividadRef.current = Date.now();
     const sesionRespuesta = ++respuestaSesionRef.current;
     const esRegeneracion = !!reemplazarId;
     // REGENERAR ⟳: reenvía el mensaje del usuario anterior a reemplazarId
@@ -1174,18 +1216,22 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       if (idxUser < 0) return;
       base = mensajes.slice(0, idxUser + 1);
     }
-    const texto = esRegeneracion
-      ? (base[base.length - 1]?.contenido ?? '').trim()
-      : (textoDesdeVoz ?? input).trim();
+    const texto = evento
+      ? ''
+      : esRegeneracion
+        ? (base[base.length - 1]?.contenido ?? '').trim()
+        : (textoDesdeVoz ?? input).trim();
     // FOTO: la pendiente del composer; al REGENERAR se reenvía la del mensaje
     // original (así la IA vuelve a MIRARLA en vez de responder a ciegas)
-    const fotoEnviada = esRegeneracion
-      ? (base[base.length - 1]?.imagen ?? null)
-      : foto;
+    const fotoEnviada = evento
+      ? null
+      : esRegeneracion
+        ? (base[base.length - 1]?.imagen ?? null)
+        : foto;
     // un turno vale con texto, con foto, o con las dos cosas juntas
-    if (!texto && !fotoEnviada) return;
+    if (!evento && !texto && !fotoEnviada) return;
     ultimoTextoRef.current = texto; // para el botón "reintentar" de errores
-    if (!esRegeneracion) {
+    if (!esRegeneracion && !evento) {
       sonidoEnviar(); // pop sutil (solo si el usuario activo el sonido)
       setInput('');
       setFoto(null); // la foto ya viajó: la miniatura se limpia
@@ -1205,7 +1251,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
 
     // ¿es el PRIMER intercambio de este chat? (no hay mensajes del usuario aun;
     // en regeneración no: no se toca el título ni se agregan burbujas)
-    const esPrimerIntercambio = !esRegeneracion && !mensajes.some((m) => m.rol === 'usuario');
+    const esPrimerIntercambio = !esRegeneracion && !evento && !mensajes.some((m) => m.rol === 'usuario');
     // si el primer mensaje fue SOLO una foto, el título igual sale (con su emoji)
     const primerMensajeChat = esPrimerIntercambio ? (texto || '📷 (foto)') : '';
 
@@ -1219,6 +1265,12 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       setMensajes((m) =>
         m.map((msg) => (msg.id === reemplazarId ? { ...msg, contenido: '' } : msg))
       );
+    } else if (evento) {
+      // Kira habla sola: solo su burbuja
+      setMensajes((m) => [
+        ...m,
+        { id: idParcial, rol: elegido.id as 'kira', contenido: '', hora: horaActual() },
+      ]);
     } else {
       setMensajes((m) => [
         ...m,
@@ -1238,13 +1290,18 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     // LA PLACA FISICA TAMBIEN PIENSA: LOADING random en el micro:bit
     // (via serial o por el puente BLE en modo feria) mientras la IA
     // contesta. Sin esto la cara queda congelada en la emocion vieja.
-    postSilencioso('/api/loading');
+    // (En un turno por evento no: la placa esta en plena reaccion.)
+    if (!evento) postSilencioso('/api/loading');
 
     const historial = base.map((m) => ({
       rol: m.rol === 'usuario' ? 'user' : 'assistant',
       // las fotos VIEJAS viajan como texto: la imagen real solo va en el turno
       // nuevo (si no, cada turno reenviaría megabytes de base64 al vacío)
       contenido: m.contenido.trim() || (m.imagen ? '(te mandé una foto)' : ''),
+      // el rastro vuelve hacia atras a proposito: es lo que le permite a Kira
+      // citar sus propias fuentes si le repreguntan. Antes no volvia, por eso
+      // no tenia memoria de sus busquedas (ver app/services/rastro.py).
+      rastro: m.rol === 'kira' ? (m.rastro ?? null) : null,
     }));
 
     await enviarMensajeStream(
@@ -1295,6 +1352,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
                     audio_url: resp.tts_url,
                     audio_urls: audioUrls,
                     fuentes: resp.fuentes ?? null,
+                    rastro: resp.rastro ?? null,
                   }
                 : msg
             )
@@ -1394,9 +1452,70 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       // tool trace: el backend avisa qué herramienta está usando
       setHerramienta,
       // privacidad: los interruptores de Ajustes viajan con este turno
-      ajustesLocales.memoria
+      ajustesLocales.memoria,
+      evento ?? null
     );
   };
+  enviarRef.current = enviar;
+
+  useEffect(() => {
+    if (!ajustesLocales.autonomia) return;
+    const PAUSA_MS = 20000;          // entre dos intervenciones espontaneas
+    const SILENCIO_MS = 4 * 60000;   // pantalla abierta y nadie habla
+    const VOLVIO_MS = 2 * 60000;     // estuvo afuera de la pestaña al menos esto
+    let vivo = true;
+
+    const libre = () =>
+      !streamPendienteRef.current &&
+      !reproduciendoAudioRef.current &&
+      !escuchandoRef.current &&
+      Date.now() - ultimoProactivoRef.current > PAUSA_MS &&
+      Date.now() - ultimaActividadRef.current > 6000;
+
+    const hablarSola = (evento: string) => {
+      if (!libre() || !enviarRef.current) return false;
+      ultimoProactivoRef.current = Date.now();
+      void enviarRef.current(undefined, undefined, evento);
+      return true;
+    };
+
+    const tick = async () => {
+      if (document.hidden) return;
+      try {
+        const r = await obtenerEventos(seqEventosRef.current);
+        if (!vivo) return;
+        const primeraVez = seqEventosRef.current < 0;
+        seqEventosRef.current = r.seq;
+        // El ultimo evento que valga la pena (los de antes de abrir la web no)
+        const ultimo = primeraVez ? undefined : r.eventos[r.eventos.length - 1];
+        if (ultimo) {
+          if (hablarSola(ultimo.linea)) return;
+        }
+      } catch {
+        // sin eventos (backend viejo, sin placa): la autonomia por silencio sigue
+      }
+      const quieto = Date.now() - Math.max(ultimaActividadRef.current, ultimoProactivoRef.current);
+      if (quieto > SILENCIO_MS) hablarSola('SILENCIO');
+    };
+
+    const alCambiarVisibilidad = () => {
+      if (document.hidden) {
+        ocultaDesdeRef.current = Date.now();
+        return;
+      }
+      const desde = ocultaDesdeRef.current;
+      ocultaDesdeRef.current = null;
+      if (desde && Date.now() - desde > VOLVIO_MS) hablarSola('VOLVIO');
+    };
+
+    const id = window.setInterval(() => void tick(), 1500);
+    document.addEventListener('visibilitychange', alCambiarVisibilidad);
+    return () => {
+      vivo = false;
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', alCambiarVisibilidad);
+    };
+  }, [ajustesLocales.autonomia]);
 
   // Limpieza final: nada de streams, micrófonos o timers vivos al desmontar.
   useEffect(() => {
@@ -1556,6 +1675,8 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         onCambiarSonido={cambiarSonido}
         voz={ajustesLocales.voz}
         onCambiarVoz={cambiarVoz}
+        autonomia={ajustesLocales.autonomia}
+        onCambiarAutonomia={cambiarAutonomia}
         volumenVoz={ajustesLocales.volumenVoz}
         onCambiarVolumenVoz={cambiarVolumenVoz}
         preferenciasMemoria={ajustesLocales.memoria}

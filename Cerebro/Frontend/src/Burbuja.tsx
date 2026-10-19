@@ -2,12 +2,27 @@
 // superficie sutil. Las acciones secundarias viven en un único menú para que la
 // conversación no se llene de iconos repetidos.
 import { memo, useEffect, useRef, useState } from 'react';
-import { motion } from 'motion/react';
+
+/** Un glifo por clase de origen, para que el ojo escanee la fila sin leerla.
+ *  Texto plano a propósito: son 9 caracteres y meter 9 iconos SVG por el
+ *  lucide para esto agranda el bundle por nada. */
+const ICONO_RASTRO: Record<string, string> = {
+  web: '🌐',
+  sensor: '⚙',
+  calculo: 'ƒ',
+  memoria: '☰',
+  estado: '◐',
+  sistema: '◷',
+  accion: '♪',
+  criada: '✦',
+  otro: '•',
+};import { motion } from 'motion/react';
 import { SPRING_MSG } from './motion';
 import {
   Check,
   Copy,
   ExternalLink,
+  Eye,
   Globe,
   MoreHorizontal,
   RefreshCw,
@@ -118,6 +133,34 @@ function BurbujaInner({
             </p>
           ) : (
             <MensajeMarkdown contenido={m.contenido} />
+          )}
+
+          {/* ============ DE DONDE SALIO ESTO ============
+              El bloque de "Fuentes" de abajo solo sale si hubo buscar_en_web.
+              Este sale SIEMPRE (tambien cuando no consulto nada), y esa es la
+              diferencia: una lista vacia es ambigua (¿no busco o me fallo?) y
+              "no consulto nada" es una respuesta. Ver app/services/rastro.py. */}
+          {!parcial && m.rastro && m.rastro.length > 0 && (
+            <details className="rastro">
+              <summary className="rastro-resumen">
+                <Eye size={12} strokeWidth={2} aria-hidden="true" />
+                {m.rastro.length === 1
+                  ? 'De dónde salió esto'
+                  : `De dónde salió esto (${m.rastro.length})`}
+              </summary>
+              <ul className="rastro-lista">
+                {m.rastro.map((r, i) => (
+                  <li key={r.herramienta + i} className={`rastro-item rastro-${r.tipo}`}>
+                    <span className="rastro-ic" aria-hidden="true">{ICONO_RASTRO[r.tipo] ?? '•'}</span>
+                    <span className="rastro-txt">
+                      <strong>{r.etiqueta}</strong>
+                      {r.detalle ? <span className="rastro-detalle"> — {r.detalle}</span> : null}
+                      {r.valor ? <span className="rastro-valor"> · {r.valor}</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
 
           {!parcial && m.fuentes && m.fuentes.length > 0 && (

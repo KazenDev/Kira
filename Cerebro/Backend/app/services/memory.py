@@ -11,6 +11,17 @@ import uuid
 from .storage import JsonStore
 
 
+def _no_vence(record: dict) -> bool:
+    """Lo que Kira SABE de alguien (nombre, su perro, su cumpleaños) y lo que
+    piensa de si misma no se olvida a los 30 dias: solo vence lo vivido
+    (los memos episodicos y las observaciones sueltas)."""
+    return (
+        record.get("durable") is True
+        or record.get("identity") is True
+        or str(record.get("tipo", "")).lower() in {"pensamiento", "identidad"}
+    )
+
+
 class MemoryStore:
     def __init__(
         self,
@@ -165,7 +176,7 @@ class MemoryStore:
                 continue
             if str(record.get("tipo", "")).lower() in {"olvido", "tombstone"}:
                 continue
-            if not include_expired:
+            if not include_expired and not _no_vence(record):
                 try:
                     if datetime.fromisoformat(record["expira"]) < now:
                         continue

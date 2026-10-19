@@ -52,7 +52,7 @@ from app.domain.streaming import (
     normalizar_emocion,
     sse_event,
 )
-from app.domain.tts import _termina_en_punto, dividir_frases
+from app.domain.tts import SegmentadorTTS, _termina_en_punto, dividir_frases, quitar_tags_audio
 from app.domain.vision import (
     AVISO_FOTO,
     IMAGEN_MAX_B64,
@@ -91,6 +91,7 @@ from app.intelligence.retrieval import (
 from app.main import create_app
 from app.services.auth import AuthStore
 from app.services import clima as clima_service
+from app.services import rastro as rastro_service
 from app.services.tenancy import (
     StatesProxy,
     StoreProxy,
@@ -1038,7 +1039,8 @@ async def diario_fusionar(pj_id: str, nombre: str, pensamientos: list[dict]):
 
 
 def guardar_turno(personaje: str, sesion: str | None, usuario: str, respuesta: str,
-                  emotion: str, herramientas: list, error: str | None = None):
+                  emotion: str, herramientas: list, error: str | None = None,
+                  rastro: list | None = None):
     """Guarda UN turno completo en el historial debug (JSONL por personaje).
     Nunca rompe nada: si falla el disco, solo se loguea."""
     try:
@@ -1049,6 +1051,9 @@ def guardar_turno(personaje: str, sesion: str | None, usuario: str, respuesta: s
             "respuesta": respuesta[:4000],
             "emotion": emotion,
             "herramientas": herramientas,
+            # El rastro tambien al archivo de debug, para poder auditar un
+            # turno concreto a posteriori ("¿de dónde saqué esto?" con hora).
+            "rastro": rastro if rastro else None,
             "error": error,
         }
         history_store.append_jsonl(
@@ -1098,6 +1103,59 @@ def memoria_diario_bloque(pj_id: str) -> str:
 RECUERDOS_TOP = 8
 RECUERDOS_MIN = 3                 # con menos, se inyectan crudos (sin llamada)
 RECUERDOS_FRESCOS_MIN = 15        # minutos: lo de ESTA charla no se repite
+RECUERDOS_INYECTADOS = 6          # cuantos llegan al prompt
+# El resumen con IA (una llamada EXTRA por turno con >=3 recuerdos) queda
+# apagado: medido con test_rag_charla.py, se disparaba en 6 de 11 turnos, y
+# cada llamada suma latencia y gasta el limite del gateway (los 429 que
+# dejaban a Kira muda). La lista con fechas le sirve igual a la IA.
+RECUERDOS_RESUMIR = os.getenv("KIRA_RECUERDOS_RESUMIR", "0") == "1"
+
+# "¿Te acordás...?", "¿qué sabés de mí?": pedidos de MEMORIA que no
+# comparten palabras con ningun recuerdo, asi que la busqueda sola trae
+# cualquier cosa. Cuando aparecen, primero va lo que Kira sabe de la persona.
+_PEDIDO_MEMORIA = re.compile(
+    r"\b(te acord[aá]s|record[aá]s|acordate|record[aá]|te dije|te cont[eé]|"
+    r"la otra vez|el otro d[ií]a|de m[ií]\b|sobre m[ií]|qui[eé]n soy|me conoc[eé]s|"
+    r"sab[eé]s (algo|qu[eé]|como|c[oó]mo) .*m[ií]|lo que hablamos)",
+    re.IGNORECASE,
+)
+
+
+def _hace_cuanto(fecha_iso: str) -> str:
+    try:
+        d = datetime.now() - datetime.fromisoformat(fecha_iso)
+    except (TypeError, ValueError):
+        return ""
+    dias = d.days
+    if dias <= 0:
+        horas = d.seconds // 3600
+        return "hoy" if horas < 12 else "ayer"
+    if dias == 1:
+        return "ayer"
+    if dias < 7:
+        return f"hace {dias} días"
+    if dias < 30:
+        semanas = dias // 7
+        return "hace una semana" if semanas == 1 else f"hace {semanas} semanas"
+    meses = dias // 30
+    return "hace un mes" if meses == 1 else f"hace {meses} meses"
+
+
+def _lo_que_se_de_vos(candidatas: list[dict], limite: int = 4) -> list[dict]:
+    """Los hechos durables de la persona y lo ultimo vivido, para cuando
+    preguntan por la memoria sin decir de que."""
+    def clave(r):
+        try:
+            edad = (datetime.now() - datetime.fromisoformat(r["fecha"])).days
+        except (KeyError, ValueError, TypeError):
+            edad = 999
+        return (-(int(r.get("importancia", 5)) - min(edad, 60) / 20.0))
+
+    durables = sorted([r for r in candidatas if r.get("durable") is True], key=clave)
+    vividos = sorted([r for r in candidatas if r.get("source") == "episodic_memo"],
+                     key=lambda r: r.get("fecha", ""), reverse=True)
+    salida = durables[:3] + vividos[:2]
+    return salida[:limite + 1]
 
 RESUMEN_RECUERDOS_SISTEMA = (
     "Sos {nombre} y estás a punto de responder en una charla. Te vienen a la "
@@ -1160,9 +1218,13 @@ async def memoria_recuerdos_bloque(
         if not candidatas:
             return ""
 
-        foco = mensaje + " " + " ".join(
-            str(h.get("contenido", "")) for h in (historial or [])[-3:]
-        )
+        # Lo que se busca: la frase de AHORA primero (el indice de palabras
+        # tiene tope, y antes el texto de Kira del historial podia empujar
+        # fuera las palabras de la pregunta) y despues lo ultimo que dijo la
+        # PERSONA. Las respuestas de Kira no: hablan de otra cosa.
+        de_la_persona = [str(h.get("contenido", "")) for h in (historial or [])
+                         if h.get("rol", "user") == "user"][-2:]
+        foco = mensaje + " " + " ".join(reversed(de_la_persona))
         search_failed = False
         try:
             top = await asyncio.to_thread(
@@ -1180,6 +1242,12 @@ async def memoria_recuerdos_bloque(
         # verdad. Si simplemente no hubo evidencia, no inventamos recuerdos.
         if search_failed:
             top = memoria_recuperar(candidatas, foco, top_n=RECUERDOS_TOP)
+        if _PEDIDO_MEMORIA.search(mensaje):
+            # Pidieron memoria "en general": primero lo que se sabe de la
+            # persona, despues lo que haya traido la busqueda
+            primero = _lo_que_se_de_vos(candidatas)
+            vistos = {r.get("id") for r in primero}
+            top = primero + [r for r in top if r.get("id") not in vistos]
         if not top:
             return ""
 
@@ -1197,11 +1265,12 @@ async def memoria_recuerdos_bloque(
                 ),
             )
 
+        top = top[:RECUERDOS_INYECTADOS]
         listado = "\n".join(
-            f"- {r['texto']} (memoria:{r.get('id', 's/id')})"
+            f"- ({_hace_cuanto(r.get('fecha', ''))}) {r['texto']}".replace("() ", "")
             for r in top
         )
-        if len(top) >= RECUERDOS_MIN:
+        if RECUERDOS_RESUMIR and len(top) >= RECUERDOS_MIN:
             # la llamada de Stanford (summarize_ideas): comprimir en una frase.
             # Si el proveedor falla, conservamos los recuerdos crudos: el RAG
             # local ya está funcionando y no debe desaparecer por una llamada IA.
@@ -1223,7 +1292,14 @@ async def memoria_recuerdos_bloque(
         else:
             cuerpo = listado
 
-        return "\n\n# LO QUE TE VIENE A LA MENTE (recuerdos de tu vida, no de esta charla)\n" + cuerpo
+        return (
+            "\n\n# LO QUE TE VIENE A LA MENTE (recuerdos de tu vida, no de esta charla)\n"
+            + cuerpo
+            + "\nUsalos solo si vienen al caso, como los usa una persona: \"la otra vez "
+            "me contaste que...\", \"¿y Rocky cómo anda?\". No los recites ni los "
+            "enumeres, y si no tienen que ver con lo que te dicen, ignoralos. Si un "
+            "recuerdo no es de esta persona, no se lo atribuyas."
+        )
     except Exception as e:
         print(f"[RECUERDOS] fallo silencioso: {type(e).__name__}: {e}")
         return ""
@@ -1480,6 +1556,14 @@ async def api_chat(body: dict):
     messages = [{"role": "system", "content": pj["system_prompt"] + bloque_identidad + bloque_diario + bloque_recuerdos}]
     for h in historial[-8:]:  # contexto corto: las ultimas 8
         messages.append({"role": h.get("rol", "user"), "content": h.get("contenido", "")})
+        # EL RASTRO, si el turno lo tiene. Antes esto NO EXISTIA, y por eso
+        # Kira no tenia amnesia: las fuentes se le mostraban a vos en la
+        # burbuja pero a ella no le quedaban, y si le repreguntabas de donde
+        # lo saco miraba su historial y no tenia nada. Ver rastro.py.
+        if h.get("rastro"):
+            texto_rastro = rastro_service.para_historial_ia(h["rastro"])
+            if texto_rastro:
+                messages.append({"role": "user", "content": texto_rastro})
     # el turno actual: con foto va como content-array (texto + image_url)
     messages.append({"role": "user", "content": mensaje_con_foto(mensaje, foto)})
 
@@ -1509,7 +1593,7 @@ async def api_chat(body: dict):
     # 3) Actualizamos el estado emocional (ramp de temperatura)
     estado.actualizar(emotion)
 
-    # 4) La VOZ: Fish Audio TTS por FRASES (la web las reproduce en cadena)
+    # 4) La VOZ: ElevenLabs por FRASES (la web las reproduce en cadena)
     tts_url = None
     tts_urls: list[str] = []
     voz = pj.get("voice_id")
@@ -1521,6 +1605,9 @@ async def api_chat(body: dict):
         tts_url = tts_urls[0] if tts_urls else None
     else:
         print(f"[TTS] {personaje} no tiene voice_id -> solo texto")
+    # Los audio tags ([laughs]...) son para la voz: la pantalla y la memoria
+    # reciben el texto limpio
+    message = quitar_tags_audio(message) or message
 
     # La extracción semántica ocurre después de responder: primero la IA
     # termina el turno y luego decide qué hechos explícitos son durables.
@@ -1587,14 +1674,20 @@ HERRAMIENTAS: dict[str, dict] = {
         # que..."). Con esta descripcion la IA sabe que mide su propio cuerpo
         # de silicio y puede decirlo. El segundo numero (el clima de afuera)
         # se agrega en formatear_sensor, para que pueda comparar.
+        # OJO 2: antes decia que el clima "viene aparte" y la IA lo entendia
+        # como "andá a buscarlo": pedia buscar_en_web EN CADA pregunta de
+        # temperatura (medido con eval_ia.py: 20 de 24). El clima de afuera
+        # viene en ESTA MISMA lectura y hay que decirlo con esas palabras.
         "descripcion": (
-            "Lee la temperatura de TU PROPIO CHIP en grados Celsius. OJO: esto "
-            "NO es la temperatura del ambiente ni de la pieza. El sensor esta "
-            "dentro del procesador y mide el calor de su propio silicono, asi "
-            "que va unos grados por encima de la temperatura del aire. Si te "
-            "preguntan si hace frio o calor, NO respondas con este numero como "
-            "si fuera el ambiente: decilo como lo que es, junto con el dato "
-            "del clima que viene aparte."
+            "Lee la temperatura de TU PROPIO CHIP en grados Celsius y, en la "
+            "MISMA respuesta, la temperatura de AFUERA (la calle de "
+            f"{config.CLIMA_LOC}). Con esta sola herramienta contestas "
+            "cualquier pregunta de temperatura o de frio/calor: NO hace falta "
+            "buscar_en_web para eso. OJO: el numero del chip NO es la "
+            "temperatura del ambiente ni de la pieza (el sensor esta dentro "
+            "del procesador y va unos grados mas caliente): NO respondas con "
+            "ese numero como si fuera el ambiente. La de la pieza nadie la "
+            "midio: no la inventes ni promedies los dos numeros."
         ),
         "comando": "SENSOR:TEMP",
         "prefijo": "TEMP:",
@@ -1638,6 +1731,17 @@ HERRAMIENTAS: dict[str, dict] = {
         "descripcion": "Lee el logo capacitivo de la micro:bit: 1 si esta tocado, 0 si no, y su lectura capacitiva cruda.",
         "comando": "SENSOR:TOQUE",
         "prefijo": "TOUCH:",
+    },
+    "ver_clima": {
+        "descripcion": (
+            f"El clima de AFUERA ahora en {config.CLIMA_LOC}: temperatura, "
+            "sensacion termica, como esta el cielo (despejado, nublado, lluvia, "
+            "tormenta), humedad, lluvia y viento. Usala si te preguntan por el "
+            "clima, si llueve o si conviene salir. Es la calle, no la pieza. "
+            "No usa el micro:bit ni buscar_en_web."
+        ),
+        "comando": None,
+        "prefijo": None,
     },
     "reloj": {
         "descripcion": "Hora y fecha actuales del sistema (no usa el micro:bit).",
@@ -1793,6 +1897,29 @@ def _texto_temperatura(chip: str) -> str:
     )
 
 
+def ver_clima() -> dict:
+    """El clima completo de afuera (Open-Meteo, gratis, sin key)."""
+    c = clima_service.temperatura_externa(config.CLIMA_LAT, config.CLIMA_LON)
+    if c is None:
+        return {"ok": False, "resultado": (
+            "No pude consultar el clima ahora (sin conexión con el servicio). "
+            "Decilo simple: no lo inventes.")}
+    partes = [f"afuera en {config.CLIMA_LOC} ahora: {c['temp']} grados"]
+    if c.get("sensacion") is not None:
+        partes.append(f"sensación térmica {c['sensacion']}")
+    if c.get("cielo"):
+        partes.append(f"el cielo está {c['cielo']}")
+    if c.get("humedad") is not None:
+        partes.append(f"humedad {c['humedad']}%")
+    if c.get("lluvia_mm"):
+        partes.append(f"lluvia {c['lluvia_mm']} mm en la última hora")
+    if c.get("viento_kmh") is not None:
+        partes.append(f"viento {c['viento_kmh']} km/h")
+    if c.get("es_de_dia") is not None:
+        partes.append("es de día" if c["es_de_dia"] else "es de noche")
+    return {"ok": True, "resultado": ", ".join(partes) + ". Es la calle, no la pieza."}
+
+
 def formatear_sensor(nombre: str, linea: str) -> str:
     """Convierte la respuesta cruda del micro:bit en texto natural."""
     try:
@@ -1938,6 +2065,18 @@ def calcular(expresion: str) -> dict:
     if not expr:
         return {"ok": False, "resultado": "Falta la expresion a calcular."}
 
+    # VARIAS CUENTAS DE UNA ("27*9/5+32, 19*9/5+32"): la IA las junta cuando
+    # convierte dos numeros. Antes eso fallaba y costaba una ronda mas (medido
+    # con eval_ia.py). Se separan por ';' o por ', ' (coma CON espacio: "3,5"
+    # sigue siendo un decimal) y se resuelve cada una.
+    partes = [p.strip() for p in re.split(r";|,\s+", expr) if p.strip()]
+    if len(partes) > 1:
+        resueltas = [calcular(p) for p in partes]
+        if all(r["ok"] for r in resueltas):
+            return {"ok": True,
+                    "resultado": "; ".join(r["resultado"] for r in resueltas),
+                    "expresion": expr}
+
     import math
 
     # ---- normalizacion amigable ----
@@ -2050,12 +2189,25 @@ def catalogo_herramientas(
     herramienta que vuelva a escribir o consultar lo que el usuario desactivó.
     """
     herramientas = dict(HERRAMIENTAS)
+    sin_web = not config.EXA_API_KEY
+    if sin_web:
+        # Sin key de Exa la busqueda falla SIEMPRE (401): ofrecerla es invitar
+        # a la IA a intentar, fallar y contestar "no pude" con 1-2 s de mas.
+        herramientas.pop("buscar_en_web", None)
+        herramientas.pop("leer_url", None)
     if not permitir_memoria:
         for nombre in ("guardar_recuerdo", "buscar_recuerdos", "actualizar_recuerdo", "olvidar_recuerdo"):
             herramientas.pop(nombre, None)
     elif not permitir_consulta_memoria:
         herramientas.pop("buscar_recuerdos", None)
-    return _catalogo_herramientas_puro(herramientas)
+    catalogo = _catalogo_herramientas_puro(herramientas)
+    if sin_web:
+        catalogo += (
+            "\n- HOY NO HAY BUSQUEDA EN INTERNET: buscar_en_web y leer_url no "
+            "estan disponibles. Si te preguntan algo actual que no sabes, decilo "
+            "simple, sin prometer buscarlo. El clima SI lo tenes (ver_clima)."
+        )
+    return catalogo
 
 
 async def ejecutar_lote(
@@ -2120,7 +2272,13 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
             f"hora y fecha actual: {ahora.strftime('%H:%M')} del {DIAS_ES[ahora.weekday()]} "
             f"{ahora.day} de {MESES_ES[ahora.month - 1]} de {ahora.year}"
         )}
+    if nombre == "ver_clima":
+        return ver_clima()
     if nombre == "buscar_en_web":
+        if not config.EXA_API_KEY:
+            return {"ok": False, "resultado": (
+                "Hoy no tenés búsqueda en internet (no está configurada). Decilo "
+                "simple y ofrecé lo que sí sabés o podés medir.")}
         query = (args or {}).get("query", "")
         return buscar_en_web(query)
     if nombre == "calcular":
@@ -2328,9 +2486,76 @@ async def _stream_ia(messages: list, caja: dict, temperatura: float):
         yield event
 
 
+# ---------------------------------------------------------------------------
+#  AUTONOMIA: Kira habla sola cuando le PASA algo
+#
+# La placa avisa sus reacciones (EVENTO:...) y los juegos (JUEGO:...) y la web
+# pide un turno con "evento" en vez de "mensaje". La IA recibe lo que le paso,
+# en palabras, y reacciona con su personalidad y su memoria. Tambien hay dos
+# eventos de la web: SILENCIO (nadie le habla hace rato) y VOLVIO.
+# ---------------------------------------------------------------------------
+EVENTOS_KIRA = {
+    "EVENTO:COSQUILLAS": "alguien te tocó el logo dorado y te hizo cosquillas (te reíste)",
+    "EVENTO:CARINO": "te están acariciando el logo con cariño",
+    "EVENTO:GRUNIDO": "te tocaron estando enojada y gruñiste",
+    "EVENTO:SOBRESALTO": "un golpe te asustó de repente",
+    "EVENTO:DESPERTAR": "te despertaron: estabas dormida",
+    "EVENTO:MAREO": "te sacudieron fuerte y quedaste mareada",
+    "EVENTO:TOQUE": "alguien te picó el botón B",
+    "EVENTO:MOLESTA": "te siguen picando el botón B y ya te está molestando",
+    "EVENTO:BERRINCHE": "te picaron tanto que hiciste un berrinche: ahora estás ofendida",
+    "EVENTO:OFENDIDA": "estás ofendida y te quisieron tocar igual",
+    "EVENTO:ENAMORADA": "te hicieron tantos mimos que te enamoraste",
+    "EVENTO:PERDON": "estabas ofendida, pero te acariciaron y los perdonaste",
+    "EVENTO:ESTORNUDO": "estornudaste del frío",
+    "EVENTO:TIRITAR": "estás tiritando de frío",
+    "EVENTO:ACALORADA": "tenés mucho calor",
+    "EVENTO:DESLUMBRADA": "volvió la luz de golpe y te encandiló",
+    "EVENTO:CAIDA": "te dejaron caer: estuviste en caída libre",
+    "SILENCIO": ("hace un rato que nadie te habla, pero la pantalla sigue abierta: "
+                 "alguien anda por ahí. Sacá charla vos, con algo espontáneo (un "
+                 "recuerdo, una curiosidad, una pregunta). Sin reprochar el silencio"),
+    "VOLVIO": "la persona volvió a la pantalla después de un rato",
+}
+
+
+def describir_evento(linea: str) -> str | None:
+    linea = (linea or "").strip()
+    if linea in EVENTOS_KIRA:
+        return EVENTOS_KIRA[linea]
+    partes = linea.split(":")
+    if partes[:2] == ["JUEGO", "DADO"] and len(partes) >= 3:
+        return f"jugaron al dado con vos y salió un {partes[2]}"
+    if partes[:2] == ["JUEGO", "PPT"] and len(partes) >= 5:
+        nombres = {"PIEDRA": "piedra", "PAPEL": "papel", "TIJERA": "tijera"}
+        persona, vos = nombres.get(partes[2], partes[2]), nombres.get(partes[3], partes[3])
+        quien = {"1": "perdiste vos", "-1": "ganaste vos", "0": "empataron"}.get(partes[4], "")
+        return f"jugaron piedra, papel o tijera: la persona sacó {persona}, vos {vos}, y {quien}"
+    if partes[:2] == ["JUEGO", "REFLEJOS"] and len(partes) >= 3:
+        if partes[2] == "TRAMPA":
+            return "jugaron al juego de reflejos y la persona apretó ANTES de tiempo: hizo trampa"
+        if partes[2] == "2000":
+            return "jugaron al juego de reflejos y la persona no apretó a tiempo"
+        return f"jugaron al juego de reflejos y la persona tardó {partes[2]} milisegundos"
+    return None
+
+
+def mensaje_de_evento(descripcion: str) -> str:
+    return (f"[EVENTO REAL, nadie te escribió] {descripcion}. Reaccioná VOS, en voz "
+            "alta y corto (una o dos frases), como te salga en el momento, "
+            "hablándole a quien esté cerca. No uses herramientas salvo que de "
+            "verdad haga falta.")
+
+
 async def api_chat_stream(body: dict):
     personaje = str(body.get("personaje", "kira")).lower()
     mensaje = str(body.get("mensaje", "")).strip()
+    evento = str(body.get("evento", "") or "").strip()
+    descripcion_evento = describir_evento(evento) if evento else None
+    if evento and not descripcion_evento:
+        raise HTTPException(400, "evento desconocido")
+    if descripcion_evento:
+        mensaje = mensaje_de_evento(descripcion_evento)
     historial = body.get("historia", [])  # [{rol, contenido}]
     sesion = body.get("sesion")  # id del chat (para el historial debug)
     preferencias = _preferencias_memoria(body)
@@ -2338,6 +2563,8 @@ async def api_chat_stream(body: dict):
     # con foto, o con las dos cosas.
     foto = normalizar_foto(body.get("imagen") or body.get("foto"))
     texto_memoria = mensaje or ("(una foto)" if foto else "")
+    if descripcion_evento:
+        texto_memoria = f"(me pasó: {descripcion_evento})"
 
     if not mensaje and not foto:
         raise HTTPException(400, "mensaje vacio")
@@ -2351,8 +2578,11 @@ async def api_chat_stream(body: dict):
     t0 = time.time()  # marcas de tiempo de las trazas [TOOL]
 
     # mientras la IA piensa, el micro:bit muestra LOADING (queda hasta que
-    # el frontend confirme que el TTS arranco -> /api/talk -> TALK)
-    serial_mgr.enviar("LOADING")
+    # el frontend confirme que el TTS arranco -> /api/talk -> TALK). En un
+    # turno por EVENTO no: la placa esta en plena reaccion (riendose,
+    # mareada...) y taparla con un loading la arruinaria.
+    if not descripcion_evento:
+        serial_mgr.enviar("LOADING")
 
     # PERSONALIDAD EMERGENTE: el sistema crece con SU diario — la
     # personalidad que ella misma escribio reflexionando (FASE 3) — y con
@@ -2386,31 +2616,62 @@ async def api_chat_stream(body: dict):
     async def generador():
         # ------- TTS POR FRASES: la voz arranca mientras la IA piensa -------
         # Estado de la cola de audio (vive en toda la respuesta, ronda 1+2):
-        parcial_msg = ""
-        despachadas: list[str] = []
         audios: list[str] = []
         orden_audio = [0]
+        # Voz por frases con CURSOR (ver SegmentadorTTS): un segmentador por
+        # ronda de la IA, y todo lo ya dicho para que ElevenLabs continue la
+        # entonacion (previous_text) en vez de arrancar de cero en cada frase.
+        voz_estado = {"seg": SegmentadorTTS(), "emocion": None}
+        dicho_total: list[str] = []
+
+        def _mandar_voz(frases: list[str], emocion: str | None) -> list[dict]:
+            if not voz or voz == "PENDIENTE":
+                return []
+            tag = config.TTS_TAGS.get(emocion or "", "") if emocion else ""
+            eventos = []
+            for frase in frases:
+                cuerpo = (tag + " " + frase).strip() if tag else frase
+                tts_id = speech_service.register(cuerpo, voz, " ".join(dicho_total)[-400:])
+                print(f"[VOZ] frase {orden_audio[0] + 1}: {cuerpo[:90]!r}")
+                dicho_total.append(frase)
+                url = f"/api/tts-stream/{tts_id}"
+                audios.append(url)
+                eventos.append({"tipo": "audio", "url": url, "orden": orden_audio[0]})
+                orden_audio[0] += 1
+            return eventos
         herramientas_turno: list[dict] = []   # debug: tools usadas en este turno
+        # El RASTRO: de donde salio cada cosa que dice. Es la diferencia entre
+        # "Kira afirma algo" y "KiraConsulto X y por eso dice esto". Se manda
+        # a la UI para que sea auditable, y al historial para que ella misma
+        # sepa citarlo si le repreguntan. Ver app/services/rastro.py.
+        rastro_turno: list[dict] = []
 
         async def _ronda(stream):
             """Reenvia los eventos de _stream_ia y, de paso, fisgonea los
             deltas: cada frase NUEVA y completa genera su audio AL INSTANTE
             (evento tipo "audio"), sin tag de emocion (aun no se conoce:
             prosodia neutra en las primeras, la definitiva llega al fin)."""
-            nonlocal parcial_msg
+            # Ronda nueva = mensaje nuevo: cursor nuevo (lo dicho antes sigue
+            # en dicho_total, para la entonacion)
+            voz_estado["seg"] = SegmentadorTTS()
             async for ev in stream:
-                yield ev
+                pl = None
                 if isinstance(ev, str) and ev.startswith("data:"):
                     try:
                         pl = json.loads(ev[5:])
                     except (json.JSONDecodeError, ValueError):
-                        continue
-                    if isinstance(pl, dict) and pl.get("tipo") == "delta":
-                        texto = str(pl.get("texto", ""))
-                        if texto and texto != parcial_msg:
-                            parcial_msg = texto
-                            for e2 in despachar_audio(texto, "", voz or "", despachadas, audios, orden_audio):
-                                yield sse_event(e2)
+                        pl = None
+                if not (isinstance(pl, dict) and pl.get("tipo") == "delta"):
+                    yield ev
+                    continue
+                crudo = str(pl.get("texto", ""))
+                if pl.get("emotion"):
+                    voz_estado["emocion"] = normalizar_emocion(pl["emotion"])
+                # A la pantalla va SIN audio tags; a la voz, con ellos
+                yield sse_event({**pl, "texto": quitar_tags_audio(crudo)})
+                frases = voz_estado["seg"].avanzar(crudo)
+                for e2 in _mandar_voz(frases, voz_estado["emocion"]):
+                    yield sse_event(e2)
 
         # ------- ronda 1: la IA decide si necesita una herramienta -------
         caja: dict = {}
@@ -2554,10 +2815,23 @@ async def api_chat_stream(body: dict):
                       + (f" (+{len(claves_repetidas)} repetida(s) cacheada(s))" if claves_repetidas else ""))
                 nuevos = await ejecutar_lote(unicas, personaje, preferencias)
                 nombres = {c: p["nombre"] for c, p in unicas}
+                args_por_clave = {c: p.get("args") for c, p in unicas}
                 for clave, res in nuevos:
                     cache_tools[clave] = res
                     herramientas_turno.append({"nombre": nombres[clave], "ok": bool(res.get("ok")),
                                                "resultado": str(res.get("resultado", ""))[:300]})
+                    # El RASTRO: de donde salio cada cosa. Va por dos lados
+                    # distintos (a la UI y al historial de ella), asi que se
+                    # arma ACA, en el unico punto donde se sabe que la tool se
+                    # ejecuto de verdad y no fue un tool cacheado.
+                    for it in rastro_turno:
+                        if it["herramienta"] == nombres[clave] and it["herramienta"]:
+                            break
+                    else:
+                        rastro_turno.append(rastro_service.item_para_herramienta(
+                            nombres[clave],
+                            {**res, "args": args_por_clave.get(clave)},
+                        ))
             if claves_repetidas:
                 print(f"[TOOL] {_t(t0)} ronda {ronda_herr}: "
                       f"{len(claves_repetidas)} llamada(s) repetida(s): NO re-ejecuto (cache)")
@@ -2619,6 +2893,28 @@ async def api_chat_stream(body: dict):
                   f"{'pidio otra herramienta' if extraer_tools(salida.get('tool')) else 'respondio'}: "
                   f"emotion={emotion} ({len(message)} caracteres)")
 
+        if not message and not forzada:
+            # RONDA DE RESCATE (si ya hubo ronda forzada, esa ERA el rescate). Medido con eval_ia.py: tras una herramienta
+            # que fallo, la IA a veces contesta con message VACIO, y antes eso
+            # salia como "..." (o como el dato crudo de la tool pegado a una
+            # frase fija). Una ronda mas, sin herramientas y con la orden
+            # explicita, casi siempre arregla: Kira contesta con sus palabras.
+            print(f"[TOOL] {_t(t0)} la respuesta salio SIN texto: ronda de rescate")
+            messages.append({"role": "assistant", "content": caja.get("buffer") or "{}"})
+            messages.append({"role": "user", "content": (
+                "[AVISO DEL SISTEMA] Tu ultima respuesta salio con el message VACIO. "
+                "Contesta AHORA lo que te pregunto el usuario, hablado y con tus "
+                "palabras, usando los datos que ya tenes arriba. Si una herramienta "
+                "fallo, decilo simple. NO pidas herramientas: tool tiene que ser null.")})
+            caja = {}
+            async for ev in _ronda(_stream_ia(messages, caja, estado.temp)):
+                yield ev
+            if not caja.get("error") and caja.get("salida"):
+                rescate = str(caja["salida"].get("message", "")).strip()
+                if rescate:
+                    message = rescate
+                    emotion = normalizar_emocion(caja["salida"].get("emotion"))
+
         if not message and ultimo_dato:
             # la ultima ronda a veces vuelve a pedir la tool o sale vacia:
             # fallback con la palabra justa segun el tipo de herramienta
@@ -2642,12 +2938,15 @@ async def api_chat_stream(body: dict):
         tts_url = None
         tts_urls: list[str] = []
         if voz and voz != "PENDIENTE":
-            tag = config.TTS_TAGS.get(emotion, "")
-            for e2 in despachar_audio(message, tag, voz, despachadas, audios, orden_audio,
-                                      solo_terminadas=False):
+            # Lo que quedo sin decir (la cola de la ultima ronda, o el mensaje
+            # entero si salio de un respaldo/rescate sin stream)
+            for e2 in _mandar_voz(voz_estado["seg"].terminar(message), emotion):
                 yield sse_event(e2)
             tts_urls = list(audios)
             tts_url = tts_urls[0] if tts_urls else None
+        # De aca en adelante (pantalla, historial, memoria) el mensaje va sin
+        # los audio tags: "[laughs]" es para la voz, no para leer.
+        message = quitar_tags_audio(message) or message
         # PERSONALIDAD EMERGENTE (FASE 1): el MEMO post-charla, en background.
         # Kira anota en una frase lo vivido y califica su importancia
         # (arquitectura Generative Agents de Stanford). Si falla, ni se nota.
@@ -2673,7 +2972,14 @@ async def api_chat_stream(body: dict):
 
         # HISTORIAL DEBUG: el turno completo queda guardado crudo (la foto no
         # se guarda: solo se deja constancia de que hubo una)
-        guardar_turno(personaje, sesion, texto_memoria, message, emotion, herramientas_turno)
+        guardar_turno(personaje, sesion, texto_memoria, message, emotion,
+                      herramientas_turno, rastro=rastro_turno or None)
+
+        # Si no consulto nada, el rastro NO viene vacio: viene con la
+        # categoria "criada". La diferencia importa, porque una lista vacia es
+        # ambigua (¿no busco o me fallo la busqueda?) y "no consulto nada" es
+        # una respuesta. Ver app/services/rastro.py.
+        rastro_final = rastro_turno or [rastro_service.sin_fuentes(herramientas_turno)]
 
         yield sse_event({
             "tipo": "fin",
@@ -2685,6 +2991,8 @@ async def api_chat_stream(body: dict):
             "personaje": personaje,
             # fuentes de la web (solo si hubo busqueda): las muestra el frontend
             "fuentes": fuentes_web,
+            # de donde salio TODO, no solo la web (ver rastro.py)
+            "rastro": rastro_final,
         })
 
     return StreamingResponse(
@@ -2937,26 +3245,19 @@ async def api_escuchar():
 
 
 # ---------------------------------------------------------------------------
-#  TTS Fish Audio (funcion auxiliar para un request simple, si se necesita)
+#  TTS ElevenLabs (funcion auxiliar para un request simple, si se necesita)
 # ---------------------------------------------------------------------------
 async def generar_voz(texto: str, voice_id: str) -> bytes:
-    """Genera el audio completo con Fish Audio (s2.1-pro-free, gratis)."""
+    """Genera el audio completo con ElevenLabs (config.ELEVEN_MODELO)."""
     if not voice_id or voice_id == "PENDIENTE":
         raise ValueError("sin voice_id asignado para este personaje")
 
     async with httpx.AsyncClient(timeout=60) as client:
         r = await client.post(
-            f"{config.FISH_BASE_URL}/v1/tts",
-            headers={
-                "Authorization": f"Bearer {config.FISH_API_KEY}",
-                # OJO: en Fish Audio el modelo va como HEADER, no en el body
-                "model": config.FISH_MODELO,
-            },
-            json={
-                "text": texto,
-                "reference_id": voice_id,
-                "format": "mp3",
-            },
+            f"{config.ELEVEN_BASE_URL}/v1/text-to-speech/{voice_id}",
+            params={"output_format": config.ELEVEN_FORMATO},
+            headers={"xi-api-key": config.ELEVENLABS_API_KEY},
+            json={"text": texto, "model_id": config.ELEVEN_MODELO},
         )
         r.raise_for_status()
         return r.content
@@ -3005,7 +3306,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("  KIRA - El Cerebro esta vivo")
     print(f"  Abri: http://127.0.0.1:8000")
-    print(f"  IA: {config.MODELO_IA} | Voz: {config.FISH_MODELO} | Serial: {config.SERIAL_BAUD}")
+    print(f"  IA: {config.MODELO_IA} | Voz: {config.ELEVEN_MODELO} | Serial: {config.SERIAL_BAUD}")
     print("=" * 60)
 
     # abre el navegador SOLO cuando el server ya esta escuchando

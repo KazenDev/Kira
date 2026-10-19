@@ -121,7 +121,18 @@ def test_unitarios():
     check("calcular sigue intacta", r["ok"] is True and "30" in r["resultado"], r["resultado"])
 
     print("\n== 4) catalogo de herramientas (lo que viaja al modelo) ==")
+    # Con la key de Exa se ofrecen todas; sin ella, la web se oculta (fallaria
+    # siempre con 401) y el catalogo lo dice para que Kira no prometa buscar.
+    key_real = ks.config.EXA_API_KEY
+    ks.config.EXA_API_KEY = ""
+    sin_web = ks.catalogo_herramientas()
+    check("sin key de Exa: NO ofrece buscar_en_web ni leer_url",
+          "- buscar_en_web:" not in sin_web and "- leer_url:" not in sin_web)
+    check("sin key de Exa: avisa que hoy no hay busqueda", "NO HAY BUSQUEDA" in sin_web)
+    check("sin key de Exa: el clima sigue (ver_clima)", "- ver_clima:" in sin_web)
+    ks.config.EXA_API_KEY = "clave-de-prueba"
     cat = ks.catalogo_herramientas()
+    ks.config.EXA_API_KEY = key_real
     check("lista TODAS las tools", all(f"- {n}:" in cat for n in ks.HERRAMIENTAS),
           str([n for n in ks.HERRAMIENTAS if f"- {n}:" not in cat]))
     check("dice cuando NO usar", "NO la uses" in cat, cat[:120])

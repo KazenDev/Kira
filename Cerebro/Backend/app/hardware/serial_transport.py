@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import queue
+import collections
 import threading
 import time
 
@@ -26,6 +27,12 @@ class SerialTransport:
         self.baud = baud
         self._cola = queue.Queue()
         self._lock = threading.RLock()
+        # EVENTOS que la placa avisa SOLA (la tocaron, la sacudieron, termino
+        # un juego...). Antes esas lineas pisaban ultimo_ack y se perdian con
+        # el siguiente ACK: nadie las escuchaba. Ahora quedan en una cola
+        # con numero de secuencia y la web las pide con /api/eventos.
+        self._eventos: collections.deque = collections.deque(maxlen=50)
+        self._seq_evento = 0
         self._exclusive_request = threading.Lock()
         self._stop_event = threading.Event()
         self._ser: serial.Serial | None = None
@@ -394,6 +401,7 @@ class SerialTransport:
             self.ultimo_ack_time = time.time()
             self.respondiendo = True
             print(f"[SERIAL] << {texto}")
+            self._registrar_evento(texto)
             # si la IA pidio leer un sensor, avisarle al que esta esperando
             esperado = self._respuesta_esperada
             if esperado:
@@ -406,6 +414,24 @@ class SerialTransport:
 
     def enviar(self, cmd: str):
         self._cola.put(cmd)
+
+    # Prefijos de las lineas que la placa manda POR SU CUENTA y que importan
+    PREFIJOS_EVENTO = ("EVENTO:", "JUEGO:")
+
+    def _registrar_evento(self, texto: str) -> None:
+        if not texto.startswith(self.PREFIJOS_EVENTO):
+            return
+        with self._lock:
+            self._seq_evento += 1
+            self._eventos.append({"seq": self._seq_evento, "linea": texto, "t": time.time()})
+
+    def eventos_desde(self, desde: int) -> tuple[int, list[dict]]:
+        """(ultimo seq, eventos con seq > desde). desde<0 = solo el seq actual
+        (la web arranca sin reproducir eventos viejos)."""
+        with self._lock:
+            if desde < 0:
+                return self._seq_evento, []
+            return self._seq_evento, [e for e in self._eventos if e["seq"] > desde]
 
     def escuchar(
         self,
@@ -529,6 +555,7 @@ class SerialTransport:
         self.ultimo_ack = texto
         self.ultimo_ack_time = time.time()
         self.respondiendo = True
+        self._registrar_evento(texto)
         esperado = self._respuesta_esperada
         if esperado:
             prefijo, evento, resultado = esperado

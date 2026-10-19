@@ -13,6 +13,7 @@ import {
   LogOut,
   Mic2,
   ShieldCheck,
+  Sparkles,
   Trash2,
   Volume2,
   VolumeX,
@@ -39,6 +40,8 @@ interface Props {
   onCambiarSonido: (v: boolean) => void;
   voz: boolean;
   onCambiarVoz: (v: boolean) => void;
+  autonomia: boolean;
+  onCambiarAutonomia: (v: boolean) => void;
   volumenVoz: number;
   onCambiarVolumenVoz: (v: number) => void;
   preferenciasMemoria: PreferenciasMemoria;
@@ -98,6 +101,8 @@ export default function Settings({
   onCambiarSonido,
   voz,
   onCambiarVoz,
+  autonomia,
+  onCambiarAutonomia,
   volumenVoz,
   onCambiarVolumenVoz,
   preferenciasMemoria,
@@ -365,6 +370,17 @@ export default function Settings({
                   etiqueta="Voz de Kira"
                   descripcion={voz ? 'Reproducir la voz y sincronizar la boca de la micro:bit' : 'No reproducir audio; la placa queda muda'}
                   icono={<Mic2 size={18} aria-hidden="true" />}
+                />
+                <Interruptor
+                  activo={autonomia}
+                  onClick={() => onCambiarAutonomia(!autonomia)}
+                  etiqueta="Kira habla sola"
+                  descripcion={
+                    autonomia
+                      ? 'Reacciona en voz alta cuando la tocan, la sacuden o termina un juego, y saca charla si nadie le habla'
+                      : 'Solo habla cuando le escribís'
+                  }
+                  icono={<Sparkles size={18} aria-hidden="true" />}
                 />
                 <div className={'ajustes-slider' + (voz ? '' : ' deshabilitado')}>
                   <div className="ajustes-slider-cabecera">

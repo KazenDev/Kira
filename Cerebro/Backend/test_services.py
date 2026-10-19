@@ -101,7 +101,7 @@ def test_speech_registry() -> None:
 
 
 async def test_speech_stream() -> None:
-    print("\n== 5) Fish Audio sigue siendo lazy ==")
+    print("\n== 5) ElevenLabs sigue siendo lazy ==")
 
     class FakeResponse:
         async def __aenter__(self):
@@ -109,6 +109,8 @@ async def test_speech_stream() -> None:
 
         async def __aexit__(self, *args):
             return False
+
+        status_code = 200
 
         def raise_for_status(self):
             return None
@@ -135,13 +137,14 @@ async def test_speech_stream() -> None:
 
     service = SpeechService(
         SimpleNamespace(
-            FISH_BASE_URL="https://fish.invalid",
-            FISH_API_KEY="fake",
-            FISH_MODELO="fake",
+            ELEVEN_BASE_URL="https://eleven.invalid",
+            ELEVENLABS_API_KEY="fake",
+            ELEVEN_MODELO="fake",
+            ELEVEN_FORMATO="mp3_44100_128",
         )
     )
     tts_id = service.register("hola", "voice")
-    check(FakeClient.calls == 0, "registrar la URL no llama a Fish")
+    check(FakeClient.calls == 0, "registrar la URL no llama a ElevenLabs")
     original = speech_module.httpx.AsyncClient
     speech_module.httpx.AsyncClient = FakeClient
     try:

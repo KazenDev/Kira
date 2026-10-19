@@ -1,5 +1,5 @@
 """
-test_respaldo_ia.py — el respaldo de IA (DeepSeek -> nano-gpt).
+test_respaldo_ia.py — el respaldo de IA (Vercel AI Gateway -> DeepSeek -> nano-gpt).
 
 Correr:  .venv/bin/python test_respaldo_ia.py    (desde Cerebro/Backend)
 
@@ -112,6 +112,8 @@ class _ClienteFalso:
 def preparar(monkeypatch_httpx=True):
     _ClienteFalso.llamadas = []
     _ClienteFalso.status_por_host = {}
+    from app.services import ai as ai_service
+    ai_service.reiniciar_enfriamientos()
     if monkeypatch_httpx:
         ks.httpx.AsyncClient = _ClienteFalso
 
@@ -128,38 +130,38 @@ async def test_principal_ok():
     r = await ks.post_json_ia({"model": "x", "messages": [], "max_tokens": 10})
     check("devuelve la respuesta del principal", r == _ClienteFalso.cuerpo_ok, str(r))
     check("le pegó a UN solo proveedor", len(_ClienteFalso.llamadas) == 1, str(_ClienteFalso.llamadas))
-    check("y fue a DeepSeek", "api.deepseek.com" in _ClienteFalso.llamadas[0], str(_ClienteFalso.llamadas))
+    check("y fue al gateway (DeepSeek via Vercel)", "ai-gateway.vercel.sh" in _ClienteFalso.llamadas[0], str(_ClienteFalso.llamadas))
 
 
 async def test_se_agota_y_entra_respaldo():
     print("\n== 2) el principal se agota (500): entra el respaldo ==")
     preparar()
     ks.esperar_reintento = no_dormir
-    _ClienteFalso.status_por_host["api.deepseek.com"] = 500
+    _ClienteFalso.status_por_host["ai-gateway.vercel.sh"] = 500
     salida = io.StringIO()
     with redirect_stdout(salida):
         r = await ks.post_json_ia({"model": "x", "messages": [], "max_tokens": 10})
     log = salida.getvalue()
     check("la respuesta vino del respaldo", r == _ClienteFalso.cuerpo_ok, str(r))
     check("intentó 3 veces el principal (y no más)",
-          sum("api.deepseek.com" in u for u in _ClienteFalso.llamadas) == 3, str(_ClienteFalso.llamadas))
-    check("después cayó a nano-gpt",
-          sum("nano-gpt.com" in u for u in _ClienteFalso.llamadas) == 1, str(_ClienteFalso.llamadas))
+          sum("ai-gateway.vercel.sh" in u for u in _ClienteFalso.llamadas) == 3, str(_ClienteFalso.llamadas))
+    check("después cayó a DeepSeek directo",
+          sum("api.deepseek.com" in u for u in _ClienteFalso.llamadas) == 1, str(_ClienteFalso.llamadas))
     check("el log lo dice con el motivo", "CAE AL RESPALDO" in log and "HTTP 500" in log, log.strip()[:160])
-    check("y no se escapa sin dejar rastro en el log", "nano-gpt" in log, log.strip()[:160])
+    check("y no se escapa sin dejar rastro en el log", "deepseek" in log, log.strip()[:160])
 
 
 async def test_sin_saldo_salta_al_toque():
     print("\n== 3) sin saldo (HTTP 402): salta al respaldo SIN reintentar ==")
     preparar()
     ks.esperar_reintento = no_dormir
-    _ClienteFalso.status_por_host["api.deepseek.com"] = 402
+    _ClienteFalso.status_por_host["ai-gateway.vercel.sh"] = 402
     salida = io.StringIO()
     with redirect_stdout(salida):
         r = await ks.post_json_ia({"model": "x", "messages": [], "max_tokens": 10})
     check("igual hubo respuesta (del respaldo)", r == _ClienteFalso.cuerpo_ok, str(r))
     check("al principal le pegó UNA sola vez (no gastó reintentos)",
-          sum("api.deepseek.com" in u for u in _ClienteFalso.llamadas) == 1, str(_ClienteFalso.llamadas))
+          sum("ai-gateway.vercel.sh" in u for u in _ClienteFalso.llamadas) == 1, str(_ClienteFalso.llamadas))
     check("el motivo en el log es HTTP 402", "HTTP 402" in salida.getvalue(), salida.getvalue()[:160])
 
 
@@ -167,7 +169,7 @@ async def test_stream_con_respaldo():
     print("\n== 4) STREAM: el chat sigue vivo con el respaldo ==")
     preparar()
     ks.esperar_reintento = no_dormir
-    _ClienteFalso.status_por_host["api.deepseek.com"] = 503
+    _ClienteFalso.status_por_host["ai-gateway.vercel.sh"] = 503
     caja: dict = {}
     eventos = []
     salida = io.StringIO()
@@ -183,7 +185,48 @@ async def test_stream_con_respaldo():
           "reintento" in tipos and "esperando" in tipos, str(tipos))
     check("el log dice que cayó al respaldo", "CAE AL RESPALDO" in salida.getvalue(), salida.getvalue()[:200])
     check("el respaldo recibió el stream",
-          any("nano-gpt.com" in u for u in _ClienteFalso.llamadas), str(_ClienteFalso.llamadas))
+          any("api.deepseek.com" in u for u in _ClienteFalso.llamadas), str(_ClienteFalso.llamadas))
+
+
+async def test_limite_salta_al_toque_y_enfria():
+    print("\n== 4b) limite de velocidad (HTTP 429): respaldo AL INSTANTE + cortacircuito ==")
+    preparar()
+    esperas = []
+
+    async def contar_espera(intento: int, respuesta=None):
+        esperas.append(intento)
+
+    ks.esperar_reintento = contar_espera
+    _ClienteFalso.status_por_host["ai-gateway.vercel.sh"] = 429
+    salida = io.StringIO()
+    with redirect_stdout(salida):
+        r1 = await ks.post_json_ia({"model": "x", "messages": [], "max_tokens": 10})
+    check("hubo respuesta (del respaldo)", r1 == _ClienteFalso.cuerpo_ok, str(r1))
+    check("al gateway le pego UNA vez (no reintento con 429)",
+          sum("ai-gateway.vercel.sh" in u for u in _ClienteFalso.llamadas) == 1, str(_ClienteFalso.llamadas))
+    check("no espero nada (antes: hasta 60 s de Retry-After)", esperas == [], str(esperas))
+    check("el log dice que queda enfriando", "enfriando" in salida.getvalue(), salida.getvalue()[:200])
+
+    # La pregunta siguiente NI LO INTENTA: va directo al respaldo
+    _ClienteFalso.llamadas = []
+    with redirect_stdout(io.StringIO()):
+        r2 = await ks.post_json_ia({"model": "x", "messages": [], "max_tokens": 10})
+    check("segunda pregunta: cero llamadas al gateway enfriado",
+          not any("ai-gateway.vercel.sh" in u for u in _ClienteFalso.llamadas), str(_ClienteFalso.llamadas))
+    check("y respondio igual", r2 == _ClienteFalso.cuerpo_ok)
+
+    # En STREAM (el chat en vivo) lo mismo
+    preparar()
+    _ClienteFalso.status_por_host["ai-gateway.vercel.sh"] = 429
+    caja: dict = {}
+    with redirect_stdout(io.StringIO()):
+        eventos = [ev async for ev in ks._stream_ia([{"role": "user", "content": "hola"}], caja, 0.8)]
+    tipos = [json.loads(e[5:]).get("tipo") for e in eventos if e.startswith("data:")]
+    check("stream: hubo texto y no error", "delta" in tipos and "error" not in tipos, str(tipos))
+    check("stream: UNA llamada al gateway", sum("ai-gateway.vercel.sh" in u for u in _ClienteFalso.llamadas) == 1,
+          str(_ClienteFalso.llamadas))
+    check("stream: no espero", esperas == [], str(esperas))
+    ks.esperar_reintento = no_dormir
 
 
 async def test_stream_principal_ok():
@@ -193,7 +236,7 @@ async def test_stream_principal_ok():
     caja: dict = {}
     eventos = [ev async for ev in ks._stream_ia([{"role": "user", "content": "hola"}], caja, 0.8)]
     check("cero llamadas al respaldo",
-          not any("nano-gpt.com" in u for u in _ClienteFalso.llamadas), str(_ClienteFalso.llamadas))
+          not any("api.deepseek.com" in u for u in _ClienteFalso.llamadas), str(_ClienteFalso.llamadas))
     check("hubo deltas", any('"tipo": "delta"' in e for e in eventos))
 
 
@@ -224,7 +267,7 @@ def test_json_adornado_y_emociones():
 
 def main():
     print("=" * 62)
-    print("TESTS — respaldo de IA (DeepSeek -> nano-gpt)")
+    print("TESTS — respaldo de IA (Gateway -> DeepSeek -> nano-gpt)")
     print("=" * 62)
     original = ks.httpx.AsyncClient
     try:
@@ -232,6 +275,7 @@ def main():
         asyncio.run(test_se_agota_y_entra_respaldo())
         asyncio.run(test_sin_saldo_salta_al_toque())
         asyncio.run(test_stream_con_respaldo())
+        asyncio.run(test_limite_salta_al_toque_y_enfria())
         asyncio.run(test_stream_principal_ok())
         test_json_adornado_y_emociones()
     except Exception:

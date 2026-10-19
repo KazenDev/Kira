@@ -144,6 +144,16 @@ async def api_ble_rx(
     return {"ok": True, "cantidad": len(lineas)}
 
 
+@router.get("/api/eventos")
+async def api_eventos(
+    desde: int = -1,
+    services: BackendContext = Depends(get_backend_context),
+):
+    """Lo que la placa aviso sola (EVENTO:..., JUEGO:...) desde 'desde'."""
+    seq, eventos = services.serial_manager().eventos_desde(desde)
+    return {"seq": seq, "eventos": eventos}
+
+
 @router.post("/api/loading")
 async def api_loading(services: BackendContext = Depends(get_backend_context)):
     services.serial_manager().enviar("LOADING")

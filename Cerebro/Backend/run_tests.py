@@ -25,6 +25,8 @@ DETERMINISTIC = (
     ("test_respaldo_ia.py", ()),
     ("test_herramientas.py", ()),
     ("test_stream_deterministic.py", ()),
+    ("test_tts.py", ()),
+    ("test_rag_charla.py", ()),
     ("test_vision_deterministic.py", ()),
     ("test_memoria.py", ("--solo-unitarios",)),
     ("test_reflexion.py", ("--solo-unitarios",)),

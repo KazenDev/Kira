@@ -2,10 +2,19 @@ import os
 
 # ================================================================================
 #  KIRA - Configuracion central del Backend
-#  El cerebro que conecta: DeepSeek (IA) + Fish Audio (voz) + micro:bit (cara)
+#  El cerebro que conecta: DeepSeek via Vercel AI Gateway (IA) + ElevenLabs
+#  (voz) + micro:bit (cara)
 # ================================================================================
 
-# ------------------- IA (DeepSeek platform, API OpenAI-compatible) ----------------
+# ------------------- IA (Vercel AI Gateway -> DeepSeek) -------------------------
+# El principal pasa por Vercel AI Gateway: una sola API OpenAI-compatible
+# (POST /chat/completions + Bearer) delante de cientos de modelos de distintos
+# proveedores, con una sola key y sin cambiar el codigo. El modelo va como
+# "proveedor/modelo" (lista real: GET https://ai-gateway.vercel.sh/v1/models).
+AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1"
+AI_GATEWAY_API_KEY = os.getenv("AI_GATEWAY_API_KEY", "")
+
+# ------------------- IA de respaldo (DeepSeek platform directo) -----------------
 # Antes: nano-gpt (sk-nano-...). Se pasó a la plataforma oficial de DeepSeek:
 # mismo formato (POST /chat/completions + Bearer), así que las únicas líneas que
 # hay que tocar son estas tres.
@@ -24,6 +33,18 @@ NANO_API_KEY = os.getenv("NANO_API_KEY", "")
 # piensa por defecto: para una charla con voz son segundos de silencio antes de
 # la primera palabra); nano-gpt rechazaría ese campo.
 PROVEEDORES_IA: list[dict] = [
+    {
+        "nombre": "vercel-gateway",
+        "base_url": AI_GATEWAY_BASE_URL,
+        "api_key": AI_GATEWAY_API_KEY,
+        # DeepSeek V4.1 Flash, snapshot del 17-oct (fijo: no cambia solo).
+        "modelo": "deepseek/deepseek-v4.1-flash-1017",
+        # El gateway traduce "reasoning" al formato de cada proveedor. Hay que
+        # apagarlo: medido, con razonamiento gasta ~85 tokens pensando antes
+        # de contestar y con MAX_TOKENS chico el JSON llega CORTADO; sin
+        # razonamiento, 0 tokens de mas y la respuesta completa.
+        "extra": {"reasoning": {"enabled": False}},
+    },
     {
         "nombre": "deepseek",
         "base_url": DEEPSEEK_BASE_URL,
@@ -50,10 +71,15 @@ MIN_TOKENS_IA = int(os.getenv("KIRA_MIN_TOKENS_IA", "128"))
 MODELO_IA = PROVEEDORES_IA[0]["modelo"]
 IA_EXTRA = PROVEEDORES_IA[0]["extra"]
 
-# ------------------- Voz (Fish Audio) -------------------
-FISH_BASE_URL = "https://api.fish.audio"
-FISH_API_KEY = os.getenv("FISH_API_KEY", "")
-FISH_MODELO = "s2.1-pro-free"  # GRATIS (el modelo va como HEADER, no en el body)
+# ------------------- Voz (ElevenLabs) -------------------
+# Eleven v4: el modelo mas expresivo de ElevenLabs; entiende "audio tags" en
+# corchetes con lenguaje libre ([happy], [whispering, scared]...), que es lo
+# que usa TTS_TAGS. Existe "eleven_v4_turbo" (mas rapido, para tiempo real):
+# se puede probar con KIRA_ELEVEN_MODELO sin tocar codigo.
+ELEVEN_BASE_URL = "https://api.elevenlabs.io"
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVEN_MODELO = os.getenv("KIRA_ELEVEN_MODELO", "eleven_v4")
+ELEVEN_FORMATO = "mp3_44100_128"   # mp3: lo que ya reproduce el frontend
 
 # ------------------- Transcripcion (AssemblyAI) -------------------
 # Se carga desde .env; no se guarda ninguna credencial en el código.
@@ -83,15 +109,16 @@ CLIMA_LAT = float(os.getenv("CLIMA_LAT", "1.8537"))
 CLIMA_LON = float(os.getenv("CLIMA_LON", "-76.0509"))
 CLIMA_LOC = os.getenv("CLIMA_LOC", "Pitalito, Huila")
 
-# Tags de emocion para que la VOZ suene con la misma emocion que la cara
-# (formato oficial de Fish Audio S2: [bracket] con lenguaje natural, 64+ emociones)
+# Tags de emocion para que la VOZ suene con la misma emocion que la cara.
+# Eleven v4 acepta audio tags en corchetes con lenguaje libre (se pueden
+# combinar: [tired, sighing]), asi que se describe el tono, no un codigo.
 TTS_TAGS = {
     "happy": "[happy]",
     "sad": "[sad]",
     "angry": "[angry]",
     "surprised": "[surprised]",
     "neutral": "",
-    "fastidio": "[frustrated]",
+    "fastidio": "[annoyed]",
     "miedo": "[scared]",
     "cansado": "[tired]",
 }

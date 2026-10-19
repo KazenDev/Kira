@@ -219,7 +219,10 @@ async def test_rag_summary_failure_keeps_local_results() -> None:
                 "kira", "Kira", "recordame los tomboys", []
             )
             check("tomboys" in block.lower(), "conserva resultados locales aunque falle el resumen", block)
-            check("- Recuerdo" in block, "inyecta la lista cruda como fallback", block)
+            # (cada linea lleva cuando paso: "- (hoy) Recuerdo 0: ...")
+            check(block.count("\n- ") >= 3 and "Recuerdo 0" in block,
+                  "inyecta la lista cruda como fallback", block)
+            check("memoria:" not in block, "sin ids internos en el prompt", block)
         finally:
             await ks.background_tasks.cancel_all()
             ks.MEMORIA_DIR = old_memory_dir
