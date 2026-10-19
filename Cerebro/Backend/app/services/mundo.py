@@ -414,6 +414,23 @@ def sol_y_luna(lat: float, lon: float, lugar: str) -> dict:
     if not dia.get("sunrise"):
         return _falla("el sol y la luna")
     partes = [f"hoy el sol sale a las {_hora(dia['sunrise'][0])} y se pone a las {_hora(dia['sunset'][0])}"]
+    # ¿ya paso? (medido: sin esto decia "ya mismo, son casi las siete" a las 23:40)
+    try:
+        tz = ZoneInfo(d.get("timezone") or "America/Bogota")
+        ahora = datetime.now(tz)
+        salida = datetime.fromisoformat(dia["sunrise"][0]).replace(tzinfo=tz)
+        puesta = datetime.fromisoformat(dia["sunset"][0]).replace(tzinfo=tz)
+        hora = ahora.strftime("%H:%M")
+        if ahora < salida:
+            partes.append(f"ahora son las {hora}: todavía no amaneció")
+        elif ahora < puesta:
+            m = int((puesta - ahora).total_seconds() // 60)
+            partes.append(f"ahora son las {hora}: faltan {m // 60} h {m % 60} min para que se ponga"
+                          if m >= 60 else f"ahora son las {hora}: se pone en {m} minutos")
+        else:
+            partes.append(f"ahora son las {hora}: el sol YA se puso hoy")
+    except (ValueError, KeyError):
+        pass
     if dia.get("daylight_duration"):
         h, m = divmod(round(dia["daylight_duration"][0] / 60), 60)
         partes.append(f"{h} horas y {m} minutos de luz")
@@ -492,3 +509,104 @@ def dias_hasta(cuando: str, hoy: date | None = None) -> dict:
     semanas = f" (unas {n // 7} semanas)" if n >= 14 else ""
     return {"ok": True, "resultado": (
         f"Faltan {n} día{'s' if n != 1 else ''}{semanas}: cae {cae} {objetivo.day}/{objetivo.month}/{objetivo.year}.")}
+
+
+# --- El OBSERVADOR: lo que pasa afuera y Kira cuenta SOLA ------------------
+#
+# Una IA autonoma no es una que habla por hablar: es una que se DA CUENTA de
+# algo real y lo cuenta. Esto mira el mundo cada tanto (datos con cache) y
+# devuelve novedades que valen una frase espontanea. Cada novedad sale UNA
+# vez (el estado de "ya avise" lo guarda quien llama).
+
+def leer_mundo(lat: float, lon: float) -> dict:
+    """Los datos crudos que mira el observador (con cache: es barato)."""
+    datos: dict = {}
+    try:
+        d = _get_json(
+            "https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}&timezone=auto"
+            "&current=precipitation,is_day&hourly=precipitation_probability&forecast_hours=2"
+            "&daily=sunset&forecast_days=1", ttl=600)
+        datos["atardecer"] = ((d.get("daily") or {}).get("sunset") or [None])[0]
+        datos["lluvia_prox"] = max(((d.get("hourly") or {}).get("precipitation_probability") or [0])[:2])
+        datos["lloviendo"] = ((d.get("current") or {}).get("precipitation") or 0) > 0
+        datos["tz"] = d.get("timezone") or "America/Bogota"
+    except Exception:
+        pass
+    try:
+        q = _get_json("https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson"
+                      f"&latitude={lat}&longitude={lon}&maxradiuskm=300&minmagnitude=3.5"
+                      "&limit=3&orderby=time", ttl=300, timeout=6.0)
+        datos["sismos"] = [
+            {"id": f.get("id"), "mag": (f.get("properties") or {}).get("mag"),
+             "t": ((f.get("properties") or {}).get("time") or 0) / 1000,
+             "km": round(_haversine(lat, lon, f["geometry"]["coordinates"][1], f["geometry"]["coordinates"][0]))}
+            for f in (q.get("features") or []) if f.get("geometry")]
+    except Exception:
+        pass
+    return datos
+
+
+def novedades(datos: dict, ahora: datetime, avisado: dict) -> list[str]:
+    """Las lineas de evento NUEVAS ("MUNDO:...") segun los datos. `avisado`
+    se actualiza: cada cosa se avisa una sola vez (o una vez cada tanto)."""
+    nuevas: list[str] = []
+    hoy = ahora.strftime("%Y-%m-%d")
+    # el sol se pone en los proximos 15 minutos
+    if datos.get("atardecer") and avisado.get("atardecer") != hoy:
+        try:
+            puesta = datetime.fromisoformat(datos["atardecer"]).replace(tzinfo=ahora.tzinfo)
+            falta = (puesta - ahora).total_seconds() / 60
+            if 0 < falta <= 15:
+                avisado["atardecer"] = hoy
+                nuevas.append(f"MUNDO:ATARDECER:{puesta.strftime('%H:%M')}")
+        except ValueError:
+            pass
+    # viene lluvia en la proxima hora (y todavia no llueve): como mucho cada 3 h
+    prob = datos.get("lluvia_prox") or 0
+    if prob >= 60 and not datos.get("lloviendo") and ahora.timestamp() - avisado.get("lluvia", 0) > 3 * 3600:
+        avisado["lluvia"] = ahora.timestamp()
+        nuevas.append(f"MUNDO:LLUVIA:{prob}")
+    # un sismo nuevo y reciente (menos de 1 h) cerca
+    vistos = avisado.setdefault("sismos", [])
+    for s in datos.get("sismos") or []:
+        if s.get("id") in vistos or not s.get("mag"):
+            continue
+        vistos.append(s["id"])
+        del vistos[:-20]
+        if ahora.timestamp() - (s.get("t") or 0) < 3600:
+            nuevas.append(f"MUNDO:SISMO:{s['mag']}:{s['km']}")
+    return nuevas
+
+
+# --- Semillas para sacar charla (cuando nadie habla) ------------------------
+
+PREGUNTAS_CURIOSAS = [
+    "¿por qué los gatos ronronean? Nadie está del todo seguro",
+    "si pudieras tener un sentido que no tenés (como mi brújula), ¿cuál elegirías?",
+    "el Huila tiene el desierto de la Tatacoa a unas horas de acá: de noche se ven miles de estrellas",
+    "un rayo calienta el aire cinco veces más que la superficie del sol",
+    "los pulpos tienen tres corazones y la sangre azul",
+    "el café de Pitalito es de los más premiados del país: ¿a vos te gusta el olor del café?",
+    "la luz de la luna en realidad es luz del sol rebotada",
+    "las abejas reconocen caras humanas",
+]
+
+
+def semilla_charla(lat: float, lon: float, azar) -> str:
+    """Algo REAL y concreto para sacar charla (no un '¿qué andás haciendo?')."""
+    opciones = []
+    try:
+        efe = un_dia_como_hoy(1)
+        if efe.get("ok"):
+            opciones.append(efe["resultado"])
+    except Exception:
+        pass
+    try:
+        iss = estacion_espacial(lat, lon, "acá")
+        if iss.get("ok"):
+            opciones.append(iss["resultado"])
+    except Exception:
+        pass
+    opciones.append("Un dato que te dio curiosidad: " + azar.choice(PREGUNTAS_CURIOSAS))
+    return azar.choice(opciones)

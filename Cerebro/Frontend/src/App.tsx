@@ -1634,6 +1634,12 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       return true;
     };
 
+    // Un evento que llega mientras Kira habla o piensa NO se pierde: queda
+    // esperando hasta 90 s (antes se tiraba, y el atardecer pasa una vez).
+    // Los del mundo real y los juegos ganan contra un toque cualquiera.
+    let pendiente: { linea: string; t: number } | null = null;
+    const pesa = (l: string) => (l.startsWith('MUNDO:') || l.startsWith('JUEGO:') || l === 'EVENTO:TIMER' ? 2 : 1);
+
     const tick = async () => {
       if (document.hidden) return;
       try {
@@ -1643,8 +1649,13 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         seqEventosRef.current = r.seq;
         // El ultimo evento que valga la pena (los de antes de abrir la web no)
         const ultimo = primeraVez ? undefined : r.eventos[r.eventos.length - 1];
-        if (ultimo) {
-          if (hablarSola(ultimo.linea)) return;
+        if (ultimo && (!pendiente || pesa(ultimo.linea) >= pesa(pendiente.linea))) {
+          pendiente = { linea: ultimo.linea, t: Date.now() };
+        }
+        if (pendiente && Date.now() - pendiente.t > 90000) pendiente = null;
+        if (pendiente && hablarSola(pendiente.linea)) {
+          pendiente = null;
+          return;
         }
       } catch {
         // sin eventos (backend viejo, sin placa): la autonomia por silencio sigue

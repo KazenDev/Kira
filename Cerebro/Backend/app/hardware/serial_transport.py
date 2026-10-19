@@ -421,7 +421,13 @@ class SerialTransport:
         self._cola.put(cmd)
 
     # Prefijos de las lineas que la placa manda POR SU CUENTA y que importan
-    PREFIJOS_EVENTO = ("EVENTO:", "JUEGO:")
+    PREFIJOS_EVENTO = ("EVENTO:", "JUEGO:", "MUNDO:")
+
+    def registrar_evento_externo(self, linea: str) -> None:
+        """Un evento que NO viene de la placa (el observador del mundo: el
+        atardecer, la lluvia que viene, un sismo). Va por el mismo canal para
+        que la web lo trate igual que un toque o una sacudida."""
+        self._registrar_evento(linea)
 
     def _registrar_evento(self, texto: str) -> None:
         if not texto.startswith(self.PREFIJOS_EVENTO):

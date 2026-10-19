@@ -58,8 +58,10 @@ describe('caraMotor', () => {
   });
 
   it('hablando, la boca abierta prende la fila de abajo; cerrada no', () => {
-    const abierta = correr({ estado: 'habla', emocion: 'neutral', boca: 1 }, 1).at(-1)!;
-    const cerrada = correr({ estado: 'habla', emocion: 'neutral', boca: 0 }, 1).at(-1)!;
+    const abiertaTodos = correr({ estado: 'habla', emocion: 'neutral', boca: 1 }, 1);
+    const abierta = abiertaTodos[abiertaTodos.length - 1];
+    const cerradaTodos = correr({ estado: 'habla', emocion: 'neutral', boca: 0 }, 1);
+    const cerrada = cerradaTodos[cerradaTodos.length - 1];
     const filaAbajo = (g: number[]) => g[21] + g[22] + g[23];
     expect(filaAbajo(abierta)).toBeGreaterThan(1.5);
     expect(filaAbajo(cerrada)).toBeLessThan(0.2);

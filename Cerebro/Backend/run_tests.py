@@ -41,6 +41,7 @@ def main() -> int:
     env["KIRA_RAG_PROVIDER"] = "none"
     env["KIRA_RAG_ALLOW_DOWNLOAD"] = "0"
     env["KIRA_AUTH_REQUIRED"] = "0"
+    env["KIRA_SIN_OBSERVADOR"] = "1"   # el observador del mundo sale a internet
     failures: list[str] = []
     for script, args in DETERMINISTIC:
         command = [sys.executable, script, *args]

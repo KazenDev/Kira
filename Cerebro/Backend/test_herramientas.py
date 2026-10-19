@@ -332,6 +332,13 @@ def test_tools_nuevas():
     check("hora_en Tokio -> 14 horas más", "14 horas más" in r["resultado"], r["resultado"])
     check("zona inexistente -> ok False", mundo.hora_en("X", "Marte/Olimpo")["ok"] is False)
 
+    for frase, esperado in [("¿a qué hora se pone el sol hoy?", "sol_y_luna"), ("¿qué hora es en Tokio?", "hora_en"),
+                            ("¿cómo está el clima en Bogotá?", "clima_en"), ("¿cuánto falta para navidad?", "dias_hasta"),
+                            ("juguemos piedra papel o tijera", "jugar_en_placa"), ("tocame feliz cumpleaños", "tocar_melodia"),
+                            ("¿por qué el sol es amarillo?", None), ("¿qué es una alarma de incendio?", None),
+                            ("el clima en Pitalito", None), ("me toca ir al baño", None)]:
+        check(f"pedido '{frase}' -> {esperado}", ks.accion_pedida(frase) == esperado, str(ks.accion_pedida(frase)))
+
     original = ks._placa_viva
     enviados = []
     original_enviar = ks.serial_mgr.enviar

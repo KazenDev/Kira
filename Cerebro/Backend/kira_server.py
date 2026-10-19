@@ -35,6 +35,7 @@ import uuid
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
@@ -1443,6 +1444,8 @@ async def lifespan(_app: FastAPI):
     serial_mgr.start()
     # al arrancar: saluda con alegria (para que el micro:bit no quede apagado)
     serial_mgr.enviar("HAPPY")
+    if os.getenv("KIRA_SIN_OBSERVADOR") != "1":
+        background_tasks.spawn("observador-mundo", observar_mundo())
     try:
         yield
     finally:
@@ -1957,6 +1960,14 @@ PEDIDO_ACCION = (
     ("jugar_en_placa", re.compile(r"\b(juguemos|jugar|jug[aá](me|mos)?)\b.*\b(dado|piedra|ppt|reflejos?)\b|"
                                   r"\b(tir[aá](me)?|lanz[aá](me)?)\b.*\bdados?\b", re.I)),
     ("calibrar_brujula", re.compile(r"\bcalibr[aá](r|te|la|mos)?\b.*\bbr[uú]jula\b", re.I)),
+    # datos que NO se inventan (medido: "¿a qué hora se pone el sol?" sin
+    # tool dio "seis menos cuarto, quedan pocos minutos" a las 23:30)
+    ("sol_y_luna", re.compile(r"\b(a qu[eé] hora|cu[aá]ndo)\b.*\b(sale|se pone|se oculta|amanece|anochece|atardece)\b|"
+                              r"\b(amanecer|atardecer|puesta del sol|luna llena)\b|\bfase\b.*\bluna\b", re.I)),
+    ("hora_en", re.compile(r"\bqu[eé] hora es (en|all[aá])\b|\bhora (de|en) (japón|japon|tokio|china|españa|madrid|"
+                           r"europa|estados unidos|nueva york|londres|par[ií]s|australia|m[eé]xico|argentina)\b", re.I)),
+    ("clima_en", re.compile(r"\b(clima|tiempo|temperatura|lloviendo|calor|fr[ií]o)\b.*\ben (?!pitalito)[A-ZÁÉÍÓÚ]", re.I)),
+    ("dias_hasta", re.compile(r"\bcu[aá]nto(s d[ií]as)? falta(n)? (para|pa)\b", re.I)),
     ("donde_queda", re.compile(r"\bd[oó]nde queda\b|\bpara d[oó]nde (queda|est[aá])\b|"
                                r"\bhacia d[oó]nde (queda|est[aá])\b", re.I)),
 )
@@ -2977,19 +2988,60 @@ def bloque_variedad(historial: list) -> str:
             break
     if not aperturas:
         return ""
-    return ("\n\n# NO EMPIECES IGUAL\nTus últimas respuestas empezaron así: "
-            + ", ".join(f"«{a}»" for a in aperturas)
-            + ". Empezá distinto (otra palabra, otra forma), y si venís cerrando con "
-            "pregunta, esta vez cerrá con un comentario tuyo.")
+    bloque = ("\n\n# NO EMPIECES IGUAL\nTus últimas respuestas empezaron así: "
+              + ", ".join(f"«{a}»" for a in aperturas)
+              + ". Empezá distinto (otra palabra, otra forma).")
+    # CURIOSA, PERO NO TANTO: medido con eval_charla.py, preguntaba en el 53%
+    # de los turnos y 7 veces dos seguidas (se sentia un interrogatorio). Si
+    # su turno anterior ya pregunto, este no: comenta, opina o cuenta algo.
+    ultima = next((h for h in reversed(historial or []) if h.get("rol") == "assistant"), None)
+    if ultima and "?" in str(ultima.get("contenido", "")):
+        bloque += ("\nTu respuesta anterior ya terminó en pregunta: en ESTA no preguntes nada "
+                   "(salvo que sin preguntar no puedas ayudar). Reaccioná, opiná o contá algo tuyo.")
+    return bloque
+
+
+async def observar_mundo(cada_seg: float = 180.0) -> None:
+    """Mira el mundo real cada 3 minutos y, si pasa algo que vale una frase
+    (el sol se pone ya, viene lluvia, un sismo cerca), lo mete como evento
+    MUNDO:... en el mismo canal que los toques de la placa. Kira lo cuenta
+    SOLA (si la web tiene la autonomia prendida y nadie esta hablando)."""
+    avisado: dict = {}
+    tz = ZoneInfo("America/Bogota")
+    while True:
+        try:
+            datos = await asyncio.to_thread(mundo_service.leer_mundo, config.CLIMA_LAT, config.CLIMA_LON)
+            for linea in mundo_service.novedades(datos, datetime.now(tz), avisado):
+                print(f"[MUNDO] novedad: {linea}")
+                serial_mgr.registrar_evento_externo(linea)
+        except Exception as error:   # el observador NUNCA se cae
+            print(f"[MUNDO] no pude mirar: {type(error).__name__}: {error}")
+        await asyncio.sleep(cada_seg)
 
 
 def describir_evento(linea: str) -> str | None:
     linea = (linea or "").strip()
+    if linea == "SILENCIO":
+        # una semilla REAL para sacar charla (no un generico "¿qué andás haciendo?")
+        try:
+            semilla = mundo_service.semilla_charla(config.CLIMA_LAT, config.CLIMA_LON, random)
+        except Exception:
+            semilla = ""
+        return EVENTOS_KIRA["SILENCIO"] + (f". Algo real que tenés a mano para arrancar: {semilla}" if semilla else "")
     if linea == "EVENTO:TIMER" and _temporizador_motivo["texto"]:
         return f"{EVENTOS_KIRA[linea]}, para: {_temporizador_motivo['texto']}"
     if linea in EVENTOS_KIRA:
         return EVENTOS_KIRA[linea]
     partes = linea.split(":")
+    if partes[:2] == ["MUNDO", "ATARDECER"] and len(partes) >= 3:
+        return (f"te diste cuenta de que el sol se pone en unos minutos (a las {':'.join(partes[2:4])}). "
+                "Contalo con ganas: si hay una ventana o una puerta cerca, vale la pena mirarlo")
+    if partes[:2] == ["MUNDO", "LLUVIA"] and len(partes) >= 3:
+        return (f"miraste el pronóstico y en la próxima hora viene lluvia (probabilidad {partes[2]}%). "
+                "Avisale a quien esté, por si anda sin paraguas o tiene que volver a casa")
+    if partes[:2] == ["MUNDO", "SISMO"] and len(partes) >= 4:
+        return (f"acaban de registrar un sismo de magnitud {partes[2]} a unos {partes[3]} km de acá. "
+                "Contalo con calma y sin asustar (en el Huila tiembla seguido) y preguntá si alguien lo sintió")
     if partes[:2] == ["JUEGO", "DADO"] and len(partes) >= 3:
         return f"jugaron al dado con vos y salió un {partes[2]}"
     if partes[:2] == ["JUEGO", "PPT"] and len(partes) >= 5:
@@ -3017,7 +3069,9 @@ async def api_chat_stream(body: dict):
     personaje = str(body.get("personaje", "kira")).lower()
     mensaje = str(body.get("mensaje", "")).strip()
     evento = str(body.get("evento", "") or "").strip()
-    descripcion_evento = describir_evento(evento) if evento else None
+    # en un hilo: la semilla del SILENCIO puede consultar internet y no puede
+    # frenar al servidor entero
+    descripcion_evento = await asyncio.to_thread(describir_evento, evento) if evento else None
     if evento and not descripcion_evento:
         raise HTTPException(400, "evento desconocido")
     if descripcion_evento:
