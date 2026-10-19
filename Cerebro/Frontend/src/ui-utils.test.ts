@@ -12,6 +12,8 @@ import {
   labelHerramienta,
   resaltarPartes,
   SUGERENCIAS_INICIO,
+  SUGERENCIAS_POOL,
+  elegirSugerencias,
   textoMicrobit,
   uuid,
 } from './ui-utils';
@@ -153,11 +155,26 @@ describe('SUGERENCIAS_INICIO', () => {
     expect(SUGERENCIAS_INICIO.every((s) => s.trim().length > 3)).toBe(true);
   });
 
-  it('toca las 3 superpotencias (charla, micro:bit, sensores)', () => {
+  it('toca las 3 superpotencias (charla, su cuerpo, el mundo)', () => {
     const juntas = SUGERENCIAS_INICIO.join(' ').toLowerCase();
     expect(juntas).toMatch(/hola|quién|quien/);
-    expect(juntas).toMatch(/metrónomo|metronomo/);
-    expect(juntas).toMatch(/temperatura/);
+    expect(juntas).toMatch(/dónde queda|donde queda/);
+    expect(juntas).toMatch(/llover/);
+  });
+});
+
+describe('elegirSugerencias', () => {
+  it('3 distintas, una por grupo, siempre del pool', () => {
+    for (let i = 0; i < 50; i++) {
+      const s = elegirSugerencias();
+      expect(s.length).toBe(3);
+      expect(new Set(s).size).toBe(3);
+      const grupos = s.map((t) => SUGERENCIAS_POOL.find((p) => p.texto === t)?.grupo);
+      expect(grupos).toEqual(['charla', 'cuerpo', 'mundo']);
+    }
+  });
+  it('con azar al borde (0.999…) no se sale del arreglo', () => {
+    expect(elegirSugerencias(() => 0.9999999).every(Boolean)).toBe(true);
   });
 });
 

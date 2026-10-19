@@ -18,6 +18,7 @@ import {
   Volume2,
   VolumeX,
   X,
+  Palette,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { T, EASE_OUT, SPRING_MODAL } from './motion';
@@ -42,6 +43,8 @@ interface Props {
   onCambiarVoz: (v: boolean) => void;
   autonomia: boolean;
   onCambiarAutonomia: (v: boolean) => void;
+  fondoVivo: boolean;
+  onCambiarFondoVivo: (v: boolean) => void;
   volumenVoz: number;
   onCambiarVolumenVoz: (v: number) => void;
   preferenciasMemoria: PreferenciasMemoria;
@@ -103,6 +106,8 @@ export default function Settings({
   onCambiarVoz,
   autonomia,
   onCambiarAutonomia,
+  fondoVivo,
+  onCambiarFondoVivo,
   volumenVoz,
   onCambiarVolumenVoz,
   preferenciasMemoria,
@@ -381,6 +386,17 @@ export default function Settings({
                       : 'Solo habla cuando le escribís'
                   }
                   icono={<Sparkles size={18} aria-hidden="true" />}
+                />
+                <Interruptor
+                  activo={fondoVivo}
+                  onClick={() => onCambiarFondoVivo(!fondoVivo)}
+                  etiqueta="Fondo vivo"
+                  descripcion={
+                    fondoVivo
+                      ? 'Un resplandor que cambia con lo que siente Kira y late cuando habla'
+                      : 'Fondo quieto (gasta menos batería)'
+                  }
+                  icono={<Palette size={18} aria-hidden="true" />}
                 />
                 <div className={'ajustes-slider' + (voz ? '' : ' deshabilitado')}>
                   <div className="ajustes-slider-cabecera">

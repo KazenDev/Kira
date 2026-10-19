@@ -43,11 +43,44 @@ export function estaAlFondo(
 }
 
 /** Sugerencias del chat vacío (romper el hielo, patrón de activación).
- * Tocan las 3 superpotencias: charla, micro:bit físico y sensores. */
+ * Tocan las 3 superpotencias: charla, su cuerpo (placa) y el mundo real. */
 export const SUGERENCIAS_INICIO: string[] = [
   'Hola, ¿quién sos?',
-  'Poné el metrónomo a 90',
-  '¿Qué temperatura hace allá?',
+  '¿Para dónde queda Bogotá?',
+  '¿Va a llover hoy?',
+];
+
+/** Todas las que pueden salir: cada visita muestra 3 distintas (una de cada
+ *  grupo), para que la pantalla no sea siempre la misma. */
+export const SUGERENCIAS_POOL: { grupo: 'charla' | 'cuerpo' | 'mundo'; texto: string }[] = [
+  { grupo: 'charla', texto: 'Hola, ¿quién sos?' },
+  { grupo: 'charla', texto: '¿Qué se siente vivir en una placa?' },
+  { grupo: 'charla', texto: 'Contame algo que te dé curiosidad' },
+  { grupo: 'charla', texto: '¿Por qué el cielo es azul?' },
+  { grupo: 'cuerpo', texto: '¿Para dónde queda Bogotá?' },
+  { grupo: 'cuerpo', texto: 'Tocame feliz cumpleaños' },
+  { grupo: 'cuerpo', texto: 'Poneme un temporizador de un minuto' },
+  { grupo: 'cuerpo', texto: 'Dibujá un corazón en tus luces' },
+  { grupo: 'mundo', texto: '¿Va a llover hoy?' },
+  { grupo: 'mundo', texto: '¿Dónde anda la Estación Espacial?' },
+  { grupo: 'mundo', texto: '¿Hubo temblores por acá?' },
+  { grupo: 'mundo', texto: '¿Qué pasó un día como hoy?' },
+];
+
+export function elegirSugerencias(azar: () => number = Math.random): string[] {
+  return (['charla', 'cuerpo', 'mundo'] as const).map((g) => {
+    const del = SUGERENCIAS_POOL.filter((s) => s.grupo === g);
+    return del[Math.floor(azar() * del.length) % del.length].texto;
+  });
+}
+
+/** Cómo te recibe Kira en un chat nuevo (no se guarda: es la pantalla). */
+export const SALUDOS_KIRA: string[] = [
+  '¡Hola! Acá estoy, con las luces prendidas.',
+  'Ey, ¿qué más? Contame algo.',
+  'Hola... justo estaba mirando para la puerta.',
+  '¡Buenas! Preguntame del clima, del cielo o de lo que se te ocurra.',
+  'Hola, hola. ¿Cómo te llamás?',
 ];
 
 /** ¿Cuál de los dos indicadores de "escribiendo" va AHORA?

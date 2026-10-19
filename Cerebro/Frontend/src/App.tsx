@@ -20,20 +20,21 @@ import {
   MensajeChat,
   obtenerEventos,
 } from './api';
-import Avatar from './Avatar';
-import Logo from './Logo';
+import KiraCara from './KiraCara';
+import FondoVivo from './FondoVivo';
+import { bocaDeLetra, kiraVivo } from './vivo';
 import Sidebar from './Sidebar';
 import ChatHeader from './ChatHeader';
 import PuenteBle, { type EstadoPuenteBle } from './PuenteBle';
 import MemoriaPanel from './MemoriaPanel';
 import { recargarApp } from './recarga';
-import { indicadorEscribiendo, labelHerramienta, estadoMicrobit, textoMicrobit, SUGERENCIAS_INICIO, uuid } from './ui-utils';
+import { indicadorEscribiendo, labelHerramienta, estadoMicrobit, textoMicrobit, elegirSugerencias, SALUDOS_KIRA, uuid } from './ui-utils';
 import { T, EASE_OUT } from './motion';
 import Burbuja from './Burbuja';
 import Settings from './Settings';
 import { sonidoEnviar, sonidoRecibir, sonidoActivo, setSonidoActivo, sonidoUI } from './sonidos';
 import { fotoDesdeArchivo } from './foto';
-import { ChatSesion, nuevoSaludo, tituloSinEmoji, horaLista } from './tipos';
+import { ChatSesion, tituloSinEmoji, horaLista } from './tipos';
 
 type ChatsPorPersonaje = Record<string, ChatSesion[]>;
 type AudioEnCola = { url: string; orden: number; texto?: string };
@@ -75,12 +76,14 @@ type AjustesLocales = {
   volumenVoz: number;
   memoria: PreferenciasMemoria;
   autonomia: boolean;   // Kira habla sola (eventos de la placa, silencios)
+  fondoVivo: boolean;   // el resplandor WebGL de fondo (apagable en celus viejos)
 };
 
 const AJUSTES_INICIALES: AjustesLocales = {
   voz: true,
   volumenVoz: 0.8,
   autonomia: true,
+  fondoVivo: true,
   memoria: { ...PREFERENCIAS_MEMORIA_POR_DEFECTO },
 };
 
@@ -96,6 +99,7 @@ function cargarAjustes(userId: string): AjustesLocales {
     return {
       voz: parsed.voz !== false,
       autonomia: parsed.autonomia !== false,
+      fondoVivo: parsed.fondoVivo !== false,
       volumenVoz: Number.isFinite(volumen) ? Math.max(0, Math.min(1, volumen)) : AJUSTES_INICIALES.volumenVoz,
       memoria: {
         recordar: memoria.recordar !== false,
@@ -175,6 +179,11 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   const escuchandoRef = useRef(false);
   const [streamId, setStreamId] = useState<string | null>(null); // mensaje parcial en streaming
   const [emotion, setEmotion] = useState('happy');
+  // cada visita: 3 sugerencias distintas y un saludo de pantalla distinto
+  const [sugerencias] = useState(() => elegirSugerencias());
+  const [saludoPantalla] = useState(
+    () => SALUDOS_KIRA[Math.floor(Math.random() * SALUDOS_KIRA.length)]
+  );
   const [hablando, setHablando] = useState(false); // la boca habla (TALK)
   const [error, setError] = useState('');
   const [status, setStatus] = useState<EstadoMicrobit | null>(null);
@@ -707,7 +716,10 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         return;
       }
       const tope = Math.min(objetivo.length, topeVoz());
-      if (revelado >= tope && revelado < objetivo.length) return; // esperando a la voz
+      if (revelado >= tope && revelado < objetivo.length) {
+        kiraVivo.boca *= 0.6; // pausa de la voz: la boca se cierra
+        return; // esperando a la voz
+      }
       if (revelado >= objetivo.length) {
         // alcanzó el texto actual: pausamos el timer (un próximo delta lo retoma)
         window.clearInterval(streamTimerRef.current!);
@@ -723,6 +735,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       const vel = Math.max(1, Math.ceil(objetivo.length / 150));
       const siguiente = Math.min(revelado + vel, tope);
       streamReveladoRef.current = siguiente;
+      if (clipVozRef.current) kiraVivo.boca = bocaDeLetra(objetivo[siguiente - 1]);
       const texto = objetivo.slice(0, siguiente);
       setMensajes((m) =>
         m.map((msg) => (msg.id === idParcial ? { ...msg, contenido: texto } : msg))
@@ -862,7 +875,9 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       id: uuid(),
       titulo: `Chat ${(numeros.length ? Math.max(...numeros) : 0) + 1}`,
       fecha: new Date().toISOString(),
-      mensajes: [nuevoSaludo(pj)],
+      // sin saludo guardado: el chat nuevo muestra la cara viva y un
+      // saludo de pantalla (antes era un texto fijo de asistente)
+      mensajes: [],
     };
     setChats((c) => ({ ...c, [pj.id]: [...(c[pj.id] ?? []), sesion] }));
     setChatActivo(sesion.id);
@@ -1155,6 +1170,14 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   const cambiarAutonomia = (v: boolean) => {
     setAjustesLocales((actual) => {
       const siguiente = { ...actual, autonomia: v };
+      guardarAjustes(usuario.id, siguiente);
+      return siguiente;
+    });
+  };
+
+  const cambiarFondoVivo = (v: boolean) => {
+    setAjustesLocales((actual) => {
+      const siguiente = { ...actual, fondoVivo: v };
       guardarAjustes(usuario.id, siguiente);
       return siguiente;
     });
@@ -1717,6 +1740,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     : `Conversación con ${elegido?.nombre ?? 'Kira'}`;
 
   const hayMensajesUsuario = mensajes.some((m) => m.rol === 'usuario');
+  const ultimoKiraId = [...mensajes].reverse().find((m) => m.rol !== 'usuario')?.id;
   const respuestaActiva = escribiendo || streamPendiente;
 
   // ¿Qué indicador de "escribiendo" corresponde? Los puntitos mientras el
@@ -1728,6 +1752,14 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
   // la hay, "pensando…" si todavía no hace nada visible)
   const labelTrace = labelHerramienta(herramienta);
 
+  // LA CARA EN VIVO (header, hero, indicador): estado REAL, nunca intencion.
+  // Escucha solo si el mic graba de verdad; habla solo si suena audio.
+  kiraVivo.estado = escuchando ? 'escucha' : hablando ? 'habla' : mostrarPuntos ? 'piensa' : 'reposo';
+  kiraVivo.emocion = emotion;
+  kiraVivo.herramienta = herramienta;
+  kiraVivo.nivel = Math.min(1, nivelEscucha / 60);
+  if (!hablando) kiraVivo.boca = 0;
+
   return (
     // el data-pj activa el MODO del personaje: Kira tiñe todo de rojo (Among Us)
     <div
@@ -1737,6 +1769,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
       {/* El puente BLE vive aquí durante toda la sesión, incluso al volver
           al inicio; su botón visual puede montarse y desmontarse en el menú. */}
       <PuenteBle oculto onEstado={setBleEstado} />
+      {ajustesLocales.fondoVivo && <FondoVivo />}
       {/* ============ SIDEBAR: historial de chats a la izquierda ============ */}
       <aside
         aria-label="Conversaciones"
@@ -1800,6 +1833,8 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
         onCambiarVoz={cambiarVoz}
         autonomia={ajustesLocales.autonomia}
         onCambiarAutonomia={cambiarAutonomia}
+        fondoVivo={ajustesLocales.fondoVivo}
+        onCambiarFondoVivo={cambiarFondoVivo}
         volumenVoz={ajustesLocales.volumenVoz}
         onCambiarVolumenVoz={cambiarVolumenVoz}
         preferenciasMemoria={ajustesLocales.memoria}
@@ -1843,7 +1878,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
             </div>
 
             <header className="hero hero-kira">
-              <Logo size={76} />
+              <KiraCara size={128} vivo mirarPuntero className="hero-cara" etiqueta="La cara de Kira" />
               <p className="hero-saludo">{saludoDelDia()}</p>
               <h1>Kira</h1>
               <p className="subtitulo">
@@ -1895,7 +1930,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
                     </div>
 
                     <div className="sugerencias welcome-suggestions" aria-label="Sugerencias para empezar">
-                      {SUGERENCIAS_INICIO.map((s) => (
+                      {sugerencias.map((s) => (
                         <button
                           key={s}
                           type="button"
@@ -1999,6 +2034,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
                     personajeId={elegido.id}
                     color={color}
                     parcial={streamId === m.id}
+                    ultimo={m.id === ultimoKiraId}
                     onRegenerar={
                       m.rol !== 'usuario' && !respuestaActiva
                         ? (id) => enviar(undefined, id)
@@ -2013,18 +2049,22 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
                 );
               })}
 
-              {/* chat vacío: sugerencias para romper el hielo (patrón de activación) */}
+              {/* chat vacío: la cara viva de Kira, su saludo y sugerencias
+                  para romper el hielo (patrón de activación) */}
+              {mensajes.length === 0 && !respuestaActiva && (
+                <div className="chat-vacio">
+                  <KiraCara size={104} vivo mirarPuntero etiqueta="La cara de Kira" />
+                  <p className="chat-vacio-saludo">{saludoPantalla}</p>
+                </div>
+              )}
               {!hayMensajesUsuario && !respuestaActiva && !input.trim() && (
                 <div className="sugerencias">
-                  {SUGERENCIAS_INICIO.map((s) => (
+                  {sugerencias.map((s) => (
                     <button
                       key={s}
                       type="button"
                       className="sugerencia"
-                      onClick={() => {
-                        setInput(s);
-                        textareaRef.current?.focus();
-                      }}
+                      onClick={() => enviar(s)}
                     >
                       <span>{s}</span>
                       <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
@@ -2045,8 +2085,8 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
                     role="status"
                     aria-live="polite"
                   >
-                    <div className="typing-avatar" style={{ background: color }}>
-                      <Avatar color="#fff" size={18} />
+                    <div className="typing-avatar">
+                      <KiraCara size={32} estado="piensa" />
                     </div>
                     <span className="typing-texto">
                       <span className="typing-dots" aria-hidden="true">

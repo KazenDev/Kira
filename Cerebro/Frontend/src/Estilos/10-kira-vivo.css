@@ -1,0 +1,315 @@
+/* ================================================================================
+   KIRA VIVA — la capa final (va ULTIMA en index.css).
+   La cara de LEDs como identidad (logo, avatares, indicador), el fondo vivo
+   en WebGL, el chat vacio y la fila de acciones de cada mensaje.
+   ============================================================================== */
+
+/* ---------- fondo vivo (canvas WebGL a baja resolucion, estirado) ---------- */
+.fondo-vivo {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 0;
+  pointer-events: none;
+  /* 1/5 de resolucion estirado: el filtro suaviza los pixeles grandes */
+  filter: blur(18px) saturate(1.1);
+  transform: scale(1.08);
+}
+.app:has(.fondo-vivo) .panel,
+.app:has(.fondo-vivo) .chat,
+.app:has(.fondo-vivo) .pantalla,
+.app:has(.fondo-vivo) .input-bar {
+  background: transparent;
+}
+.app:has(.fondo-vivo) .chat-header {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+.app:has(.fondo-vivo) .sidebar {
+  background: color-mix(in srgb, var(--elev-1) 88%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ---------- la cara: avatares sin circulo de color (la placa ya es el fondo) ---------- */
+.kira-cara {
+  display: block;
+  flex: 0 0 auto;
+}
+.turn-avatar,
+.typing-avatar,
+.chat-header .avatar,
+.item-avatar,
+.auth-logo {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+.chat-header .avatar {
+  width: 36px;
+  height: 36px;
+}
+.chat-header .avatar .kira-cara,
+.turn-avatar .kira-cara,
+.typing-avatar .kira-cara {
+  filter: drop-shadow(0 2px 8px rgba(255, 60, 45, 0.18));
+}
+.auth-logo {
+  width: 56px;
+  height: 56px;
+}
+.hero-cara {
+  margin: 0 auto 6px;
+  filter: drop-shadow(0 10px 40px rgba(255, 60, 45, 0.28));
+}
+
+/* ---------- chat vacio: la cara saluda ---------- */
+.chat-vacio {
+  margin: auto auto 0;
+  padding: 24px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  animation: kira-aparece 0.5s var(--ease-out) both;
+}
+.chat-vacio .kira-cara {
+  filter: drop-shadow(0 8px 34px rgba(255, 60, 45, 0.3));
+}
+.chat-vacio-saludo {
+  margin: 0;
+  max-width: 28ch;
+  font-size: 1.18rem;
+  line-height: 1.4;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+}
+@keyframes kira-aparece {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* sugerencias: pildoras tocables (en el celu, apiladas) */
+.chat .sugerencias,
+.welcome-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px 14px;
+}
+.chat .sugerencia,
+.welcome-suggestions .sugerencia {
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--elev-2) 70%, transparent);
+  color: var(--text-1);
+  font-size: 0.92rem;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.chat .sugerencia:hover,
+.welcome-suggestions .sugerencia:hover {
+  background: var(--elev-3);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong));
+}
+.chat .sugerencia:active,
+.welcome-suggestions .sugerencia:active {
+  transform: scale(0.97);
+}
+.chat .sugerencia svg,
+.welcome-suggestions .sugerencia svg {
+  display: none;
+}
+@media (max-width: 560px) {
+  .chat .sugerencias,
+  .welcome-suggestions {
+    flex-direction: column;
+    align-items: stretch;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+}
+
+/* ---------- acciones del mensaje (fila de iconos, estilo ChatGPT) ---------- */
+.turn-pie {
+  min-height: 30px;
+  margin-top: 2px;
+}
+.msg-acciones {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-left: -6px;
+  transition: opacity var(--t-fast) var(--ease);
+}
+.msg-accion {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+.msg-accion:hover,
+.msg-accion:focus-visible {
+  background: var(--elev-2);
+  color: var(--text-1);
+}
+.msg-rastro {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  margin-left: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 0.76rem;
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.msg-rastro:hover,
+.msg-rastro.abierto {
+  color: var(--text-2);
+  border-color: var(--border-strong);
+}
+.turn .rastro-lista {
+  margin: 6px 0 2px;
+  font-size: 0.82rem;
+  color: var(--text-2);
+  animation: kira-aparece 0.25s var(--ease-out) both;
+}
+/* en compu: los mensajes viejos esconden sus acciones hasta el hover */
+@media (hover: hover) {
+  .turn:not(.ultimo) .msg-acciones {
+    opacity: 0;
+  }
+  .turn:not(.ultimo):hover .msg-acciones,
+  .turn:not(.ultimo):focus-within .msg-acciones {
+    opacity: 1;
+  }
+}
+
+/* fuentes de la web: chips */
+.fuentes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.fuente {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  color: var(--text-2);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+.fuente-titulo-texto {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.fuente:hover {
+  border-color: var(--border-strong);
+  color: var(--text-1);
+}
+
+/* "hablando…" mientras el texto sale al ritmo de la voz */
+.escribiendo-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  color: var(--text-3);
+}
+.onda-voz {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 12px;
+}
+.onda-voz i {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: kira-onda 0.9s var(--ease-in-out) infinite;
+  transform-origin: center;
+}
+.onda-voz i:nth-child(2) { animation-delay: 0.15s; }
+.onda-voz i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes kira-onda {
+  0%, 100% { transform: scaleY(0.3); opacity: 0.6; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* el indicador de "pensando": la cara hace la animacion, el texto acompaña */
+.typing {
+  align-items: center;
+  gap: 12px;
+}
+.typing-texto {
+  font-size: 0.92rem;
+  color: var(--text-2);
+}
+.typing .typing-dots {
+  display: none; /* la cara de LEDs ya es el indicador */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-vacio,
+  .turn .rastro-lista {
+    animation: none;
+  }
+  .onda-voz i {
+    animation: none;
+  }
+}
+
+/* el canvas va en z-index 0 y el contenido arriba: .app es flex, asi que a
+   sus hijos les alcanza el z-index SIN tocar su position (la sidebar del
+   celu es fixed y fuera de pantalla: no se toca). El color de fondo pasa al
+   <html> y el body queda transparente. */
+.app > .panel {
+  z-index: 1;
+}
+/* la sidebar ya trae su z-index (20) y en el celu es un cajon fixed: no se
+   pisa. Solo pierde la transparencia en el celu (ahi tapa el chat). */
+@media (max-width: 860px) {
+  .app:has(.fondo-vivo) .sidebar {
+    background: var(--elev-1);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+html:has(.fondo-vivo) {
+  background: var(--bg);
+}
+html:has(.fondo-vivo) body,
+.app:has(.fondo-vivo) {
+  background: transparent;
+}

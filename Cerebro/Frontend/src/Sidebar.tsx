@@ -255,7 +255,7 @@ export default function Sidebar({
                   {emoji ? (
                     <span className="item-emoji" aria-hidden="true">{emoji}</span>
                   ) : (
-                    <Avatar color="#fff" size={26} />
+                    <Avatar size={36} />
                   )}
                 </div>
                 <div className="item-cuerpo">

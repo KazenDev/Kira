@@ -3,7 +3,7 @@ import { ArrowLeft, Cpu, Menu, MoreHorizontal } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { T, EASE_OUT, SPRING_POP } from './motion';
 import type { PersonajeInfo } from './api';
-import Avatar from './Avatar';
+import KiraCara from './KiraCara';
 import MicrobitVirtual from './MicrobitVirtual';
 
 interface Props {
@@ -175,11 +175,10 @@ export default function ChatHeader({
 
       <div
         className={`avatar${hablando ? ' hablando' : ''}`}
-        style={{ background: color }}
         title={`${elegido.nombre} · ${elegido.rol}`}
         aria-hidden="true"
       >
-        <Avatar color="#fff" size={22} />
+        <KiraCara size={36} vivo />
       </div>
 
       <div className="chat-titulo">

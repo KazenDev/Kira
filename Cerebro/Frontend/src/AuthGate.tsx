@@ -1,6 +1,7 @@
+import KiraCara from './KiraCara';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Database, Eye, EyeOff, LoaderCircle, LogIn, ShieldCheck, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, LoaderCircle, LogIn, ShieldCheck, UserPlus } from 'lucide-react';
 import {
   cerrarSesion,
   iniciarSesion,
@@ -109,10 +110,10 @@ export default function AuthGate() {
       <main className="auth-shell">
         <section className="auth-card" aria-labelledby="auth-title">
           <div className="auth-brand">
-            <div className="auth-logo"><Database size={22} aria-hidden="true" /></div>
+            <div className="auth-logo"><KiraCara size={56} vivo mirarPuntero etiqueta="La cara de Kira" /></div>
             <div>
               <h1 id="auth-title">Kira</h1>
-              <p>Una memoria distinta para cada persona.</p>
+              <p>Vive en una micro:bit. Te recuerda solo a vos.</p>
             </div>
           </div>
 
@@ -217,8 +218,7 @@ export default function AuthGate() {
 
           <p className="auth-note">
             <ShieldCheck size={15} aria-hidden="true" />
-            Tus recuerdos, diario, conversaciones e índice RAG quedan separados por cuenta.
-            El micro:bit y los servicios de IA/TTS son compartidos por la instalación.
+            Lo que le contás queda en tu cuenta: nadie más ve tus charlas ni lo que Kira recuerda de vos.
           </p>
           {modo === 'registro' && (
             <p className="auth-note auth-note-import">

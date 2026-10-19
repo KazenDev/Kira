@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..dependencies import BackendContext, get_backend_context
+from ..domain.streaming import como_objeto, limpiar_json_ia
 from ..schemas import MemoriaBorrarTodoRequest, MemoriaOlvidarRequest, TituloRequest
 
 router = APIRouter()
@@ -194,7 +195,9 @@ async def api_titulo(
     try:
         r = await services.post_json_ia(payload)
         content = r["choices"][0]["message"]["content"]
-        salida = json.loads(content)
+        # como_objeto: a veces la IA devuelve [ {...} ] y antes se caia al
+        # fallback (el titulo quedaba como el mensaje crudo)
+        salida = como_objeto(json.loads(limpiar_json_ia(content)))
         titulo = str(salida.get("title", "")).strip()
         if not titulo:
             titulo = primer_mensaje[:30]

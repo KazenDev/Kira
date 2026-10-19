@@ -1,7 +1,7 @@
 // Mensajes del chat en formato "turn": asistente sin burbuja y usuario en una
 // superficie sutil. Las acciones secundarias viven en un único menú para que la
 // conversación no se llene de iconos repetidos.
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useState } from 'react';
 
 /** Un glifo por clase de origen, para que el ojo escanee la fila sin leerla.
  *  Texto plano a propósito: son 9 caracteres y meter 9 iconos SVG por el
@@ -16,7 +16,17 @@ const ICONO_RASTRO: Record<string, string> = {
   accion: '♪',
   criada: '✦',
   otro: '•',
-};import { motion } from 'motion/react';
+};
+
+/** "clima · pronóstico" o "lo sabía" (cuando no consultó nada). */
+function resumenRastro(rastro: NonNullable<MensajeChat['rastro']>): string {
+  const consultas = rastro.filter((r) => r.tipo !== 'criada');
+  if (!consultas.length) return 'lo sabía';
+  const nombres = consultas.slice(0, 2).map((r) => r.etiqueta.charAt(0).toLowerCase() + r.etiqueta.slice(1));
+  return nombres.join(' · ') + (consultas.length > 2 ? ` +${consultas.length - 2}` : '');
+}
+
+import { motion } from 'motion/react';
 import { SPRING_MSG } from './motion';
 import {
   Check,
@@ -24,12 +34,11 @@ import {
   ExternalLink,
   Eye,
   Globe,
-  MoreHorizontal,
   RefreshCw,
   Volume2,
 } from 'lucide-react';
 import { MensajeChat } from './api';
-import Avatar from './Avatar';
+import KiraCara from './KiraCara';
 import MensajeMarkdown from './MensajeMarkdown';
 
 interface Props {
@@ -37,6 +46,8 @@ interface Props {
   personajeId: string;
   color: string;
   parcial?: boolean;
+  /** el ultimo mensaje de Kira: sus acciones se ven siempre (como ChatGPT) */
+  ultimo?: boolean;
   onRegenerar?: (id: string) => void;
   onEscuchar?: () => void;
 }
@@ -46,37 +57,12 @@ function BurbujaInner({
   personajeId,
   color,
   parcial = false,
+  ultimo = false,
   onRegenerar,
   onEscuchar,
 }: Props) {
   const [copiado, setCopiado] = useState(false);
-  const [accionesAbiertas, setAccionesAbiertas] = useState(false);
-  const accionesRef = useRef<HTMLDivElement | null>(null);
-  const accionesButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    if (!accionesAbiertas) return;
-
-    const cerrarFuera = (event: PointerEvent) => {
-      if (!accionesRef.current?.contains(event.target as Node)) {
-        setAccionesAbiertas(false);
-      }
-    };
-    const cerrarEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setAccionesAbiertas(false);
-      window.setTimeout(() => accionesButtonRef.current?.focus(), 0);
-    };
-
-    document.addEventListener('pointerdown', cerrarFuera);
-    document.addEventListener('keydown', cerrarEscape);
-    return () => {
-      document.removeEventListener('pointerdown', cerrarFuera);
-      document.removeEventListener('keydown', cerrarEscape);
-    };
-  }, [accionesAbiertas]);
+  const [rastroAbierto, setRastroAbierto] = useState(false);
 
   if (m.rol === 'usuario') {
     return (
@@ -107,7 +93,6 @@ function BurbujaInner({
       try {
         await navigator.clipboard.writeText(m.contenido);
         setCopiado(true);
-        setAccionesAbiertas(false);
         setTimeout(() => setCopiado(false), 1600);
       } catch {
         /* clipboard no disponible */
@@ -118,12 +103,12 @@ function BurbujaInner({
 
     return (
       <div
-        className="turn"
+        className={'turn' + (ultimo ? ' ultimo' : '')}
         style={{ '--color': color } as React.CSSProperties}
         title={`Mensaje de las ${m.hora}`}
       >
-        <div className="turn-avatar" style={{ background: color }}>
-          <Avatar color="#fff" size={18} />
+        <div className="turn-avatar">
+          <KiraCara size={32} emocion={m.emotion ?? 'happy'} etiqueta="Kira" />
         </div>
         <div className="turn-cuerpo">
           {parcial ? (
@@ -135,40 +120,8 @@ function BurbujaInner({
             <MensajeMarkdown contenido={m.contenido} />
           )}
 
-          {/* ============ DE DONDE SALIO ESTO ============
-              El bloque de "Fuentes" de abajo solo sale si hubo buscar_en_web.
-              Este sale SIEMPRE (tambien cuando no consulto nada), y esa es la
-              diferencia: una lista vacia es ambigua (¿no busco o me fallo?) y
-              "no consulto nada" es una respuesta. Ver app/services/rastro.py. */}
-          {!parcial && m.rastro && m.rastro.length > 0 && (
-            <details className="rastro">
-              <summary className="rastro-resumen">
-                <Eye size={12} strokeWidth={2} aria-hidden="true" />
-                {m.rastro.length === 1
-                  ? 'De dónde salió esto'
-                  : `De dónde salió esto (${m.rastro.length})`}
-              </summary>
-              <ul className="rastro-lista">
-                {m.rastro.map((r, i) => (
-                  <li key={r.herramienta + i} className={`rastro-item rastro-${r.tipo}`}>
-                    <span className="rastro-ic" aria-hidden="true">{ICONO_RASTRO[r.tipo] ?? '•'}</span>
-                    <span className="rastro-txt">
-                      <strong>{r.etiqueta}</strong>
-                      {r.detalle ? <span className="rastro-detalle"> — {r.detalle}</span> : null}
-                      {r.valor ? <span className="rastro-valor"> · {r.valor}</span> : null}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-
           {!parcial && m.fuentes && m.fuentes.length > 0 && (
             <div className="fuentes">
-              <span className="fuentes-titulo">
-                <Globe size={12} strokeWidth={2} aria-hidden="true" />
-                Fuentes
-              </span>
               {m.fuentes.slice(0, 4).map((f, i) => (
                 <a
                   key={f.url + i}
@@ -178,69 +131,73 @@ function BurbujaInner({
                   rel="noopener noreferrer"
                   title={f.url}
                 >
-                  <span className="fuente-n">{i + 1}</span>
+                  <Globe size={12} strokeWidth={2} aria-hidden="true" />
                   <span className="fuente-titulo-texto">{f.titulo}</span>
-                  <ExternalLink size={12} strokeWidth={2} aria-hidden="true" />
+                  <ExternalLink size={11} strokeWidth={2} aria-hidden="true" />
                 </a>
               ))}
             </div>
           )}
 
+          {/* DE DONDE SALIO ESTO: el rastro sale SIEMPRE (tambien cuando no
+              consulto nada: "no consulto nada" es una respuesta, una lista
+              vacia seria ambigua). Ver app/services/rastro.py. Va plegado en
+              la misma fila de acciones para no gritar en cada mensaje. */}
+          {rastroAbierto && m.rastro && m.rastro.length > 0 && (
+            <ul className="rastro-lista" id={`rastro-${m.id}`}>
+              {m.rastro.map((r, i) => (
+                <li key={r.herramienta + i} className={`rastro-item rastro-${r.tipo}`}>
+                  <span className="rastro-ic" aria-hidden="true">{ICONO_RASTRO[r.tipo] ?? '•'}</span>
+                  <span className="rastro-txt">
+                    <strong>{r.etiqueta}</strong>
+                    {r.detalle ? <span className="rastro-detalle"> — {r.detalle}</span> : null}
+                    {r.valor ? <span className="rastro-valor"> · {r.valor}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
           <div className="turn-pie">
             {parcial ? (
-              <span className="escribiendo-estado">escribiendo…</span>
+              <span className="escribiendo-estado">
+                <span className="onda-voz" aria-hidden="true"><i /><i /><i /></span>
+                hablando…
+              </span>
             ) : (
-              <div className="msg-acciones-wrap" ref={accionesRef}>
-                <button
-                  ref={accionesButtonRef}
-                  type="button"
-                  className="msg-accion msg-acciones-disparador"
-                  onClick={() => setAccionesAbiertas((abierto) => !abierto)}
-                  title="Acciones del mensaje"
-                  aria-label="Acciones del mensaje"
-                  aria-expanded={accionesAbiertas}
-                  aria-haspopup="true"
-                >
+              <div className="msg-acciones" role="toolbar" aria-label="Acciones del mensaje">
+                {hayAudio && (
+                  <button type="button" className="msg-accion" onClick={onEscuchar}
+                    title="Escuchar de nuevo" aria-label="Escuchar de nuevo">
+                    <Volume2 size={15} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                )}
+                <button type="button" className="msg-accion" onClick={copiar}
+                  title={copiado ? 'Copiado' : 'Copiar'} aria-label={copiado ? 'Copiado' : 'Copiar'}>
                   {copiado ? (
-                    <Check size={14} strokeWidth={2} aria-hidden="true" />
+                    <Check size={15} strokeWidth={2.2} aria-hidden="true" />
                   ) : (
-                    <MoreHorizontal size={15} strokeWidth={2} aria-hidden="true" />
+                    <Copy size={15} strokeWidth={2} aria-hidden="true" />
                   )}
                 </button>
-
-                {accionesAbiertas && (
-                  <div className="msg-acciones-menu" role="dialog" aria-label="Acciones del mensaje">
-                    {hayAudio && (
-                      <button
-                        type="button"
-                        className="msg-accion-menu-item"
-                        onClick={() => {
-                          setAccionesAbiertas(false);
-                          onEscuchar?.();
-                        }}
-                      >
-                        <Volume2 size={15} strokeWidth={2} aria-hidden="true" />
-                        <span>Escuchar de nuevo</span>
-                      </button>
-                    )}
-                    <button type="button" className="msg-accion-menu-item" onClick={copiar}>
-                      <Copy size={15} strokeWidth={2} aria-hidden="true" />
-                      <span>{copiado ? 'Copiado' : 'Copiar'}</span>
-                    </button>
-                    {onRegenerar && (
-                      <button
-                        type="button"
-                        className="msg-accion-menu-item"
-                        onClick={() => {
-                          setAccionesAbiertas(false);
-                          onRegenerar(m.id);
-                        }}
-                      >
-                        <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
-                        <span>Generar otra respuesta</span>
-                      </button>
-                    )}
-                  </div>
+                {onRegenerar && (
+                  <button type="button" className="msg-accion" onClick={() => onRegenerar(m.id)}
+                    title="Otra respuesta" aria-label="Generar otra respuesta">
+                    <RefreshCw size={15} strokeWidth={2} aria-hidden="true" />
+                  </button>
+                )}
+                {m.rastro && m.rastro.length > 0 && (
+                  <button
+                    type="button"
+                    className={'msg-rastro' + (rastroAbierto ? ' abierto' : '')}
+                    onClick={() => setRastroAbierto((v) => !v)}
+                    aria-expanded={rastroAbierto}
+                    aria-controls={`rastro-${m.id}`}
+                    title="De dónde salió esto"
+                  >
+                    <Eye size={13} strokeWidth={2} aria-hidden="true" />
+                    {resumenRastro(m.rastro)}
+                  </button>
                 )}
               </div>
             )}
