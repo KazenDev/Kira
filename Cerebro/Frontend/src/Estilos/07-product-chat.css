@@ -127,18 +127,20 @@
 .header-more-modal {
   position: fixed;
   z-index: 41;
-  top: 50%;
-  left: 50%;
-  right: auto;
+  /* Centrado con inset + margin auto: no usa transform ni translate, asi que
+     la animacion de Motion (que escribe transform) no lo puede descolocar.
+     Con translate: -50% -50% alcanzaba con que UNA regla posterior tocara
+     left/right para que el modal se fuera de la pantalla, que es justo lo que
+     pasaba en el celular. */
+  inset: 0;
+  margin: auto;
   width: min(340px, calc(100vw - 32px));
+  height: fit-content;
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 10px;
   border-radius: var(--r-lg);
-  /* el truco del centrado con Motion: la animacion escribe transform, asi que
-     el translate del centrado va en el mismo transform */
-  margin: 0;
-  translate: -50% -50%;
   transform-origin: center center;
   box-shadow: var(--shadow-3);
 }
@@ -169,6 +171,27 @@
   color: var(--text-1);
   border-color: var(--accent-soft);
   background: var(--elev-3);
+}
+
+/* En el celular el modal tiene que ser comodo, no un popover chiquito.
+   Si la pantalla es baja (celular acostado), el max-height ya lo hace
+   scrolleable solo. */
+@media (max-width: 560px) {
+  .header-more-modal {
+    width: calc(100vw - 24px);
+    max-width: 400px;
+    max-height: calc(100dvh - 24px);
+    padding: 12px;
+  }
+  /* el area tactil del boton de cerrar crece a lo minimo recomendado */
+  .header-menu-cerrar {
+    width: 34px;
+    height: 34px;
+  }
+  .header-menu-item,
+  .header-menu-items .puente-ble {
+    min-height: 46px;
+  }
 }
 
 .header-menu-label {

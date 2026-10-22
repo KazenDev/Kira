@@ -132,7 +132,12 @@
     border: 1px solid var(--bg);
   }
 
-  .header-more-menu {
+  /* El modal de los 3 puntos (header-more-modal) NO se toca aca: lo centra
+     su propia regla en 07-product-chat.css. Antes esta media query lo
+     anclaba abajo con left/right, y como se importa DESPUES, pisaba el
+     `translate: -50% -50%` del centrado y el modal terminaba fuera de la
+     pantalla (se veia cortado por la derecha y por abajo). */
+  .header-more-menu:not(.header-more-modal) {
     position: fixed;
     top: auto;
     right: 10px;
