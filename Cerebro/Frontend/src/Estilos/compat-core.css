@@ -184,7 +184,7 @@
 .send-btn {
   width: 38px;
   height: 38px;
-  color: #08101d;
+  color: #0b1210;
   background: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 70%, white 10%);
   box-shadow: 0 7px 20px color-mix(in srgb, var(--accent) 19%, transparent);
@@ -520,7 +520,7 @@
 .md pre {
   margin-block: 12px;
   border-radius: 14px;
-  background: #090d13;
+  background: #0a100d;
   border-color: rgba(255, 255, 255, 0.075);
   box-shadow: none;
 }
@@ -552,7 +552,7 @@
 }
 
 .composer textarea::placeholder {
-  color: #7f8a9b;
+  color: var(--text-3);
 }
 
 .composer-acciones {

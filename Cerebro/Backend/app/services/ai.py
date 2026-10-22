@@ -26,7 +26,10 @@ from app.domain.streaming import (
 
 TIMEOUT_IA = httpx.Timeout(connect=8.0, read=20.0, write=15.0, pool=8.0)
 ESTADOS_REINTENTABLES = {408, 409, 429, 500, 502, 503, 504}
-ESTADOS_SIN_REINTENTO = {401, 402, 403}
+# 405: Hive lo devuelve cuando la organización NO tiene saldo ("Out of
+# Balance"), en vez del 402 habitual. Reintentarlo es perder 3 intentos con
+# backoff antes de caer al respaldo, así que cuenta como "sin acceso".
+ESTADOS_SIN_REINTENTO = {401, 402, 403, 405}
 MAX_INTENTOS_IA = 3
 _EMOCION_PARCIAL = __import__("re").compile(r'"emotion"\s*:\s*"([a-zA-Z]+)"')
 
@@ -127,8 +130,39 @@ class AIProvider:
         return {"Authorization": f"Bearer {provider['api_key']}"}
 
     @staticmethod
-    def body(payload: dict, provider: dict) -> dict:
-        return {**payload, **provider.get("extra", {}), "model": provider["modelo"]}
+    def _sin_detail_imagen(payload: dict) -> dict:
+        """Quita `detail` de los bloques image_url.
+
+        OpenAI (y DeepSeek/Vercel, que lo imitan) aceptan
+        {"image_url": {"url": ..., "detail": "high"}}. Hive NO: responde
+        HTTP 400 "Received malformed JSON body". El `detail` es una optimización
+        de costo, no un requisito, así que para esos proveedores se omite.
+        """
+        mensajes = payload.get("messages")
+        if not isinstance(mensajes, list):
+            return payload
+        limpios = []
+        for mensaje in mensajes:
+            contenido = mensaje.get("content") if isinstance(mensaje, dict) else None
+            if not isinstance(contenido, list):
+                limpios.append(mensaje)
+                continue
+            bloques = []
+            for bloque in contenido:
+                if isinstance(bloque, dict) and bloque.get("type") == "image_url":
+                    imagen = bloque.get("image_url")
+                    if isinstance(imagen, dict) and "detail" in imagen:
+                        bloque = {**bloque, "image_url": {k: v for k, v in imagen.items() if k != "detail"}}
+                bloques.append(bloque)
+            limpios.append({**mensaje, "content": bloques})
+        return {**payload, "messages": limpios}
+
+    @classmethod
+    def body(cls, payload: dict, provider: dict) -> dict:
+        cuerpo = {**payload, **provider.get("extra", {}), "model": provider["modelo"]}
+        if provider.get("sin_detail_imagen"):
+            cuerpo = cls._sin_detail_imagen(cuerpo)
+        return cuerpo
 
     @staticmethod
     def failure_reason(error: Exception | None) -> str:

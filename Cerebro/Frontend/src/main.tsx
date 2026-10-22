@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { MotionConfig } from 'motion/react';
-import AuthGate from './AuthGate';
+import AuthGate from './componentes/AuthGate';
 import './estilos.css';
 
 // Deploy nuevo: el service worker nuevo toma el control, pero la pestaña (o

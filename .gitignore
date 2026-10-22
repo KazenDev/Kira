@@ -42,3 +42,8 @@ MicroBit/Referencias/
 # Artefactos de navegador y depuración
 .playwright-mcp/
 .debug_sniff.log
+
+# Volcados de sesiones de IA: suelen traer credenciales, IPs y datos runtime
+session-*.md
+ses_*.md
+*.session.md

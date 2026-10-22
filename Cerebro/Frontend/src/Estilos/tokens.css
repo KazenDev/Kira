@@ -7,36 +7,36 @@
 @property --accent {
   syntax: '<color>';
   inherits: true;
-  initial-value: #ff5c52;
+  initial-value: #a3e635;
 }
 @property --accent-hover {
   syntax: '<color>';
   inherits: true;
-  initial-value: #ff7068;
+  initial-value: #b8ef5a;
 }
 @property --accent-soft {
   syntax: '<color>';
   inherits: true;
-  initial-value: rgba(255, 92, 82, 0.16);
+  initial-value: rgba(163, 230, 53, 0.16);
 }
 
 :root {
-  /* Superficies y texto: valores finales de la interfaz actual. */
-  --bg: #191817;
-  --elev-1: #151413;
-  --elev-2: #211f1d;
-  --elev-3: #2b2825;
-  --text-1: #e8e6e3;
-  --text-2: #aaa69f;
-  --text-3: #77736d;
-  --border: rgba(255, 255, 255, 0.075);
-  --border-strong: rgba(255, 255, 255, 0.13);
+  /* Superficies y texto: verde bosque oscuro con acento lima. */
+  --bg: #0b1210;
+  --elev-1: #0f1714;
+  --elev-2: #16211c;
+  --elev-3: #1f2d26;
+  --text-1: #e8f1ea;
+  --text-2: #a7b8ac;
+  --text-3: #758a7c;
+  --border: rgba(210, 255, 225, 0.08);
+  --border-strong: rgba(210, 255, 225, 0.15);
 
   /* Acento base y estados de feedback. */
-  --accent: #ff5c52;
-  --accent-hover: #ff7068;
-  --accent-soft: rgba(255, 92, 82, 0.16);
-  --ok: #4fb286;
+  --accent: #a3e635;
+  --accent-hover: #b8ef5a;
+  --accent-soft: rgba(163, 230, 53, 0.16);
+  --ok: #43c98a;
   --danger: #e0655f;
 
   /* Sombras: última definición efectiva de la capa V5. */
@@ -64,7 +64,7 @@
 }
 
 .app[data-pj='kira'] {
-  --accent: #d96f55;
-  --accent-hover: #e58268;
-  --accent-soft: rgba(217, 111, 85, 0.14);
+  --accent: #9bdb2e;
+  --accent-hover: #aeea4a;
+  --accent-soft: rgba(155, 219, 46, 0.14);
 }

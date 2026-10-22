@@ -57,18 +57,18 @@ a:hover {
 /* ---------- scrollbar finita ---------- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #3a3733 transparent;
+  scrollbar-color: #26352d transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #3a3733;
+  background: #26352d;
   border-radius: 8px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #4a453f;
+  background: #35493d;
 }
 *::-webkit-scrollbar-track {
   background: transparent;
@@ -93,7 +93,7 @@ a:hover {
 }
 
 /* ---------- MODO por personaje: todo el acento cambia según a quién hablás ---------- */
-/* Kira -> rojo (Among Us) | sin elegir -> rojo base de :root */
+/* Kira -> verde lima | sin elegir -> verde lima base de :root */
 /* El acento por personaje vive en tokens.css. */
 /* ---------- SIDEBAR (historial de chats, izquierda) ---------- */
 .sidebar {
@@ -1144,7 +1144,7 @@ svg.girando {
 /* ================= RÉPLICA DEL MICRO:BIT (matriz LED) ================= */
 .microbit-board {
   width: 150px;
-  border: 1px solid #3a3a32;
+  border: 1px solid #2c3b33;
   border-radius: 10px;
   padding: 12px 14px 10px;
   position: relative;
@@ -1165,15 +1165,15 @@ svg.girando {
 .led {
   aspect-ratio: 1;
   border-radius: 2px;
-  background: #1b1b17;
+  background: #141f19;
   box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.8);
   opacity: 0.35;
 }
 .led-on {
-  background: var(--color, #ff5c52);
+  background: var(--color, #a3e635);
   box-shadow:
-    0 0 4px 1px var(--color, #ff5c52),
-    0 0 10px 2px color-mix(in srgb, var(--color, #ff5c52) 35%, transparent);
+    0 0 4px 1px var(--color, #a3e635),
+    0 0 10px 2px color-mix(in srgb, var(--color, #a3e635) 35%, transparent);
   opacity: 1;
   animation: led-in 0.3s ease both;
   animation-delay: calc(var(--i, 0) * 14ms);
@@ -1189,7 +1189,7 @@ svg.girando {
   }
 }
 .led-loading {
-  background: var(--color, #ff5c52);
+  background: var(--color, #a3e635);
   animation: led-pulso 1s ease-in-out infinite;
   animation-delay: calc(var(--i, 0) * 60ms);
   opacity: 0.6;

@@ -6,11 +6,17 @@ import os
 #  (voz) + micro:bit (cara)
 # ================================================================================
 
-# ------------------- IA (Vercel AI Gateway -> DeepSeek) -------------------------
-# El principal pasa por Vercel AI Gateway: una sola API OpenAI-compatible
-# (POST /chat/completions + Bearer) delante de cientos de modelos de distintos
-# proveedores, con una sola key y sin cambiar el codigo. El modelo va como
-# "proveedor/modelo" (lista real: GET https://ai-gateway.vercel.sh/v1/models).
+# ------------------- IA (The Hive -> DeepSeek V4.1 Flash) -----------------------
+# PRINCIPAL: The Hive, API OpenAI-compatible (POST /chat/completions + Bearer).
+# OJO con la URL: Hive NO usa /v1, sino /api/v3 (sin barra final).
+# Doc: https://docs.thehive.ai/docs/chat-completions-openai-compatible-llms
+# Los clientes de Virginia (VA1) usan https://api-va1.thehive.ai/api/v3.
+HIVE_BASE_URL = os.getenv("HIVE_BASE_URL", "https://api-cdn.thehive.ai/api/v3")
+HIVE_API_KEY = os.getenv("HIVE_API_KEY", "")
+
+# ------------------- IA de respaldo (Vercel AI Gateway -> DeepSeek) -------------
+# Una sola API OpenAI-compatible delante de cientos de modelos. El modelo va
+# como "proveedor/modelo" (GET https://ai-gateway.vercel.sh/v1/models).
 AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1"
 AI_GATEWAY_API_KEY = os.getenv("AI_GATEWAY_API_KEY", "")
 
@@ -33,6 +39,24 @@ NANO_API_KEY = os.getenv("NANO_API_KEY", "")
 # piensa por defecto: para una charla con voz son segundos de silencio antes de
 # la primera palabra); nano-gpt rechazaría ese campo.
 PROVEEDORES_IA: list[dict] = [
+    {
+        "nombre": "hive",
+        "base_url": HIVE_BASE_URL,
+        "api_key": HIVE_API_KEY,
+        # DeepSeek V4.1 Flash, snapshot del 17-oct (fijo: no cambia solo).
+        # Multimodal nativo (texto + imagen), contexto de 1M de tokens.
+        "modelo": "deepseek-ai/deepseek-v4.1-flash-1017",
+        # Hive NO entiende el "reasoning" de Vercel ni el "thinking" de
+        # DeepSeek: su campo es reasoning_effort. Por defecto viene en "high"
+        # y el modelo PIENSA antes de contestar: en una charla con voz eso son
+        # segundos de silencio y, con MAX_TOKENS=300, el JSON puede llegar
+        # cortado. Medido con curl: effort "none" responde en ~0.6 s y no
+        # gasta tokens de razonamiento.
+        "extra": {"reasoning_effort": "none"},
+        # Hive rechaza el campo "detail" dentro de image_url con HTTP 400
+        # ("Received malformed JSON body"); OpenAI y Vercel sí lo aceptan.
+        "sin_detail_imagen": True,
+    },
     {
         "nombre": "vercel-gateway",
         "base_url": AI_GATEWAY_BASE_URL,
