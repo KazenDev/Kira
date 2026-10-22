@@ -5,7 +5,7 @@ import { memo } from 'react';
  * Muestra lo que el personaje recuerda de su vida: sus memorias recientes
  * con importancia, su diario (quién es hoy) y el contador. Es la prueba
  * viva de la personalidad emergente — ningún chatbot muestra esto.
- * Lee de GET /api/memoria/{personaje} (ver GUIA_DEPLOY_VPS.md).
+ * Lee de GET /api/memoria/{personaje} (ver Cerebro/ARQUITECTURA.md).
  */
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';

@@ -56,3 +56,10 @@ Portada/
 KIRA-Cartilla*/
 KIRA-Portada*/
 KIRA-portada*/
+
+# Bitacora interna e infraestructura: no se publican.
+# Siguen en disco (son utiles para trabajar), pero fuera del repo.
+GUIA_DEPLOY_VPS.md
+Celular/LEEME.md
+TODO.md
+TODO_RAG.md
