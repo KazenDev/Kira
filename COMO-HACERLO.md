@@ -6,6 +6,10 @@
 
 <sub>Todo lo de acá está verificado contra el código. Si algo no coincide, el código tiene razón.</sub>
 
+<br/>
+
+**← [README](README.md)** · **[Requisitos](REQUISITOS.md)** · **[Arquitectura](Cerebro/ARQUITECTURA.md)**
+
 </div>
 
 ---
@@ -430,6 +434,10 @@ de esta máquina.
 ---
 
 <div align="center">
+
+**← [README](README.md)** · **[Requisitos](REQUISITOS.md)** · **[Arquitectura](Cerebro/ARQUITECTURA.md)** · **[micro:bit](MicroBit/MICROBIT.md)**
+
+<br/>
 
 <sub>Si algo de esta guía no te funcionó, el problema es de la guía: abrí un issue.</sub>
 

@@ -32,12 +32,12 @@ if not defined PY (
     exit /b 1
 )
 
-REM --- 2) Version de Python (necesitamos 3.9+) ---
+REM --- 2) Version de Python (necesitamos 3.10+) ---
 echo  [1/4] Python: %PY%
 %PY% --version
-%PY% -c "import sys; sys.exit(0 if sys.version_info >= (3,9) else 1)" >nul 2>nul
+%PY% -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" >nul 2>nul
 if errorlevel 1 (
-    echo  [ERROR] Python es muy viejo. Necesitas Python 3.9 o superior.
+    echo  [ERROR] Python es muy viejo. Necesitas Python 3.10 o superior.
     echo  Bajalo de https://www.python.org/downloads/ y reinstala.
     echo.
     pause

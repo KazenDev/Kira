@@ -5,6 +5,9 @@ que imita el micro:bit. No toca la placa y no adivina: cada coste por
 operación está deducido del fuente de CODAL que ya está en
 `MicroBit/Referencias/`.
 
+> **← Volver al [README](../../README.md)** · **[CÓMO HACERLO](../../COMO-HACERLO.md)** · **[micro:bit](../MICROBIT.md)** · **[Memoria de la placa](../MEMORIA.md)**
+
+
 ## Correrlo
 
 ```sh

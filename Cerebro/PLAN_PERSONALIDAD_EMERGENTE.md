@@ -4,6 +4,8 @@
 > nosotros — la **construye** viviendo: charlas → memorias → reflexiones →
 > opiniones propias con evidencia citable.
 >
+> **← Volver al [README](../README.md)** · **[CÓMO HACERLO](../COMO-HACERLO.md)** · **[Arquitectura](ARQUITECTURA.md)**
+>
 > Basado en proyectos REALES (código leído, no papers resumidos):
 > - **Generative Agents** — Park et al., Stanford 2023 (repo clonado en
 >   `Cerebro/Referencias/generative_agents/`)
@@ -125,9 +127,9 @@ Cada turno: HOGAR + SU DIARIO + historial → habla como se crió.
   robot) → "Hogar intocable" (bondad base, público infantil, vale más
   que su propio diario) → el resto del contrato INTACTO (emociones,
   herramientas, TTS, JSON)
-- Temperamento de cuna mínimo (lo único innato): Kira "sensible" /
-  Kiro "inquieto" — los gemelos divergen desde el día 1
-- rol de display: "en cría 🌱" ambos
+- Temperamento de cuna mínimo (lo único innato): Kira arranca "sensible"
+  y el resto lo construye viviendo
+- rol de display: "en cría 🌱"
 - Integración real: responde JSON válido Y con postura propia
   ("yo soy del equipo de los gatos"), cero diplomacia de robot
 

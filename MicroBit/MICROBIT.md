@@ -1,18 +1,20 @@
 # 🎭 MICRO:BIT — EXPRESIONES EMOCIONALES CON IA
 
 > Proyecto para la **Feria de Ciencias** — el micro:bit es la **cara física**
-> de Kira y Kiro (los personajes IA). Muestra emociones, habla con la boca,
-> carga mientras la IA piensa y hasta lee sensores reales.
+> de Kira. Muestra emociones, habla con la boca, carga mientras la IA piensa
+> y lee sensores reales.
+>
+> **← Volver al [README](../README.md)** · **[CÓMO HACERLO](../COMO-HACERLO.md)**
 
 ---
 
 ## 🧠 ¿DE QUÉ TRATA?
 
-Una IA (DeepSeek V4 Flash) conversa con el público. Cada respuesta trae una
+Una IA (DeepSeek V4.1 Flash) conversa con el público. Cada respuesta trae una
 **emoción** (`happy`, `sad`, `angry`, `surprised`, `neutral`, `fastidio`,
 `miedo`, `cansado`) y el micro:bit **pone la cara**: dibuja la emoción en su
 matriz LED 5×5, la anima con movimiento, sincroniza la **boca** con la voz
-real del TTS (Fish Audio) y muestra un **loading** mientras la IA "piensa".
+real del TTS (ElevenLabs) y muestra un **loading** mientras la IA "piensa".
 
 Es una **pieza de demostración viva**: la gente le habla al chat, y la
 plaquita reacciona como si tuviera sentimientos.
@@ -834,7 +836,7 @@ todas las direcciones. Una consulta puntual no la reemplaza.
 El logo táctil devuelve un estado debounced (`1`/`0`) y la lectura capacitiva
 cruda. No es una medición de fuerza de contacto.
 
-Idea: que Kira/Kiro puedan decir "qué temperatura hace", "¿me sacudiste?",
+Idea: que Kira pueda decir "qué temperatura hace", "¿me sacudiste?",
 "¿hacia dónde apunta la brújula?", "¿estoy tocando el logo?", "¿hay mucho ruido?",
 "¿cuánta batería le queda?", etc., usando estos datos reales.
 

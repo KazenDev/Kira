@@ -1,8 +1,10 @@
 # Arquitectura actual de Kira
 
-> Documento de trabajo backend. La identidad del producto es **Kira**.
-> No se despliega automáticamente. La clave de DeepSeek se carga desde el `.env`
-> local mediante `run.sh`; no se mantiene su valor en el código.
+> Documento de trabajo del backend. La identidad del producto es **Kira**.
+> No se despliega automáticamente. Las claves de los proveedores se cargan desde
+> el `.env` local mediante `run.sh`; nunca se guardan en el código.
+>
+> **← Volver al [README](../README.md)** · **[CÓMO HACERLO](../COMO-HACERLO.md)** · **[Requisitos](../REQUISITOS.md)**
 
 ## 1. Vista general
 

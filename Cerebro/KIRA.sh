@@ -25,6 +25,13 @@ fi
 PY=python3
 echo "  [1/4] Python: $($PY --version 2>&1)"
 
+# El backend usa anotaciones "X | None" en runtime: Python 3.9 explota al
+# definir esas funciones. Mejor avisar acá que fallar con un traceback raro.
+if ! $PY -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)"; then
+    echo "  [ERROR] Necesitas Python 3.10 o superior (tenes $($PY --version 2>&1))."
+    exit 1
+fi
+
 # --- 2) venv + dependencias ---
 echo "  [2/4] Verificando dependencias..."
 if [ ! -d "Backend/.venv" ]; then

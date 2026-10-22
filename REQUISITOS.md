@@ -1,117 +1,263 @@
-# 📋 REQUISITOS — KIRA & KIRO
+<div align="center">
 
-Todo lo que hace falta para correr el Cerebro en una PC limpia (Linux o Windows).
+# REQUISITOS
+
+**Todo lo que hace falta para correr Kira en una PC limpia.**
+
+<sub>Linux, Windows o macOS. Si algo falla, mirá el [checklist](#por-qué-no-anda) del final o la guía paso a paso en [CÓMO HACERLO](COMO-HACERLO.md).</sub>
+
+**← Volver al [README](README.md)**
+
+</div>
 
 ---
 
-## 🐍 Python
+## Python
 
 | | |
-|---|---|
-| **Versión mínima** | **3.10** (obligatoria: el código usa anotaciones `X | None` que no existen en 3.9) |
+|:--|:--|
+| **Versión mínima** | **3.10** (obligatoria: el código usa anotaciones `X \| None`, que no existen en 3.9) |
 | **Probado en** | 3.12.3 (recomendado: 3.10, 3.11 o 3.12) |
 | **Descarga** | https://www.python.org/downloads/ |
 
-> ⚠️ En Windows: marcar la casilla **"Add Python to PATH"** durante la instalación.
+> **Windows:** marcá **"Add Python to PATH"** durante la instalación.
 
 ---
 
-## 📦 Módulos de Python (`Backend/requirements.txt`)
+## Dependencias de Python
 
-```
-fastapi>=0.115        # servidor web / API
-uvicorn>=0.30         # server ASGI que corre FastAPI
-httpx>=0.27           # llamadas HTTP a la IA y al TTS (async + streaming)
-pyserial>=3.5         # serial con el micro:bit
-numpy>=1.26           # VAD Silero (audio)
-onnxruntime>=1.17     # corre el modelo silero_vad.onnx
-assemblyai>=0.34      # transcripción de voz (grabar/escuchar)
-simpleeval>=0.9       # tool "calcular" de la IA (eval seguro de mates)
-```
+Las que declara `Cerebro/Backend/requirements.txt`:
 
-Instalación manual (si no usás los launchers):
+| Paquete | Para qué |
+|:--|:--|
+| `fastapi` | el servidor y la API |
+| `uvicorn` | corre FastAPI |
+| `httpx` | llamadas a IA, TTS y transcripción (async + streaming) |
+| `pyserial` | hablar con la micro:bit por USB |
+| `numpy` | audio y VAD |
+| `onnxruntime` | corre el modelo Silero de detección de voz |
+| `assemblyai` | transcribir audio |
+| `simpleeval` | la herramienta `calcular` (eval seguro de matemática) |
+| `python-multipart` | subida de archivos (fotos y audio) |
+| `fastembed` | embeddings locales del RAG |
+
+Instalación:
 
 ```bash
-python3 -m pip install -r Backend/requirements.txt
+cd Cerebro/Backend
+python3 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
 ```
 
-Los launchers (`KIRA.bat` / `KIRA.sh`) instalan todo solos la primera vez.
+Para desarrollo (agrega `pytest`):
+
+```bash
+./.venv/bin/pip install -r requirements-dev.txt
+```
 
 ---
 
-## 🎬 Programas externos
+## Node.js (solo para el frontend)
 
-| Programa | ¿Para qué? | ¿Obligatorio? |
-|---|---|---|
-| **ffmpeg** | Convertir grabaciones a MP3/WAV (botones de grabar y escuchar) | Solo si vas a usar el micrófono del micro:bit. El chat normal anda sin él |
-| **Node.js + npm** | Recompilar el frontend (`npm run build`) | NO. El `dist/` ya viene compilado |
-| **Git** (opcional) | — | NO |
+| | |
+|:--|:--|
+| **Versión mínima** | 18 |
+| **Uso** | compilar o desarrollar la interfaz |
 
-**ffmpeg en Windows** (no viene de fábrica):
+**No es obligatorio para usar Kira servida por el backend**, pero sí para tocar el frontend:
 
-```bat
+```bash
+cd Cerebro/Frontend
+npm install
+npm run dev     # desarrollo
+npm run build   # producción (genera dist/)
+```
+
+---
+
+## Programas externos
+
+| Programa | Para qué | ¿Obligatorio? |
+|:--|:--|:--:|
+| **ffmpeg** | convertir el audio del micrófono de la placa a MP3 | solo si grabás voz |
+| **Node.js + npm** | recompilar el frontend | solo si tocás la UI |
+| **Git** | clonar el repo | sí, si no descargás el ZIP |
+
+**ffmpeg** no viene instalado por defecto:
+
+```bash
+# Debian / Ubuntu
+sudo apt install ffmpeg
+
+# Arch
+sudo pacman -S ffmpeg
+
+# Fedora
+sudo dnf install ffmpeg
+
+# Windows (y reiniciá la terminal)
 winget install --id Gyan.FFmpeg
 ```
-(y cerrar/abrir la terminal para que PATH se recargue)
-
-**ffmpeg en Linux:**
-```bash
-sudo apt install ffmpeg      # Debian/Ubuntu
-sudo pacman -S ffmpeg        # Arch
-```
 
 ---
 
-## 🔌 Hardware
+## Hardware (opcional)
 
-- **micro:bit v2** con el firmware de Kira flasheado (carpeta `MicroBit/`).
-- Se conecta por **USB** y se detecta solo:
+- **micro:bit v2** con el firmware de Kira flasheado (ver [`MicroBit/`](MicroBit/MICROBIT.md)).
+- Conexión por **USB**:
   - Windows → puerto `COM*` (Windows 10/11 instala el driver DAPLink solo)
-  - Linux → `/dev/ttyACM0` (si no aparece: `sudo usermod -aG dialout $USER` y reloguear)
+  - Linux → `/dev/ttyACM0`
+  - macOS → `/dev/cu.usbmodem*`
 - Serial a **115200 baudios**.
 
----
+En Linux hacen falta permisos para el puerto:
 
-## 🔑 API keys (ya están cargadas en `Backend/config.py`)
+```bash
+sudo usermod -aG dialout $USER
+# cerrá sesión y volvé a entrar
+```
 
-| Servicio | Uso |
-|---|---|
-| **Nano GPT** | IA (DeepSeek v4 flash, chat) |
-| **Fish Audio** | Voz TTS (modelo s2.1-pro-free) |
-| **AssemblyAI** | Transcripción de voz |
-| **Exa** | Búsqueda web (tool de la IA) |
-
-> Las keys viven en `Backend/config.py` (algunas leen variable de entorno si existe,
-> ej: `ASSEMBLYAI_API_KEY`, `EXA_API_KEY`). OJO: no subir este archivo a un repo público.
+> **Sin placa la app funciona igual.** El chat, la voz y la micro:bit virtual
+> andan; solo no hay cara física ni sensores reales. Las herramientas de
+> sensores van a responder "no pude leerlo", y está bien: Kira no inventa.
 
 ---
 
-## 🌐 Internet
+## Claves de API
 
-**Obligatorio**: la IA, la voz y la búsqueda web son APIs en la nube.
-Sin internet el server levanta pero Kira no puede pensar ni hablar.
+Todas se cargan en **`Cerebro/Backend/.env`** (copiá `.env.example`).
+**Nunca** se escriben en el código ni se commitean: el `.env` está en `.gitignore`.
+
+| Variable | Servicio | Para qué | ¿Obligatoria? |
+|:--|:--|:--|:--:|
+| `HIVE_API_KEY` | [The Hive](https://thehive.ai) | la IA (DeepSeek V4.1 Flash) | **sí** |
+| `ELEVENLABS_API_KEY` | [ElevenLabs](https://elevenlabs.io) | la voz de Kira | para oírla |
+| `KIRA_ELEVEN_VOICE_ID` | ElevenLabs | el ID de la voz clonada | para oírla |
+| `ASSEMBLYAI_API_KEY` | [AssemblyAI](https://assemblyai.com) | transcribir lo que hablás | para hablarle |
+| `EXA_API_KEY` | [Exa](https://exa.ai) | búsqueda web de la IA | opcional |
+| `AI_GATEWAY_API_KEY` | Vercel AI Gateway | IA de respaldo | opcional |
+
+> **La IA tiene respaldo en cadena.** Si Hive falla o se queda sin saldo,
+> prueba Vercel Gateway y después DeepSeek directo. Los logs avisan:
+> `[IA] hive se agotó (HTTP 405) -> CAE AL RESPALDO`.
 
 ---
 
-## 🚀 Cómo arrancar
+## Internet
+
+**Obligatorio.** La IA, la voz y la búsqueda web son APIs en la nube.
+Sin internet el servidor levanta, pero Kira no puede pensar ni hablar.
+
+La memoria y el índice RAG, en cambio, son **100% locales**.
+
+---
+
+## Cómo arrancar
+
+### Opción A: launchers (más fácil)
 
 | SO | Acción |
-|---|---|
-| **Windows** | Doble clic en `Cerebro/KIRA.bat` |
-| **Linux** | `./Cerebro/KIRA.sh` (primera vez: `chmod +x Cerebro/KIRA.sh`) |
+|:--|:--|
+| **Windows** | doble clic en `Cerebro/KIRA.bat` |
+| **Linux / macOS** | `./Cerebro/KIRA.sh` (la primera vez: `chmod +x Cerebro/KIRA.sh`) |
 
-Abrí **http://127.0.0.1:8000** (el launcher abre el navegador solo).
+Instalan las dependencias la primera vez y abren el navegador.
 
-Sin micro:bit conectado la web anda igual (el chat, la voz y el micro:bit
-virtual funcionan; solo no hay carita física real).
+### Opción B: a mano
+
+```bash
+# terminal 1 — backend
+cd Cerebro/Backend
+cp .env.example .env    # completá las claves
+./run.sh
+
+# terminal 2 — frontend (desarrollo)
+cd Cerebro/Frontend
+npm install
+npm run dev
+```
+
+- Backend: **http://127.0.0.1:8000**
+- Frontend dev: **http://127.0.0.1:5173** (proxea `/api` al backend)
+
+Si usás el launcher, todo se sirve desde **:8000** y no hace falta la terminal 2.
 
 ---
 
-## ✅ Checklist rápido "¿por qué no anda?"
+## Por qué no anda
 
-1. ¿Python 3.10+? → `python --version`
-2. ¿Dependencias? → `pip install -r Backend/requirements.txt`
-3. ¿ffmpeg en PATH? (solo para grabar voz) → `ffmpeg -version`
-4. ¿Internet? (IA y voz son APIs online)
-5. ¿API keys válidas en `config.py`?
-6. ¿micro:bit? → probar `python3 MicroBit/mb.py test` (o `python MicroBit\mb.py test` en Windows)
+<details>
+<summary><b>1. ¿Python 3.10 o más?</b></summary>
+
+```bash
+python3 --version
+```
+
+</details>
+
+<details>
+<summary><b>2. ¿Dependencias instaladas?</b></summary>
+
+```bash
+cd Cerebro/Backend
+./.venv/bin/pip install -r requirements.txt
+```
+
+</details>
+
+<details>
+<summary><b>3. ¿ffmpeg en el PATH?</b> (solo si grabás voz)</summary>
+
+```bash
+ffmpeg -version
+```
+
+</details>
+
+<details>
+<summary><b>4. ¿Internet?</b></summary>
+
+La IA y la voz son APIs online. Probá:
+
+```bash
+curl -I https://api-cdn.thehive.ai
+```
+
+</details>
+
+<details>
+<summary><b>5. ¿Las claves son válidas?</b></summary>
+
+```bash
+curl -s http://127.0.0.1:8000/api/rag/status
+```
+
+Si el servidor responde, el backend vive. Los errores de clave aparecen en la
+consola del backend con `[IA]` o `[TTS]`.
+
+</details>
+
+<details>
+<summary><b>6. ¿La micro:bit aparece?</b></summary>
+
+```bash
+# Linux
+ls /dev/ttyACM*
+```
+
+```bash
+# probar la conexión
+python3 MicroBit/mb.py test
+```
+
+En Windows: `python MicroBit\mb.py test`
+
+</details>
+
+---
+
+<div align="center">
+
+**← [README](README.md)** · **[CÓMO HACERLO](COMO-HACERLO.md)** · **[Arquitectura](Cerebro/ARQUITECTURA.md)**
+
+</div>

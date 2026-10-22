@@ -3,6 +3,9 @@
 > La verdad oficial de la memoria, medida con símbolos del ELF (no con el
 > reporte del build, que miente — ver abajo). Re-auditable en 2 comandos.
 
+> **← Volver al [README](../README.md)** · **[CÓMO HACERLO](../COMO-HACERLO.md)** · **[micro:bit](MICROBIT.md)** · **[Memoria de la placa](MEMORIA.md)**
+
+
 ## 🧠 El mapa REAL (nRF52833: 128 KB RAM / 512 KB flash)
 
 | Zona | Tamaño | Qué es |

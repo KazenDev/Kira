@@ -246,18 +246,27 @@ directorio: memoria, diario, conversaciones, grabaciones y RAG derivado.
 
 <h3 align="center">DOCUMENTACIÓN</h3>
 
+<p align="center">
+Empezá por donde estés parado.
+</p>
+
 <div align="center">
 
-| Documento | Contenido |
+| Quiero… | Documento |
 |:--|:--|
-| [`COMO-HACERLO.md`](COMO-HACERLO.md) | **guía práctica**: levantar, conectar la placa, probar, extender |
-| [`Cerebro/ARQUITECTURA.md`](Cerebro/ARQUITECTURA.md) | capas del backend y contrato de endpoints |
-| [`Cerebro/PLAN_PERSONALIDAD_EMERGENTE.md`](Cerebro/PLAN_PERSONALIDAD_EMERGENTE.md) | el modelo de personalidad que se construye sola |
-| [`MicroBit/MICROBIT.md`](MicroBit/MICROBIT.md) | firmware, emociones y protocolo serial |
-| [`MicroBit/MEMORIA.md`](MicroBit/MEMORIA.md) | mapa real de RAM y flash de la placa |
-| [`REQUISITOS.md`](REQUISITOS.md) | todo lo necesario en una PC limpia |
+| **instalarlo y que ande** | **[`COMO-HACERLO.md`](COMO-HACERLO.md)** — paso a paso, con problemas comunes |
+| **saber qué necesito** | **[`REQUISITOS.md`](REQUISITOS.md)** — versiones, claves, hardware |
+| **entender el backend** | [`Cerebro/ARQUITECTURA.md`](Cerebro/ARQUITECTURA.md) — capas y endpoints |
+| **entender por qué es distinta** | [`Cerebro/PLAN_PERSONALIDAD_EMERGENTE.md`](Cerebro/PLAN_PERSONALIDAD_EMERGENTE.md) — la memoria que se construye sola |
+| **tocar el firmware** | [`MicroBit/MICROBIT.md`](MicroBit/MICROBIT.md) — emociones y protocolo |
+| **optimizar la placa** | [`MicroBit/MEMORIA.md`](MicroBit/MEMORIA.md) · [`MicroBit/Bench/`](MicroBit/Bench/README.md) |
+| **cambiar los colores** | [`Estilos/README.md`](Cerebro/Frontend/src/Estilos/README.md) — el orden de la cascada |
 
 </div>
+
+<p align="center">
+<sub>El orden sugerido es: <b>README</b> → <b>REQUISITOS</b> → <b>CÓMO HACERLO</b> → <b>ARQUITECTURA</b>.</sub>
+</p>
 
 <img src=".github/assets/divider.svg" width="100%" alt="" />
 

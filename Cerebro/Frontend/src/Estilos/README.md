@@ -10,3 +10,7 @@ La entrada de la aplicación es `index.css`.
 - `08-ajustes.css` y `09-auth.css` contienen sus respectivos módulos.
 
 El orden de los imports es intencional: las capas de compatibilidad preservan el orden original para que la consolidación no cambie el aspecto. Las media queries permanecen junto a sus capas hasta poder reorganizarlas por componente sin alterar la cascada móvil.
+
+---
+
+**← Volver al [README](../../../../README.md)** · **[CÓMO HACERLO](../../../../COMO-HACERLO.md)** · **[Arquitectura](../../../ARQUITECTURA.md)**

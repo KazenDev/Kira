@@ -6,6 +6,9 @@ la placa, sin tocarlo) contra una copia congelada de la versión vieja, y las
 alterna en la misma placa para que la diferencia se vea **con los ojos**, no
 solo en un número.
 
+> **← Volver al [README](../../README.md)** · **[CÓMO HACERLO](../../COMO-HACERLO.md)** · **[micro:bit](../MICROBIT.md)** · **[Memoria de la placa](../MEMORIA.md)**
+
+
 ## Cómo usarlo
 
 ```sh
