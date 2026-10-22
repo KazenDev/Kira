@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/hero.svg" alt="Kira — IA con memoria, voz y cara de LEDs" width="100%" />
+<img src=".github/assets/hero.svg" alt="Kira — IA con memoria, voz y cara de LEDs" width="100%" />
 
 <br/>
 
@@ -26,7 +26,7 @@
 
 </div>
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <h3 align="center">QUÉ ES KIRA</h3>
 
@@ -55,12 +55,12 @@ que puede citar. Si le preguntás de dónde sacó algo, te muestra la fuente.
 
 </div>
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <h3 align="center">ARQUITECTURA</h3>
 
 <div align="center">
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/arquitectura.svg" alt="Celular, micro:bit y cerebro" width="90%" />
+<img src=".github/assets/arquitectura.svg" alt="Celular, micro:bit y cerebro" width="90%" />
 </div>
 
 <p align="center">
@@ -89,7 +89,7 @@ Kira/
 └─ MicroBit/         firmware C++ (CODAL)
 ```
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <h3 align="center">CÓMO PIENSA</h3>
 
@@ -124,7 +124,7 @@ Todo local: la fuente de verdad es
 </tr>
 </table>
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <h3 align="center">PUESTA EN MARCHA</h3>
 
@@ -182,7 +182,7 @@ y proxea `/api` al backend.
 | `EXA_API_KEY` | búsqueda web | opcional |
 | `AI_GATEWAY_API_KEY` | respaldo de IA | opcional |
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <h3 align="center">EL MICRO:BIT</h3>
 
@@ -214,7 +214,7 @@ El gesto nunca se presenta como velocidad. La brújula avisa si está sin calibr
 Prefiere decir "no sé" antes que inventar.</sub>
 </p>
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <h3 align="center">VERIFICACIÓN</h3>
 
@@ -228,7 +228,7 @@ cd Cerebro/Frontend && npm run build            # build + PWA
 
 </div>
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <h3 align="center">PRIVACIDAD</h3>
 
@@ -242,7 +242,7 @@ directorio: memoria, diario, conversaciones, grabaciones y RAG derivado.
 <sub>No se versionan credenciales, bases SQLite, memorias ni grabaciones.</sub>
 </p>
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <h3 align="center">DOCUMENTACIÓN</h3>
 
@@ -259,7 +259,7 @@ directorio: memoria, diario, conversaciones, grabaciones y RAG derivado.
 
 </div>
 
-<img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" />
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <div align="center">
 
@@ -274,4 +274,4 @@ directorio: memoria, diario, conversaciones, grabaciones y RAG derivado.
 
 </div>
 
-<a href="https://github.com/KazenDev"><img src="https://github.com/KazenDev/Kira/raw/main/.github/assets/divider.svg" width="100%" alt="" /></a>
+<a href="https://github.com/KazenDev"><img src=".github/assets/divider.svg" width="100%" alt="" /></a>
