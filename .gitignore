@@ -47,3 +47,12 @@ MicroBit/Referencias/
 session-*.md
 ses_*.md
 *.session.md
+
+# Material de la feria: portadas, cartillas y PDFs con datos personales
+# (nombre, grado, colegio, profesores). NO versionar.
+Portada/
+*.pdf
+*.PDF
+KIRA-Cartilla*/
+KIRA-Portada*/
+KIRA-portada*/
