@@ -103,6 +103,9 @@ IA_EXTRA = PROVEEDORES_IA[0]["extra"]
 ELEVEN_BASE_URL = "https://api.elevenlabs.io"
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ELEVEN_MODELO = os.getenv("KIRA_ELEVEN_MODELO", "eleven_v4")
+# La voz concreta (voice_id) NO se versiona: es de la cuenta de cada uno.
+# Si el personaje trae el marcador ELEVEN_VOICE_ID, se usa esta variable.
+ELEVEN_VOICE_ID = os.getenv("KIRA_ELEVEN_VOICE_ID", "")
 ELEVEN_FORMATO = "mp3_44100_128"   # mp3: lo que ya reproduce el frontend
 
 # ------------------- Transcripcion (AssemblyAI) -------------------

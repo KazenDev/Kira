@@ -63,3 +63,17 @@ GUIA_DEPLOY_VPS.md
 Celular/LEEME.md
 TODO.md
 TODO_RAG.md
+
+# Documentos de decision obsoletos: describen proveedores que ya no se usan
+# (nano-gpt, Fish Audio) y exponen un voice_id de la cuenta.
+DECISION_MODELO_IA.txt
+Cerebro/LEEME.txt
+
+# Binarios de build y capturas sueltas (no aportan al que clona)
+MicroBit/Respaldo/
+*.hex
+*.7z
+cap-celular.png
+cap-escritorio.png
+.debug_sniff.py
+.debug_sniff.log

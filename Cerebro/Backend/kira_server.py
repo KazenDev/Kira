@@ -136,6 +136,20 @@ def resource_path(rel: str) -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), rel)
 
 
+def voz_del_personaje(pj: dict) -> str | None:
+    """voice_id efectivo del personaje.
+
+    El JSON trae el marcador ELEVEN_VOICE_ID; la voz real vive en el .env
+    (KIRA_ELEVEN_VOICE_ID) porque es de la cuenta de cada uno y no se versiona.
+    """
+    voz = pj.get("voice_id")
+    if voz == "ELEVEN_VOICE_ID":
+        voz = config.ELEVEN_VOICE_ID
+    if not voz or voz == "PENDIENTE":
+        return None
+    return voz
+
+
 def cargar_personaje(nombre: str) -> dict:
     ruta = os.path.join(PERSONAJE_DIR, nombre + ".json")
     if not os.path.exists(ruta):
@@ -1642,8 +1656,8 @@ async def api_chat(body: dict):
     # 4) La VOZ: ElevenLabs por FRASES (la web las reproduce en cadena)
     tts_url = None
     tts_urls: list[str] = []
-    voz = pj.get("voice_id")
-    if voz and voz != "PENDIENTE":
+    voz = voz_del_personaje(pj)
+    if voz:
         tag = config.TTS_TAGS.get(emotion, "")
         for frase in dividir_frases(message):
             tts_id = guardar_tts(((tag + " " + frase).strip() if tag else frase), voz)
@@ -3229,7 +3243,7 @@ async def api_chat_stream(body: dict):
 
     pj = cargar_personaje(personaje)
     estado = estados[personaje]
-    voz = pj.get("voice_id")
+    voz = voz_del_personaje(pj)
 
     async def generador():
         # ------- TTS POR FRASES: la voz arranca mientras la IA piensa -------

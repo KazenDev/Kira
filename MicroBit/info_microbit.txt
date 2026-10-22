@@ -18,8 +18,7 @@ MakeCode) por maximo rendimiento:
 - RAM:     128 KB
 - Flash:   512 KB
 - USB:     0d28:0204 NXP ARM mbed - "BBC micro:bit CMSIS-DAP"
-- Serial:  SERIAL
-- URL:     https://microbit.org/device/?id=9906&v=0257
+- Serial:  (unico de cada placa; no se publica)
 - Puerto:  /dev/ttyACM0
 
 == FIRMWARE DE INTERFAZ (DAPLink) ==
@@ -86,7 +85,7 @@ MicroBit/
    rm -rf build
    python3 build.py
 3. Copiar MICROBIT.hex a la unidad MICROBIT (se flashea solo)
-   cp MICROBIT.hex /media/zkazen/MICROBIT/MICROBIT.HEX
+   cp MICROBIT.hex /media/$USER/MICROBIT/
 
 == COMUNICARSE CON LA MICRO:BIT DESDE PYTHON (PC) ==
 import serial, time
