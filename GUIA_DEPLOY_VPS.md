@@ -1,8 +1,9 @@
 # GUIA_DEPLOY_VPS.md — Manual para trabajar en este proyecto (para IA y humanos)
 
-> ⚠️ **ARCHIVO CON CONTRASEÑA REAL ADENTRO — NO SUBIR A GITHUB NI COMPARTIR.**
-> Si este repo se vuelve público algún día, BORRAR la contraseña de este
-> archivo antes (o mejor: volver al placeholder `PW='LA_CONTRASEÑA'`).
+> ℹ️ **Este archivo NO contiene credenciales.** Las IPs están anonimizadas
+> (`<IP_DEL_VPS>`, `<IP_VIEJA>`) y la contraseña se carga desde el entorno
+> (`PW`), nunca se escribe acá. Antes de publicar el repo, verificá que no
+> hayas pegado una IP o clave real en este archivo.
 
 > Guía de traspaso: cómo está montado Kira & Kiro, qué vive en la nube y
 > cómo actualizar la web sin romper nada. Si sos una IA mejorando el
