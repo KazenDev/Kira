@@ -25,6 +25,8 @@ type Props = {
   onDetener: () => void;
   onEscuchar: () => void;
   escuchando: boolean;
+  /** El audio ya se grabó y se está convirtiendo a texto. */
+  transcribiendo: boolean;
   nivelEscucha: number;
   segEscucha: number;
   onCancelarEscucha: () => void;
@@ -49,6 +51,7 @@ function ComposerInner({
   onDetener,
   onEscuchar,
   escuchando,
+  transcribiendo,
   nivelEscucha,
   segEscucha,
   onCancelarEscucha,
@@ -56,6 +59,36 @@ function ComposerInner({
   mbConectado,
   rutaCel,
 }: Props) {
+  // El audio ya se grabo: se esta subiendo y transcribiendo. Es el hueco de
+  // 1-3 segundos en el que antes no pasaba nada visible y parecia que la
+  // grabacion se habia perdido. Se muestra un estado propio (no el de
+  // "escuchando", que ya terminó: el microfono esta apagado).
+  if (transcribiendo) {
+    return (
+      <footer className="input-bar">
+        <div
+          className="orbe-escucha orbe-transcribiendo"
+          role="status"
+          aria-live="polite"
+          aria-label="Transcribiendo tu audio"
+        >
+          <span className="orbe-estado">
+            <span className="orbe-procesando" aria-hidden="true" />
+          </span>
+          <div className="orbe-barras orbe-barras-suave" aria-hidden="true">
+            {FACTORES_BARRAS.map((f, i) => (
+              <i
+                key={i}
+                style={{ '--f': 0.35 + f * 0.25, animationDelay: `${i * 0.09}s` } as CSSProperties}
+              />
+            ))}
+          </div>
+          <span className="orbe-hint">transcribiendo…</span>
+        </div>
+      </footer>
+    );
+  }
+
   if (escuchando) {
     return (
       <footer className="input-bar">

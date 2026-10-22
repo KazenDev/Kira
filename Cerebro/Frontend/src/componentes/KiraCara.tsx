@@ -1,4 +1,4 @@
-// La CARA de Kira: su matriz 5x5 de LEDs rojos, viva, en un canvas.
+// La CARA de Kira: su matriz 5x5 de LEDs lima, viva, en un canvas.
 // Es logo, avatar e indicador de estado a la vez (reposo, escucha, piensa,
 // habla). El motor puro esta en caraMotor.ts; aca solo se dibuja.
 //
@@ -27,7 +27,13 @@ interface Props {
   etiqueta?: string;
 }
 
-const LED = [255, 59, 47];
+// Lima de la paleta del proyecto (#a3e635), aclarado hacia el blanco al brillar.
+const LED = [163, 230, 53];
+/** Mezcla el lima con blanco (0 = lima puro, 1 = blanco). */
+const claro = (k: number) =>
+  [LED[0] + (255 - LED[0]) * k, LED[1] + (255 - LED[1]) * k, LED[2] + (255 - LED[2]) * k] as const;
+const rgba = (c: readonly number[], a: number) =>
+  `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`;
 const reducido = () =>
   typeof window !== 'undefined' &&
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
@@ -42,9 +48,9 @@ function spriteGlow(radio: number): HTMLCanvasElement {
   c.width = c.height = clave * 2;
   const ctx = c.getContext('2d')!;
   const gr = ctx.createRadialGradient(clave, clave, 0, clave, clave, clave);
-  gr.addColorStop(0, `rgba(${LED[0]},${LED[1] + 40},${LED[2] + 20},0.55)`);
-  gr.addColorStop(0.35, `rgba(${LED[0]},${LED[1]},${LED[2]},0.22)`);
-  gr.addColorStop(1, 'rgba(255,40,30,0)');
+  gr.addColorStop(0, rgba(claro(0.25), 0.55));
+  gr.addColorStop(0.35, rgba(claro(0.05), 0.22));
+  gr.addColorStop(1, rgba(LED, 0));
   ctx.fillStyle = gr;
   ctx.fillRect(0, 0, clave * 2, clave * 2);
   spritesGlow.set(clave, c);
@@ -65,8 +71,8 @@ function pintar(ctx: CanvasRenderingContext2D, px: number, g: Rejilla, fondo: bo
   ctx.clearRect(0, 0, px, px);
   if (fondo) {
     const gr = ctx.createLinearGradient(0, 0, 0, px);
-    gr.addColorStop(0, '#24130f');
-    gr.addColorStop(1, '#140a08');
+    gr.addColorStop(0, '#16211c');
+    gr.addColorStop(1, '#0b1210');
     ctx.fillStyle = gr;
     rectRedondo(ctx, 0, 0, px, px, px * 0.26);
     ctx.fill();
@@ -77,7 +83,7 @@ function pintar(ctx: CanvasRenderingContext2D, px: number, g: Rejilla, fondo: bo
   const radio = lado * 0.24;
   const glow = spriteGlow(celda * 1.15);
   // LEDs apagados (se ven, como en la placa real)
-  ctx.fillStyle = 'rgba(255,90,70,0.075)';
+  ctx.fillStyle = rgba(LED, 0.09);
   for (let i = 0; i < 25; i++) {
     const cx = pad + (i % 5) * celda + celda / 2;
     const cy = pad + Math.floor(i / 5) * celda + celda / 2;
@@ -96,14 +102,14 @@ function pintar(ctx: CanvasRenderingContext2D, px: number, g: Rejilla, fondo: bo
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
-  // nucleos: rojo que se aclara cuando brilla fuerte
+  // nucleos: lima que se aclara cuando brilla fuerte
   for (let i = 0; i < 25; i++) {
     const v = g[i];
     if (v < 0.03) continue;
     const cx = pad + (i % 5) * celda + celda / 2;
     const cy = pad + Math.floor(i / 5) * celda + celda / 2;
     const k = v * v;
-    ctx.fillStyle = `rgba(${LED[0]},${Math.round(LED[1] + 110 * k)},${Math.round(LED[2] + 90 * k)},${Math.min(1, 0.15 + v)})`;
+    ctx.fillStyle = rgba(claro(k * 0.55), Math.min(1, 0.15 + v));
     rectRedondo(ctx, cx - lado / 2, cy - lado / 2, lado, lado, radio);
     ctx.fill();
   }

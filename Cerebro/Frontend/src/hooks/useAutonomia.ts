@@ -7,6 +7,13 @@ const PAUSA_MS = 20000; // entre dos intervenciones espontáneas
 const SILENCIO_MS = 4 * 60000; // pantalla abierta y nadie habla
 const VOLVIO_MS = 2 * 60000; // estuvo afuera de la pestaña al menos esto
 
+// ESCALADO DEL SILENCIO: sin esto, pasados los 4 minutos Kira hablaba sola
+// cada 20 s PARA SIEMPRE (el tick corre cada 1,5 s y solo la pausa lo
+// frenaba). Nadie la contestaba y ella seguía hablando: insoportable en la
+// feria, donde la pantalla queda abierta horas. Ahora cada intervención sin
+// respuesta duplica la espera: 4 min, 8, 16, 32... y tope a la hora.
+const ESCALADO_MAX = 60 * 60000;
+
 type Opciones = {
   activa: boolean;
   /** Hay un turno en curso o la placa está sonando/grabando. */
@@ -18,6 +25,9 @@ type Opciones = {
 export function useAutonomia({ activa, libre, hablarSola }: Opciones) {
   const ultimaActividadRef = useRef(Date.now());
   const ultimoProactivoRef = useRef(0);
+  // Cuantas veces seguidas hablo sola sin que nadie le contestara. Se resetea
+  // en cuanto la persona dice algo (marcarActividad).
+  const sinRespuestaRef = useRef(0);
   const seqEventosRef = useRef(-1);
   const ocultaDesdeRef = useRef<number | null>(null);
   const libreRef = useRef(libre);
@@ -27,6 +37,8 @@ export function useAutonomia({ activa, libre, hablarSola }: Opciones) {
 
   const marcarActividad = useCallback(() => {
     ultimaActividadRef.current = Date.now();
+    // La persona hablo: se vuelve al ritmo normal de silencio.
+    sinRespuestaRef.current = 0;
   }, []);
 
   useEffect(() => {
@@ -76,7 +88,14 @@ export function useAutonomia({ activa, libre, hablarSola }: Opciones) {
       }
       const quieto =
         Date.now() - Math.max(ultimaActividadRef.current, ultimoProactivoRef.current);
-      if (quieto > SILENCIO_MS) hablar('SILENCIO');
+      // La espera crece con cada intervencion sin respuesta (4 min, 8, 16...)
+      const espera = Math.min(
+        SILENCIO_MS * Math.pow(2, sinRespuestaRef.current),
+        ESCALADO_MAX
+      );
+      if (quieto > espera) {
+        if (hablar('SILENCIO')) sinRespuestaRef.current += 1;
+      }
     };
 
     const alCambiarVisibilidad = () => {

@@ -159,6 +159,47 @@
   .orbe-hint {
     display: none;
   }
+  /* pero en "transcribiendo" el hint ES la unica señal: no se oculta */
+  .orbe-transcribiendo .orbe-hint {
+    display: inline;
+  }
+}
+
+/* ---------- TRANSCRIBIENDO: el audio ya se grabo, falta el texto ----------
+   Estado propio (no es "escuchando": el microfono ya esta apagado). Sin esto
+   habia 1-3 segundos de pantalla quieta y parecia que la grabacion se habia
+   perdido. */
+.orbe-transcribiendo {
+  /* sin barra de progreso ni cronometro: la grabacion termino */
+  padding-right: 14px;
+}
+.orbe-procesando {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  animation: orbe-girar 0.75s linear infinite;
+}
+@keyframes orbe-girar {
+  to { transform: rotate(360deg); }
+}
+/* las barras respiran despacio y bajito: hay actividad, no voz */
+.orbe-barras-suave i {
+  opacity: 0.5;
+  height: calc(3px + (var(--f, 0.5) * 16px));
+  animation: barra-ola 2.1s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbe-procesando {
+    animation: none;
+    border-top-color: var(--accent);
+    opacity: 0.7;
+  }
+  .orbe-barras-suave i {
+    animation: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

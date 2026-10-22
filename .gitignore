@@ -5,6 +5,11 @@
 **/.env.*
 !**/.env.example
 
+# Certificados locales (HTTPS para probar desde el celular en la LAN).
+# Son de cada máquina: nunca se publican.
+Cerebro/Frontend/certs/
+*.pem
+
 # Dependencias y entornos
 node_modules/
 **/node_modules/

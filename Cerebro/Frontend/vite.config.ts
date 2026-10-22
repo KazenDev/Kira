@@ -1,6 +1,20 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// Certificado local para probar desde el celular por HTTPS. El microfono y el
+// Bluetooth SOLO existen en contexto seguro (https o localhost): por http en
+// una IP de la LAN el navegador ni siquiera muestra el permiso. Si los .pem no
+// estan, Vite arranca normal en HTTP y todo sigue andando por localhost.
+const dirCerts = join(dirname(fileURLToPath(import.meta.url)), 'certs');
+const rutaCert = join(dirCerts, 'kira-cert.pem');
+const rutaKey = join(dirCerts, 'kira-key.pem');
+const https = existsSync(rutaCert) && existsSync(rutaKey)
+  ? { cert: readFileSync(rutaCert), key: readFileSync(rutaKey) }
+  : undefined;
 
 // base: './' -> los assets usan rutas relativas (funciona dentro del exe)
 export default defineConfig({
@@ -72,6 +86,11 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Escucha en toda la LAN ademas de localhost, para poder abrir Kira
+    // desde el celular o desde otra PC de la misma red (feria/pruebas).
+    // El proxy /api sigue siendo interno: el celular habla solo con Vite.
+    host: true,
+    https,
     proxy: {
       '/api': 'http://127.0.0.1:8000',
     },

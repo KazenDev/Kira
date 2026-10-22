@@ -48,6 +48,12 @@ class SerialTransport:
         # El ENTORNO que la placa mide sola cada 2 s (AMBIENTE:ruido:base:
         # actividad:movimiento): no es un ACK ni un evento, es el estado.
         self.ambiente: dict | None = None
+        # Resultado de la ultima calibracion de brujula. La placa contesta
+        # ~30 s despues de que arranca, sin request pendiente: se guarda aca
+        # para que leer_brujula no siga diciendo "sin calibrar" despues de
+        # que la persona ya hizo el trabajo.
+        self.brujula_calibrada: bool | None = None
+        self.brujula_calibrada_time: float = 0.0
         self._exclusive_request = threading.Lock()
         self._stop_event = threading.Event()
         self._ser: serial.Serial | None = None
@@ -466,6 +472,15 @@ class SerialTransport:
             self.ultimo_ack_time = time.time()
             self.respondiendo = True
             print(f"[SERIAL] << {texto}")
+            # La calibracion de la brujula NO es un pedido de sensor: la placa
+            # avisa cuando TERMINA, ~30 s despues, sin que nadie este
+            # esperando una respuesta (la tool ya contesto "arranco"). Antes
+            # esta linea se perdia en ultimo_ack y Kira seguia creyendo que la
+            # brujula estaba sin calibrar. Se guarda como bandera.
+            if texto.startswith("BRUJULA:CALIBR"):
+                self.brujula_calibrada = texto == "BRUJULA:CALIBRADA"
+                self.brujula_calibrada_time = time.time()
+                print(f"[SERIAL] brujula -> {'CALIBRADA' if self.brujula_calibrada else 'ERROR'}")
             self._registrar_evento(texto)
             # si la IA pidio leer un sensor, avisarle al que esta esperando
             esperado = self._respuesta_esperada

@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..dependencies import BackendContext, get_backend_context
 from ..domain.streaming import como_objeto, limpiar_json_ia
-from ..schemas import MemoriaBorrarTodoRequest, MemoriaOlvidarRequest, TituloRequest
+from ..schemas import (
+    MemoriaBorrarTodoRequest,
+    MemoriaOlvidarRequest,
+    ProveedorElegidoRequest,
+    TituloRequest,
+)
 
 router = APIRouter()
 
@@ -232,3 +238,84 @@ async def api_rag_status(
     services: BackendContext = Depends(get_backend_context),
 ) -> dict[str, Any]:
     return {"rag": services.rag_stats()}
+
+
+@router.get("/api/proveedores")
+async def api_proveedores(
+    services: BackendContext = Depends(get_backend_context),
+) -> dict[str, Any]:
+    """Los proveedores de IA que puede usar Kira, con su estado actual.
+
+    Cada uno trae si tiene clave (sin clave no puede atender), su modelo, y
+    si esta ENFRIANDO: el cortacircuito que se activa solo cuando responde
+    429/402 (limite o sin saldo). Asi la web puede mostrar "este esta
+    castigado 40 s" en vez de que el usuario elija uno que no va a andar.
+    """
+    from ..services import ai as ai_service
+
+    ahora = time.monotonic()
+    elegido = ai_service.preferido()
+    lista = []
+    for indice, p in enumerate(services.config.PROVEEDORES_IA):
+        nombre = str(p.get("nombre", ""))
+        tiene_key = bool(str(p.get("api_key") or "").strip())
+        enfriado_hasta = ai_service._enfriado_hasta.get(nombre, 0.0)
+        restante = max(0.0, enfriado_hasta - ahora)
+        lista.append(
+            {
+                "nombre": nombre,
+                "modelo": p.get("modelo", ""),
+                "base_url": p.get("base_url", ""),
+                "tiene_key": tiene_key,
+                "disponible": tiene_key and restante <= 0,
+                "enfriando_s": round(restante, 1),
+                "orden": indice,
+                "elegido": nombre == elegido,
+            }
+        )
+    return {
+        "proveedores": lista,
+        "automatico": elegido is None,
+        # El que atenderia AHORA mismo si se manda un mensaje: el elegido a
+        # mano si puede, y si no el primero disponible del orden automatico.
+        # (Antes esto ignoraba la eleccion y siempre mostraba el primero de la
+        # lista: elegias Baseten y seguia diciendo "hive".)
+        "atendiendo": next(
+            (p["nombre"] for p in lista if p["elegido"] and p["disponible"]),
+            None,
+        )
+        or next((p["nombre"] for p in lista if p["disponible"]), None),
+    }
+
+
+@router.post("/api/proveedores")
+async def api_elegir_proveedor(
+    body: ProveedorElegidoRequest = ProveedorElegidoRequest(),
+    services: BackendContext = Depends(get_backend_context),
+) -> dict[str, Any]:
+    """Elige quien atiende. Nombre vacio = automatico (orden de la config).
+
+    Se aplica EN CALIENTE: no hay que reiniciar el backend ni perder la
+    charla. Si el elegido falla o se queda sin saldo, la cadena de respaldo
+    sigue funcionando igual.
+    """
+    from ..services import ai as ai_service
+
+    nombre = str(getattr(body, "nombre", "") or "").strip()
+    if nombre:
+        validos = {str(p.get("nombre", "")) for p in services.config.PROVEEDORES_IA}
+        if nombre not in validos:
+            raise HTTPException(404, f"no existe el proveedor '{nombre}'")
+        # Elegir uno sin clave no tiene sentido: no va a poder atender.
+        elegido = next(
+            (p for p in services.config.PROVEEDORES_IA if p.get("nombre") == nombre),
+            None,
+        )
+        if elegido is not None and not str(elegido.get("api_key") or "").strip():
+            raise HTTPException(
+                400,
+                f"'{nombre}' no tiene clave configurada: agregala al .env del backend",
+            )
+    ai_service.fijar_preferido(nombre or None)
+    print(f"[IA] proveedor elegido a mano: {nombre or 'automatico'}")
+    return {"ok": True, "elegido": nombre or None}

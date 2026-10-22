@@ -1,16 +1,19 @@
 import { memo } from 'react';
 // Settings.tsx - Ajustes de Kira: sonido, memoria/privacidad, chats,
 // dispositivo y diagnóstico. Las secciones viven en ./ajustes/.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { T, EASE_OUT, SPRING_MODAL } from '../lib/motion';
 import {
+  elegirProveedor,
+  listarProveedores,
   obtenerMemoria,
   obtenerRagStatus,
   obtenerStatus,
   type EstadoMemoria,
   type EstadoMicrobit,
+  type EstadoProveedores,
   type EstadoRag,
   type PreferenciasMemoria,
   type UsuarioKira,
@@ -21,6 +24,7 @@ import { SeccionSonido } from './ajustes/SeccionSonido';
 import { SeccionMemoria } from './ajustes/SeccionMemoria';
 import { SeccionChats } from './ajustes/SeccionChats';
 import { SeccionDispositivo } from './ajustes/SeccionDispositivo';
+import { SeccionProveedores } from './ajustes/SeccionProveedores';
 import { SeccionDiagnostico } from './ajustes/SeccionDiagnostico';
 import { SeccionCuenta } from './ajustes/SeccionCuenta';
 
@@ -81,6 +85,10 @@ function SettingsInner({
   const [borrandoMemoria, setBorrandoMemoria] = useState(false);
   const [memoria, setMemoria] = useState<EstadoMemoria | null>(null);
   const [rag, setRag] = useState<EstadoRag | null>(null);
+  const [proveedores, setProveedores] = useState<EstadoProveedores | null>(null);
+  const [cargandoProveedores, setCargandoProveedores] = useState(false);
+  const [cambiandoProveedor, setCambiandoProveedor] = useState<string | null>(null);
+  const [errorProveedor, setErrorProveedor] = useState('');
   const [estado, setEstado] = useState<EstadoMicrobit | null>(estadoMicrobit);
   const [cargandoDiagnostico, setCargandoDiagnostico] = useState(false);
   const [error, setError] = useState('');
@@ -132,6 +140,45 @@ function SettingsInner({
   useEffect(() => {
     if (estadoMicrobit) setEstado(estadoMicrobit);
   }, [estadoMicrobit]);
+
+  // Proveedores: se leen al abrir y cuando el usuario pide refrescar. No se
+  // hace polling: el "enfriando" de un proveedor cambia solo cuando algo
+  // falla, y para eso está el botón de refrescar.
+  const cargarProveedores = useCallback(async () => {
+    setCargandoProveedores(true);
+    setErrorProveedor('');
+    try {
+      setProveedores(await listarProveedores());
+    } catch (e) {
+      setErrorProveedor(
+        'No se pudo leer la lista de proveedores: ' +
+          (e instanceof Error ? e.message : String(e))
+      );
+    } finally {
+      setCargandoProveedores(false);
+    }
+  }, []);
+
+  const cambiarProveedor = useCallback(
+    async (nombre: string) => {
+      setCambiandoProveedor(nombre || 'auto');
+      setErrorProveedor('');
+      try {
+        await elegirProveedor(nombre);
+        setProveedores(await listarProveedores());
+      } catch (e) {
+        setErrorProveedor(e instanceof Error ? e.message : String(e));
+      } finally {
+        setCambiandoProveedor(null);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!abierto) return;
+    void cargarProveedores();
+  }, [abierto, cargarProveedores]);
 
   useEffect(() => {
     setConfirmandoChats(false);
@@ -283,6 +330,14 @@ function SettingsInner({
                 totalChats={totalChats}
                 confirmandoChats={confirmandoChats}
                 onBorrarChats={pedirBorrarChats}
+              />
+              <SeccionProveedores
+                estado={proveedores}
+                cargando={cargandoProveedores}
+                error={errorProveedor}
+                cambiando={cambiandoProveedor}
+                onRefrescar={() => void cargarProveedores()}
+                onElegir={(nombre) => void cambiarProveedor(nombre)}
               />
               <SeccionDispositivo
                 estado={estado}

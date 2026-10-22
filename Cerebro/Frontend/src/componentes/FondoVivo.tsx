@@ -13,7 +13,7 @@ import { kiraVivo } from '../lib/vivo';
 
 const VERT = `attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
 
-const FRAG = `precision mediump float;
+const FRAG = `precision highp float;
 uniform vec2 res; uniform float t; uniform vec3 tinte; uniform float energia;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -24,11 +24,16 @@ void main(){
   float tt = t * 0.045;
   vec2 q = vec2(fbm(p + tt), fbm(p + vec2(5.2, 1.3) - tt));
   float f = fbm(p + 2.2*q + vec2(tt*1.7, -tt));
-  // luz que nace de arriba al centro (donde esta la cara) y se apaga abajo
-  float foco = smoothstep(1.25, 0.05, distance(uv, vec2(0.5, 0.72)));
+  // luz que nace de arriba al centro (donde esta la cara) y se apaga abajo.
+  // OJO: smoothstep exige edge0 < edge1. Con los bordes invertidos el
+  // resultado es INDEFINIDO en GLSL: algunos drivers devuelven basura (y de
+  // ahi salia el fondo lavado). Asi, restado de 1.0, es lo mismo pero legal.
+  float foco = 1.0 - smoothstep(0.05, 1.25, distance(uv, vec2(0.5, 0.72)));
   float luz = (0.35 + 0.65*f*f) * (0.25 + 0.75*foco) * (0.55 + 0.45*energia);
   vec3 base = vec3(0.043, 0.071, 0.063);
-  gl_FragColor = vec4(base + tinte * luz * luz * 0.85, 1.0);
+  // clamp: el shader NUNCA puede devolver un color claro, pase lo que pase
+  vec3 col = clamp(base + tinte * luz * luz * 0.85, vec3(0.0), vec3(0.30));
+  gl_FragColor = vec4(col, 1.0);
 }`;
 
 /** Color del resplandor por emocion (verde lima de base). */
@@ -51,7 +56,6 @@ export default function FondoVivo() {
     if (!canvas) return;
     const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'low-power' });
     if (!gl) return; // sin WebGL: queda el fondo CSS
-
     const shader = (tipo: number, src: string) => {
       const s = gl.createShader(tipo)!;
       gl.shaderSource(s, src);
@@ -114,6 +118,11 @@ export default function FondoVivo() {
       gl.uniform3f(uTinte, tinte[0], tinte[1], tinte[2]);
       gl.uniform1f(uEnergia, energia);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      // Recien aca hay pixeles oscuros reales en el canvas. Hasta este
+      // momento los paneles conservan su fondo opaco: si WebGL falla a mitad
+      // de camino, nunca se quedan transparentes sobre un canvas vacio (que
+      // es lo que mostraba el fondo claro del navegador).
+      canvas.classList.add('fondo-vivo-listo');
     };
     const arrancar = () => {
       if (!raf && !document.hidden) raf = requestAnimationFrame(cuadro);
@@ -124,7 +133,13 @@ export default function FondoVivo() {
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener('resize', medir);
       document.removeEventListener('visibilitychange', arrancar);
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      canvas.classList.remove('fondo-vivo-listo');
+      // NO llamar a WEBGL_lose_context.loseContext() aca. En desarrollo,
+      // React StrictMode monta el efecto dos veces: el cleanup mataba el
+      // contexto y el segundo montaje recibia el MISMO contexto ya perdido,
+      // asi que el shader no linkeaba y el canvas quedaba en blanco (los
+      // paneles son transparentes con el fondo vivo activo). El contexto se
+      // libera solo cuando React saca el canvas del DOM.
     };
   }, []);
 

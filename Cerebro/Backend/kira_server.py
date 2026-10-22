@@ -429,11 +429,33 @@ def _normalizar_evidencia(texto: str) -> str:
 
 
 def _es_identidad_semantica(record: dict) -> bool:
-    return (
-        record.get("identity") is True
-        and record.get("source") == "llm_memory_extraction"
-        and str(record.get("field", "")).casefold() in {"nombre", "name", "alias", "apodo", "nickname"}
-    )
+    """¿Este recuerdo es "cómo se llama la persona"?
+
+    Se decide por ESTRUCTURA, no por el texto: el recuerdo trae `identity`
+    (marcado por el extractor o por la herramienta guardar_recuerdo) y un
+    `tipo`/`field` que lo declara. Nada de regex sobre la redaccion: eso se
+    rompia con cada forma nueva de decir lo mismo ("se llama" / "mi nombre es"
+    / "me dicen" / "le dicen") y ademas marcaba frases que solo mencionaban
+    un nombre de pasada.
+    """
+    if record.get("identity") is not True:
+        return False
+    fuente = str(record.get("source", ""))
+    if fuente not in {"llm_memory_extraction", "explicit_tool", "explicit_user"}:
+        return False
+    # El tipo declarado manda. Se aceptan los dos vocabularios porque el
+    # extractor guarda 'identidad' y el campo puede venir como 'field'.
+    tipo = str(
+        record.get("tipo_declarado") or record.get("tipo") or ""
+    ).strip().casefold()
+    campo = str(record.get("field", "")).strip().casefold()
+    return tipo == "identidad" or campo in {
+        "nombre",
+        "name",
+        "alias",
+        "apodo",
+        "nickname",
+    }
 
 
 async def memoria_extraer_factos(pj_id: str, nombre: str, turnos: list[dict],
@@ -1166,16 +1188,6 @@ RECUERDOS_INYECTADOS = 6          # cuantos llegan al prompt
 # dejaban a Kira muda). La lista con fechas le sirve igual a la IA.
 RECUERDOS_RESUMIR = os.getenv("KIRA_RECUERDOS_RESUMIR", "0") == "1"
 
-# "¿Te acordás...?", "¿qué sabés de mí?": pedidos de MEMORIA que no
-# comparten palabras con ningun recuerdo, asi que la busqueda sola trae
-# cualquier cosa. Cuando aparecen, primero va lo que Kira sabe de la persona.
-_PEDIDO_MEMORIA = re.compile(
-    r"\b(te acord[aá]s|record[aá]s|acordate|record[aá]|te dije|te cont[eé]|"
-    r"la otra vez|el otro d[ií]a|de m[ií]\b|sobre m[ií]|qui[eé]n soy|me conoc[eé]s|"
-    r"sab[eé]s (algo|qu[eé]|como|c[oó]mo) .*m[ií]|lo que hablamos)",
-    re.IGNORECASE,
-)
-
 
 def _hace_cuanto(fecha_iso: str) -> str:
     try:
@@ -1198,8 +1210,14 @@ def _hace_cuanto(fecha_iso: str) -> str:
 
 
 def _lo_que_se_de_vos(candidatas: list[dict], limite: int = 4) -> list[dict]:
-    """Los hechos durables de la persona y lo ultimo vivido, para cuando
-    preguntan por la memoria sin decir de que."""
+    """Los HECHOS de la persona (nombre, edad, colegio, gustos...) y lo ultimo
+    vivido.
+
+    Los hechos durables van primero y con prioridad absoluta: son los que la
+    persona espera que Kira sepa sin tener que preguntarle. Se ordenan por
+    importancia y luego por lo reciente. La identidad (el nombre) va siempre
+    arriba de todo.
+    """
     def clave(r):
         try:
             edad = (datetime.now() - datetime.fromisoformat(r["fecha"])).days
@@ -1207,11 +1225,31 @@ def _lo_que_se_de_vos(candidatas: list[dict], limite: int = 4) -> list[dict]:
             edad = 999
         return (-(int(r.get("importancia", 5)) - min(edad, 60) / 20.0))
 
-    durables = sorted([r for r in candidatas if r.get("durable") is True], key=clave)
-    vividos = sorted([r for r in candidatas if r.get("source") == "episodic_memo"],
-                     key=lambda r: r.get("fecha", ""), reverse=True)
-    salida = durables[:3] + vividos[:2]
-    return salida[:limite + 1]
+    durables = [r for r in candidatas if r.get("durable") is True]
+    # El nombre primero: es el dato que mas se pregunta y el que peor se
+    # pierde si queda fuera del tope.
+    identidad = [r for r in durables if _es_identidad_semantica(r)]
+    resto = sorted(
+        [r for r in durables if not _es_identidad_semantica(r)],
+        key=clave,
+    )
+    vividos = sorted(
+        [r for r in candidatas if r.get("source") == "episodic_memo"],
+        key=lambda r: r.get("fecha", ""),
+        reverse=True,
+    )
+    salida: list[dict] = []
+    vistos: set[str] = set()
+    for grupo in (identidad, resto, vividos):
+        for r in grupo:
+            rid = str(r.get("id", ""))
+            if rid in vistos:
+                continue
+            vistos.add(rid)
+            salida.append(r)
+            if len(salida) >= limite + 1:
+                return salida
+    return salida
 
 RESUMEN_RECUERDOS_SISTEMA = (
     "Sos {nombre} y estás a punto de responder en una charla. Te vienen a la "
@@ -1259,18 +1297,32 @@ async def memoria_recuerdos_bloque(
         recuerdos = memoria_cargar(pj_id)
         if not recuerdos:
             return ""
-        # Fuera lo fresco de una charla activa (ya vive en el historial). Al
-        # abrir un chat nuevo, los recientes de otra sesión sí son relevantes.
+        # Fuera lo que YA esta en el historial de esta charla (para no
+        # repetirlo en el prompt). OJO: antes esto filtraba por TIEMPO
+        # ("recuerdos de los ultimos 15 minutos"), y eso rompia justo el caso
+        # mas comun: guardabas un dato con guardar_recuerdo y 15 segundos
+        # despues Kira ya no lo encontraba ("no me acuerdo, y eso me da cosa").
+        # Lo correcto es comparar CONTENIDO, no reloj: si el recuerdo no esta
+        # en el historial, tiene que poder volver.
+        en_historial = " ".join(
+            str(h.get("contenido", "")) for h in (historial or [])
+        ).casefold()
         hace_un_rato = datetime.now() - timedelta(minutes=RECUERDOS_FRESCOS_MIN)
         candidatas = []
         for r in recuerdos:
             if r.get("identity") is True:
                 continue
+            texto = str(r.get("texto", "")).strip().casefold()
+            ya_dicho = bool(texto) and texto in en_historial
             try:
-                if incluir_recientes or datetime.fromisoformat(r["fecha"]) < hace_un_rato:
-                    candidatas.append(r)
+                reciente = datetime.fromisoformat(r["fecha"]) >= hace_un_rato
             except (KeyError, ValueError):
+                reciente = False
+            # Se descarta solo si es reciente Y ya se dijo en esta charla:
+            # ahi repetirlo no aporta nada. Cualquier otro caso entra.
+            if ya_dicho and reciente and not incluir_recientes:
                 continue
+            candidatas.append(r)
         if not candidatas:
             return ""
 
@@ -1298,12 +1350,17 @@ async def memoria_recuerdos_bloque(
         # verdad. Si simplemente no hubo evidencia, no inventamos recuerdos.
         if search_failed:
             top = memoria_recuperar(candidatas, foco, top_n=RECUERDOS_TOP)
-        if _PEDIDO_MEMORIA.search(mensaje):
-            # Pidieron memoria "en general": primero lo que se sabe de la
-            # persona, despues lo que haya traido la busqueda
-            primero = _lo_que_se_de_vos(candidatas)
-            vistos = {r.get("id") for r in primero}
-            top = primero + [r for r in top if r.get("id") not in vistos]
+        # LOS HECHOS DURABLES VAN SIEMPRE, sin importar como este redactada la
+        # pregunta. Antes esto dependia de un regex (_PEDIDO_MEMORIA) que
+        # intentaba adivinar "¿esto es una pregunta sobre la persona?": era
+        # fragil por definicion (cada forma nueva de preguntar lo esquivaba) y
+        # dejaba afuera justo lo que nunca deberia faltar: el nombre, la edad,
+        # el colegio. Ahora es estructura: si el recuerdo es durable y
+        # semantico, se inyecta. La busqueda se usa para lo episodico (lo que
+        # paso), que es lo que de verdad varia con la pregunta.
+        primero = _lo_que_se_de_vos(candidatas)
+        vistos = {r.get("id") for r in primero}
+        top = primero + [r for r in top if r.get("id") not in vistos]
         if not top:
             return ""
 
@@ -1924,7 +1981,20 @@ HERRAMIENTAS: dict[str, dict] = {
         "prefijo": None,
     },
     "guardar_recuerdo": {
-        "descripcion": "Guarda un recuerdo SOLO cuando el usuario te pide explícitamente que lo guardes. No la uses para convertir cada frase, dato o emoción en memoria automática; el extractor post-turno se encarga de los hechos durables. args: 'texto' (la frase), 'importancia' (1-10, opcional), 'explicit_user' (true sólo si el usuario pidió guardarlo).",
+        "descripcion": (
+            "Guarda un recuerdo SOLO cuando el usuario te pide explícitamente que lo "
+            "guardes. No la uses para convertir cada frase, dato o emoción en memoria "
+            "automática; el extractor post-turno se encarga de los hechos durables. "
+            "args: 'texto' (la frase), 'importancia' (1-10, opcional), "
+            "'explicit_user' (true sólo si el usuario pidió guardarlo), "
+            "'tipo' (opcional, ELEGILO VOS, es lo que despues decide como se usa el "
+            "recuerdo: 'identidad' si es el NOMBRE o apodo de la persona, "
+            "'dato_personal' si es edad, colegio, ciudad, cumpleaños, "
+            "'preferencia' si es algo que le gusta o no, "
+            "'relacion' si es sobre su familia o amigos, "
+            "'evento' si es algo que pasó, "
+            "'observacion' para todo lo demas)."
+        ),
         "comando": None,
         "prefijo": None,
     },
@@ -2383,6 +2453,20 @@ def formatear_sensor(nombre: str, linea: str) -> str:
             if len(partes) >= 3:
                 rumbo, campo, calibrada = partes[:3]
                 if calibrada != "1" or rumbo.startswith("-"):
+                    # La placa puede haber avisado "BRUJULA:CALIBRADA" hace un
+                    # rato (la calibracion dura ~30 s y termina sola). Si
+                    # todavia no llego un BRUJULA: nuevo con la calibracion
+                    # aplicada, al menos decir la VERDAD de lo que paso en vez
+                    # de mandar a calibrar otra vez a alguien que ya lo hizo.
+                    reciente = (
+                        getattr(serial_mgr, "brujula_calibrada", None) is True
+                        and time.time() - getattr(serial_mgr, "brujula_calibrada_time", 0) < 600
+                    )
+                    if reciente:
+                        return (f"brújula: la calibración terminó bien hace un momento, pero el "
+                                f"sensor todavía no da un rumbo válido (campo magnético {campo}). "
+                                f"Probá leerla de nuevo en unos segundos; si sigue igual, hay que "
+                                f"recalibrar lejos de metales e imanes.")
                     return (f"brújula: NO está calibrada (para calibrarla alguien tiene que "
                             f"inclinarte un rato hasta llenar la pantalla); campo magnético {campo}")
                 return (f"brújula: mirás hacia el {mundo_service.cardinal(float(rumbo))} "
@@ -2559,15 +2643,47 @@ def leer_url(url: str) -> dict:
         return {"ok": False, "resultado": f"No pude leer {url}: {e}"}
 
 
+# Herramientas que ESCRIBEN en la placa (serial/BLE). El serial es un recurso
+# UNICO: si dos se ejecutan a la vez, la respuesta de una se lee como si fuera
+# de la otra y Kira contesta cualquier cosa. Van EN CADENA.
+#
+# OJO: antes esto se deducia del campo `comando` del catalogo, pero cinco
+# herramientas no lo usan: validan `_placa_viva()` a mano adentro y mandan por
+# `serial_mgr.enviar()`. Quedaban clasificadas como "no tocan la placa", se
+# ejecutaban en PARALELO con todo lo demas, y ahi esta el bug. La lista es
+# explicita a proposito: agregar una herramienta de placa nueva es agregar su
+# nombre aca (y hay un test que lo verifica).
+TOOLS_PLACA_EXTRA = frozenset({
+    "mostrar_en_leds",
+    "temporizador",
+    "tocar_melodia",
+    "jugar_en_placa",
+    "calibrar_brujula",
+    "controlar_metronomo",
+    "experimento",
+    # donde_queda no "parece" de placa (resuelve geografia), pero lee la
+    # brujula (_rumbo_kira) y MANDA una flecha a los LEDs: toca el serial dos
+    # veces y corria en paralelo con las demas.
+    "donde_queda",
+    # pronostico parece puro internet, pero le pasa rumbo_kira=_rumbo_kira():
+    # lee la brujula del serial para orientar el viento.
+    "pronostico",
+})
+
+
 def es_tool_placa(nombre: str) -> bool:
-    """True si la herramienta habla con el micro:bit por serial/BLE. Es un
-    recurso UNICO (respuesta esperada se setea a mano): dos lecturas en
+    """True si la herramienta habla con el micro:bit por serial/BLE.
+
+    Es un recurso UNICO (la respuesta esperada se setea a mano): dos en
     paralelo se pisarian, asi que van EN CADENA. Las demas (web, calculo,
-    memoria...) corren en paralelo sin problema."""
+    memoria...) corren en paralelo sin problema.
+    """
+    if nombre in TOOLS_PLACA_EXTRA:
+        return True
     h = HERRAMIENTAS.get(nombre)
     if h is None:
         return False
-    return bool(h.get("comando")) or nombre in ("controlar_metronomo", "experimento")
+    return bool(h.get("comando"))
 
 
 def catalogo_herramientas(
@@ -2607,6 +2723,7 @@ async def ejecutar_lote(
     pedidas: list[tuple[str, dict]],
     personaje: str | None = None,
     preferencias_memoria: dict[str, bool] | None = None,
+    sesion: str | None = None,
 ) -> list[tuple[str, dict]]:
     """Ejecuta un lote de herramientas pedido por la IA y devuelve
     [(clave, resultado)] en el MISMO orden de entrada. Las herramientas de
@@ -2639,6 +2756,13 @@ async def ejecutar_lote(
         args = dict(pedido)
         if personaje:
             args["personaje"] = personaje   # p.ej. guardar_recuerdo sabe en QUEN memoria escribir
+        if sesion:
+            # De que charla salio el recuerdo. Sin esto, un nombre guardado
+            # por la herramienta no se puede atribuir a una sesion y el bloque
+            # de identidad lo trata SIEMPRE como "de otra charla" (proteccion
+            # de la feria): Kira no le decia el nombre a la persona que lo
+            # acababa de dar.
+            args["sesion"] = sesion
         return clave, await asyncio.to_thread(ejecutar_herramienta, nombre, args)
 
     async def _cadena_placa():
@@ -2675,7 +2799,24 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
     y la busqueda web es una llamada HTTP sincrona."""
     h = HERRAMIENTAS.get(nombre)
     if h is None:
-        return {"ok": False, "resultado": f"No existe la herramienta '{nombre}'."}
+        # El modelo escribe en espanol y a veces le pone tilde al nombre de la
+        # herramienta: pidio "leer_brújula" en vez de "leer_brujula" y se
+        # comio un fallo (el log lo muestra: FALLO: "No existe la herramienta
+        # 'leer_brújula'"). Se normalizan tildes y mayusculas antes de rendirse.
+        import unicodedata
+
+        def _plano(texto: str) -> str:
+            sin = unicodedata.normalize("NFKD", str(texto))
+            return "".join(c for c in sin if not unicodedata.combining(c)).casefold().strip()
+
+        buscado = _plano(nombre)
+        for clave in HERRAMIENTAS:
+            if _plano(clave) == buscado:
+                nombre = clave
+                h = HERRAMIENTAS[clave]
+                break
+        else:
+            return {"ok": False, "resultado": f"No existe la herramienta '{nombre}'."}
     if nombre == "reloj":
         ahora = datetime.now()
         return {"ok": True, "resultado": (
@@ -2779,16 +2920,46 @@ def ejecutar_herramienta(nombre: str, args: dict | None = None) -> dict:
             except Exception as error:
                 print(f"[RAG] dedup semántico no disponible: {type(error).__name__}: {error}")
         try:
+            # El TIPO lo declara el modelo (campo 'tipo' de la herramienta).
+            # No se adivina por palabras: un regex sobre el texto es fragil y
+            # se rompe con cualquier redaccion nueva ("se llama X" / "mi
+            # nombre es X" / "me dicen X"...). El tipo es estructura y se
+            # puede consultar sin ambiguedad.
+            tipos = {
+                "identidad": "identidad",
+                "identidad_nombre": "identidad",
+                "dato_personal": "dato_personal",
+                "preferencia": "preferencia",
+                "relacion": "relacion",
+                "evento": "evento",
+                "observacion": "observacion",
+            }
+            tipo = tipos.get(
+                str((args or {}).get("tipo", "")).strip().casefold(),
+                "observacion",
+            )
+            metadata = {
+                "source": "explicit_tool",
+                "tipo_declarado": tipo,
+                "memory_class": "semantic",
+                "durable": True,
+                # identidad = el nombre de la persona: entra SIEMPRE al prompt
+                # por el bloque de identidad, sin depender de la similitud
+                # semantica (un nombre propio no se parece a "¿cuál era mi
+                # nombre?": medido daba 0.837 contra un umbral de 0.84).
+                "identity": tipo == "identidad",
+            }
+            if tipo == "identidad":
+                metadata["field"] = "nombre"
+            sesion_actual = str((args or {}).get("sesion") or "").strip()
+            if sesion_actual:
+                metadata["sesion"] = sesion_actual
             recuerdo = memoria_agregar(
                 pj_id,
                 texto,
-                "observacion",
+                tipo,
                 importancia,
-                metadata={
-                    "source": "explicit_tool",
-                    "memory_class": "semantic",
-                    "durable": True,
-                },
+                metadata=metadata,
                 deduplicate=True,
             )
         except Exception as e:
@@ -2951,9 +3122,10 @@ EVENTOS_KIRA = {
     "EVENTO:COSQUILLAS": "alguien te tocó el logo dorado y te hizo cosquillas (te reíste)",
     "EVENTO:CARINO": "te están acariciando el logo con cariño",
     "EVENTO:GRUNIDO": "te tocaron estando enojada y gruñiste",
-    "EVENTO:SOBRESALTO": "un golpe te asustó de repente",
+    "EVENTO:SOBRESALTO": "sentiste un tirón brusco en el acelerómetro (puede haber sido un golpe, "
+                         "o simplemente que la movieron o acomodaron de un saque)",
     "EVENTO:DESPERTAR": "te despertaron: estabas dormida",
-    "EVENTO:MAREO": "te sacudieron fuerte y quedaste mareada",
+    "EVENTO:MAREO": "sentiste que te sacudían (o que algo vibraba fuerte cerca) y quedaste mareada",
     "EVENTO:TOQUE": "alguien te picó el botón B",
     "EVENTO:MOLESTA": "te siguen picando el botón B y ya te está molestando",
     "EVENTO:BERRINCHE": "te picaron tanto que hiciste un berrinche: ahora estás ofendida",
@@ -2964,7 +3136,7 @@ EVENTOS_KIRA = {
     "EVENTO:TIRITAR": "estás tiritando de frío",
     "EVENTO:ACALORADA": "tenés mucho calor",
     "EVENTO:DESLUMBRADA": "volvió la luz de golpe y te encandiló",
-    "EVENTO:CAIDA": "te dejaron caer: estuviste en caída libre",
+    "EVENTO:CAIDA": "sentiste una caída libre (la placa se soltó o alguien la soltó de golpe)",
     "EVENTO:VOCES": ("escuchaste gente hablando cerca tuyo, recién: alguien llegó o "
                      "anda por ahí. Llamá su atención con onda: invitá a charlar o proponé un "
                      "reto corto (romper tu récord de grito, taparte la luz, un minijuego)"),
@@ -3170,7 +3342,17 @@ def mensaje_de_evento(descripcion: str) -> str:
     return (f"[EVENTO REAL, nadie te escribió] {descripcion}. Reaccioná VOS, en voz "
             "alta y corto (una o dos frases), como te salga en el momento, "
             "hablándole a quien esté cerca. No uses herramientas salvo que de "
-            "verdad haga falta.")
+            "verdad haga falta.\n"
+            # Los eventos del acelerometro son AMBIGUOS: un roce, un cable que "
+            # se mueve o alguien que apoya algo en la mesa generan el mismo
+            # pico que un golpe. Reaccionar con drama a eso suena exagerado y
+            # cualquiera que este al lado piensa "pero si no paso nada".
+            "Si el evento es de movimiento (golpe, sacudida, caída, mareo), "
+            "NO lo des por seguro ni lo dramatices: reaccioná con la duda de "
+            "alguien normal (\"¿se movió o me pareció?\", \"uy, ¿qué pasó ahí?\"). "
+            "Nunca digas que te golpearon, que te tiraron ni que casi te caés de "
+            "la mesa: vos no ves nada, solo sentiste un pico y puede ser "
+            "cualquier cosa. Ante la duda, liviana y con gracia.")
 
 
 async def api_chat_stream(body: dict):
@@ -3487,7 +3669,7 @@ async def api_chat_stream(body: dict):
                 print(f"[TOOL] {_t(t0)} ronda {ronda_herr}: ejecuto {len(unicas)} herramienta(s): "
                       + ", ".join(p["nombre"] for _, p in unicas)
                       + (f" (+{len(claves_repetidas)} repetida(s) cacheada(s))" if claves_repetidas else ""))
-                nuevos = await ejecutar_lote(unicas, personaje, preferencias)
+                nuevos = await ejecutar_lote(unicas, personaje, preferencias, sesion)
                 nombres = {c: p["nombre"] for c, p in unicas}
                 args_por_clave = {c: p.get("args") for c, p in unicas}
                 for clave, res in nuevos:
@@ -3749,6 +3931,34 @@ def samples_a_mp3(samples: bytes) -> str | None:
     return mp3_path if ok else None
 
 
+# Transcripcion: el idioma va EXPLICITO y los keyterms sesgan el decoder
+# hacia las palabras del proyecto (nombres propios que el modelo no conoce
+# y suele inventar: "ChatGPT" salia como "Chad GPT", "Chadhepete", etc).
+#
+# NO se usa `prompt`: se probo contra 22 audios reales y empeoraba. Al ser
+# una instruccion libre, el modelo a veces la obedecia de mas y TRUNCABA la
+# frase (un audio de 6 palabras quedo en 3) o inventaba ("Chadhepete"). Los
+# keyterms son solo un sesgo del decoder: no pueden recortar ni alucinar.
+TERMINOS_TRANSCRIPCION = (
+    # el proyecto
+    "Kira",
+    "micro:bit",
+    "Pitalito",
+    "Huila",
+    "Bogota",
+    "parce",
+    "LEDs",
+    # tecnologia que la gente nombra y el modelo suele deformar
+    # ("ChatGPT" salia como "Chad GPT", "Chadhepete", "Chedhépeté")
+    "ChatGPT",
+    "WhatsApp",
+    "YouTube",
+    "PDF",
+    "WiFi",
+    "Bluetooth",
+)
+
+
 def escucha_desde_la_placa(audio: bytes | None) -> None:
     """Apretaron A en la placa (con cable) sin que la web pidiera escuchar:
     se transcribe y la web lo manda como mensaje de la persona (OIDO:TEXTO).
@@ -3796,7 +4006,15 @@ def transcribir_audio(mp3_path: str) -> str | None:
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20,
         )
         if r.returncode == 0 and os.path.exists(wav_tmp):
-            cfg = aai.SyncTranscriptionConfig(language_code="es")
+            # OJO: SyncTranscriptionConfig NO acepta `language_code` (ese
+            # nombre es de la config async). El campo del sync es
+            # `language_codes` (lista ISO 639-1). Con el nombre viejo pydantic
+            # lo descarta en silencio, la API se queda sin idioma y transcribe
+            # en lo que le parece: aparecian audios en vietnamita y en hindi.
+            cfg = aai.SyncTranscriptionConfig(
+                language_codes=["es"],
+                keyterms_prompt=TERMINOS_TRANSCRIPCION,
+            )
             res = aai.SyncTranscriber().transcribe(wav_tmp, config=cfg)
             if res.text:
                 return res.text
@@ -3809,11 +4027,13 @@ def transcribir_audio(mp3_path: str) -> str | None:
             except Exception:
                 pass
 
-    # 2) FALLBACK: async (upload + submit + poll) con el MP3 directo
+    # 2) FALLBACK: async (upload + submit + poll) con el MP3 directo.
+    # Aca SI va `language_code` (singular) y `speech_models`.
     try:
         cfg = aai.TranscriptionConfig(
             speech_models=["universal-3-5-pro", "universal-2"],
             language_code="es",
+            word_boost=list(TERMINOS_TRANSCRIPCION),
         )
         t = aai.Transcriber(config=cfg).transcribe(mp3_path)
         if t.status == aai.TranscriptStatus.completed and t.text:

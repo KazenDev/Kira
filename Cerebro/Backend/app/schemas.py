@@ -21,6 +21,11 @@ class TituloRequest(_PermissiveModel):
     primera_respuesta: Any = ""
 
 
+class ProveedorElegidoRequest(_PermissiveModel):
+    # Nombre del proveedor; vacio = automatico (orden de config.PROVEEDORES_IA)
+    nombre: Any = ""
+
+
 class ChatRequest(_PermissiveModel):
     personaje: Any = "kira"
     mensaje: Any = ""

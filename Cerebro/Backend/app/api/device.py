@@ -58,7 +58,17 @@ async def api_ble_error(
     raw_message = datos.mensaje if "mensaje" in datos.model_fields_set else ""
     mensaje = str(raw_message)[:300]
     services.serial_manager().ble_error = mensaje
-    print(f"[BLE RELAY] ERROR del navegador: {mensaje}")
+    # El navegador manda DOS clases de mensaje por este endpoint:
+    #   - "diag: ..."  -> transiciones NORMALES del puente (solté el puesto,
+    #                     reconecté, re-armé GATT...). Es ruido util.
+    #   - cualquier otra cosa -> un fallo de verdad.
+    # Antes todo salia como "ERROR del navegador", asi que el log del VPS se
+    # llenaba de ERROR en rojo durante una sesion perfectamente sana y los
+    # fallos reales quedaban enterrados entre el ruido.
+    if mensaje.startswith("diag:"):
+        print(f"[BLE RELAY] · {mensaje[5:].strip()}")
+    else:
+        print(f"[BLE RELAY] ERROR del navegador: {mensaje}")
     return {"ok": True}
 
 

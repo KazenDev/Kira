@@ -336,7 +336,17 @@ static void sentir(EstadoCara &c, const Estimulos &e, uint32_t t)
         // o un boton con el dedo ya la empuja mas de 1,5 g, y Kira se asustaba
         // de un mimo. Ahora: umbral de 2 g, nunca con un dedo encima, y se
         // confirma 150 ms despues (el toque capacitivo puede llegar tarde).
-        if (tiron > 2000.0f && !c.sacudiendo && !e.dedo && t - c.ultimoGolpe > 2500)
+        //
+        // OJO: NO alcanza con la suma de deltas. GIRARLA conserva |a| = 1 g
+        // (solo rota la gravedad) pero cambia el vector: voltearla boca abajo
+        // de un saque da tiron = 2048 y disparaba "un golpe te asusto" sin
+        // que nadie la tocara. Un golpe de verdad cambia la MAGNITUD, no solo
+        // la direccion: por eso se exige tambien |a| fuera de la banda de la
+        // gravedad (un tirón normal de mano ronda 0,7-1,3 g).
+        float mag = sqrtf(e.ax * e.ax + e.ay * e.ay + e.az * e.az);
+        bool fueraDeGravedad = mag > 1500.0f || mag < 600.0f;
+        if (tiron > 2000.0f && fueraDeGravedad && !c.sacudiendo && !e.dedo &&
+            t - c.ultimoGolpe > 2500)
             c.golpePendiente = t;
     }
     if (c.golpePendiente) {

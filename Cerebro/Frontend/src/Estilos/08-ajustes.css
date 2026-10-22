@@ -245,3 +245,54 @@
   }
 }
 
+
+/* ---------- PROVEEDORES DE IA ----------
+   Una fila por proveedor. El elegido se marca con .activa (borde de acento,
+   ya existente). Lo nuevo: el botón de refrescar del título y las marcas de
+   estado ("sin clave", "enfriando N s"). */
+.ajustes-mini-boton {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-3);
+  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+}
+.ajustes-mini-boton:hover:not(:disabled) {
+  color: var(--text-1);
+  border-color: var(--accent-soft);
+  background: var(--elev-2);
+}
+.ajustes-mini-boton:disabled {
+  opacity: 0.5;
+}
+
+/* la flechita del refresco gira mientras carga */
+.girando {
+  animation: girar 0.9s linear infinite;
+}
+@keyframes girar {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .girando { animation: none; }
+}
+
+/* "· enfriando 40 s" pegado al nombre, sin gritar */
+.proveedor-marca {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.72em;
+}
+.proveedor-marca.apagado {
+  color: var(--text-3);
+}
+.proveedor-marca.aviso {
+  color: var(--color-aviso, #d9a441);
+}

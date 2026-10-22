@@ -402,6 +402,7 @@ export function useMotorConversacion({
     hablando,
     setHablando,
     escuchando: escucha.escuchando,
+    transcribiendo: escucha.transcribiendo,
     nivelEscucha: escucha.nivelEscucha,
     segEscucha: escucha.segEscucha,
     rutaCelRef: escucha.rutaCelRef,

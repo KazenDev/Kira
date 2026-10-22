@@ -1,5 +1,5 @@
 import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, Cpu, Menu, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, Cpu, Menu, MoreHorizontal, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { T, EASE_OUT, SPRING_POP } from '../lib/motion';
 import type { PersonajeInfo } from '../lib/api';
@@ -260,40 +260,63 @@ function ChatHeaderInner({
             aria-label="Abrir más opciones"
             aria-expanded={menuAbierto}
             aria-controls={menuPopoverId}
-            aria-haspopup="true"
+            aria-haspopup="dialog"
           >
             <MoreHorizontal size={18} strokeWidth={2} aria-hidden="true" />
           </button>
 
-          {/* El menú queda montado aunque esté oculto: PuenteBle mantiene vivo
-              el enlace, Wake Lock y la reconexión durante toda la conversación. */}
-          <motion.div
-            id={menuPopoverId}
-            className="header-more-menu"
-            role="dialog"
-            aria-label="Kira y dispositivo"
-            aria-hidden={!menuAbierto}
-            initial={false}
-            animate={{
-              opacity: menuAbierto ? 1 : 0,
-              scale: menuAbierto ? 1 : 0.98,
-              y: menuAbierto ? 0 : -4,
-            }}
-            transition={SPRING_POP}
-            style={{
-              display: menuAbierto ? 'block' : 'none',
-              transformOrigin: 'top right',
-            }}
-            onClick={(event) => {
-              const boton = (event.target as HTMLElement).closest('button');
-              if (boton && !boton.classList.contains('puente-ble')) {
-                setMenuAbierto(false);
-              }
-            }}
-          >
-            <span className="header-menu-label">Kira y dispositivo</span>
-            <div className="header-menu-items">{acciones}</div>
-          </motion.div>
+          {/* MODAL CENTRADO. Antes era un popover colgado del boton: en el
+              celular quedaba apretado contra el borde y las opciones (Bluetooth,
+              cara, etc.) no se leian comodas. Ahora abre en el medio de la
+              pantalla con fondo oscurecido, como el resto de los modales.
+              El menu queda montado aunque este oculto: PuenteBle mantiene vivo
+              el enlace, Wake Lock y la reconexion durante toda la conversacion. */}
+          <AnimatePresence>
+            {menuAbierto && (
+              <>
+                <motion.div
+                  className="header-menu-velo"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.16 }}
+                  onClick={() => setMenuAbierto(false)}
+                  aria-hidden="true"
+                />
+                <motion.div
+                  id={menuPopoverId}
+                  className="header-more-menu header-more-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Kira y dispositivo"
+                  initial={{ opacity: 0, scale: 0.94, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 6 }}
+                  transition={SPRING_POP}
+                  onClick={(event) => {
+                    const boton = (event.target as HTMLElement).closest('button');
+                    if (boton && !boton.classList.contains('puente-ble')) {
+                      setMenuAbierto(false);
+                    }
+                  }}
+                >
+                  <div className="header-menu-cabecera">
+                    <span className="header-menu-label">Kira y dispositivo</span>
+                    <button
+                      type="button"
+                      className="header-menu-cerrar"
+                      onClick={() => setMenuAbierto(false)}
+                      title="Cerrar"
+                      aria-label="Cerrar"
+                    >
+                      <X size={16} strokeWidth={2.2} aria-hidden="true" />
+                    </button>
+                  </div>
+                  <div className="header-menu-items">{acciones}</div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </header>

@@ -28,6 +28,8 @@ type Props = {
   respuestaActiva: boolean;
   hablando: boolean;
   escuchando: boolean;
+  /** El audio ya se grabó y se está transcribiendo. */
+  transcribiendo: boolean;
   nivelEscucha: number;
   segEscucha: number;
   labelTrace: string | null;
@@ -102,6 +104,7 @@ function VistaChatInner({
   respuestaActiva,
   hablando,
   escuchando,
+  transcribiendo,
   nivelEscucha,
   segEscucha,
   labelTrace,
@@ -303,6 +306,7 @@ function VistaChatInner({
         onDetener={onDetener}
         onEscuchar={onEscuchar}
         escuchando={escuchando}
+        transcribiendo={transcribiendo}
         nivelEscucha={nivelEscucha}
         segEscucha={segEscucha}
         onCancelarEscucha={onCancelarEscucha}

@@ -46,6 +46,21 @@ ENFRIA_MIN_S, ENFRIA_MAX_S = 5.0, 60.0
 ENFRIA_SIN_ACCESO_S = 300.0  # 401/402/403: no se arregla solo en segundos
 _enfriado_hasta: dict[str, float] = {}
 
+# PROVEEDOR ELEGIDO A MANO (desde Ajustes > Proveedores). Vive a nivel de
+# modulo por el mismo motivo que _enfriado_hasta: AIProvider se crea de nuevo
+# en cada llamada. None = automatico (el orden de config.PROVEEDORES_IA).
+_preferido: str | None = None
+
+
+def fijar_preferido(nombre: str | None) -> None:
+    """Elige el proveedor que atiende primero. None vuelve al automatico."""
+    global _preferido
+    _preferido = (nombre or "").strip() or None
+
+
+def preferido() -> str | None:
+    return _preferido
+
 
 def reiniciar_enfriamientos() -> None:
     """Para los tests: olvida los proveedores enfriados."""
@@ -173,6 +188,18 @@ class AIProvider:
             return "HTTP 200 sin contenido"
         return type(error).__name__
 
+    def indice_preferido(self) -> int:
+        """Indice del proveedor elegido a mano. -1 si no hay eleccion o el
+        nombre ya no existe (config cambio): se usa el automatico."""
+        if not _preferido:
+            return -1
+        for i, p in enumerate(self.config.PROVEEDORES_IA):
+            if p["nombre"] == _preferido:
+                # Si no tiene key no sirve como primero: el automatico ya
+                # sabe saltear los que no pueden andar.
+                return i if str(p.get("api_key") or "").strip() else -1
+        return -1
+
     def has_fallback(self, index: int) -> bool:
         # Respaldo = un proveedor mas adelante que PUEDA andar (con key). Si
         # ninguno tiene key (tests sin red), cualquiera cuenta: es el
@@ -227,6 +254,9 @@ class AIProvider:
 
     async def post_json(self, payload: dict, intentos: int = MAX_INTENTOS_IA, inicio: int = 0) -> dict:
         last_error: Exception | None = None
+        # El proveedor elegido a mano en Ajustes atiende primero (si tiene
+        # key). Si falla, sigue la cadena normal desde ahi.
+        inicio = self.indice_preferido() if _preferido else inicio
         inicio = min(max(inicio, 0), len(self.config.PROVEEDORES_IA) - 1)
         primero = self.saltar_enfriados(inicio)
         for provider_index, provider in enumerate(self.config.PROVEEDORES_IA):
@@ -300,7 +330,9 @@ class AIProvider:
             "stream": True,
         }
         buffer = ""
-        provider_index = self.saltar_enfriados(0)
+        provider_index = self.saltar_enfriados(
+            self.indice_preferido() if _preferido else 0
+        )
         attempt = 0
         while True:
             provider = self.config.PROVEEDORES_IA[provider_index]

@@ -69,9 +69,64 @@ def test_unitarios():
         "leer_temperatura", "leer_luz", "leer_botones", "leer_movimiento",
         "leer_sonido", "leer_bateria", "leer_gesto", "leer_brujula",
         "leer_toque", "controlar_metronomo",
+        # Estas cinco NO declaran `comando` en el catalogo: validan
+        # _placa_viva() adentro y escriben por serial_mgr.enviar(). Antes se
+        # clasificaban como paralelas y se pisaban con el resto (la respuesta
+        # de una se leia como si fuera de otra).
+        "mostrar_en_leds", "temporizador", "tocar_melodia",
+        "jugar_en_placa", "calibrar_brujula",
     ]
     check("tools de la placa -> cadena (serial)", all(ks.es_tool_placa(n) for n in seriales),
           str([n for n in seriales if not ks.es_tool_placa(n)]))
+    # Ninguna herramienta que ESCRIBA en la placa puede quedar fuera de la
+    # cadena. Se recorre el codigo fuente con AST siguiendo las llamadas de
+    # verdad (no substring): el dispatcher no escribe al serial, delega en
+    # _mostrar_en_leds() y compania, que son las que llaman a serial_mgr.
+    import ast
+    import inspect
+
+    fuente_mod = inspect.getsource(ks)
+    arbol = ast.parse(fuente_mod)
+    funciones = [n for n in ast.walk(arbol) if isinstance(n, ast.FunctionDef)]
+
+    def llamadas(nodo: ast.AST) -> set[str]:
+        return {
+            x.func.id
+            for x in ast.walk(nodo)
+            if isinstance(x, ast.Call) and isinstance(x.func, ast.Name)
+        }
+
+    # 1) las que tocan el serial de forma directa
+    tocan = set()
+    for f in funciones:
+        cuerpo = ast.get_source_segment(fuente_mod, f) or ""
+        if "serial_mgr.enviar" in cuerpo or "serial_mgr.leer_sensor" in cuerpo:
+            tocan.add(f.name)
+    # 2) propagar por llamadas (quien llama a una que toca la placa, la toca)
+    cambio = True
+    while cambio:
+        cambio = False
+        for f in funciones:
+            if f.name in tocan:
+                continue
+            if llamadas(f) & tocan:
+                tocan.add(f.name)
+                cambio = True
+    # 3) que herramientas del dispatcher llegan a esas funciones
+    escriben: set[str] = set()
+    for trozo in fuente_mod.split('if nombre == "')[1:]:
+        nombre_tool = trozo.split('"')[0]
+        cuerpo_tool = trozo.split('\n    if nombre == "')[0].split("\n    if ")[0]
+        cuerpo_tool = cuerpo_tool.split('\n    return')[0]
+        if any(f"{f}(" in cuerpo_tool for f in tocan):
+            escriben.add(nombre_tool)
+
+    fuera = sorted(n for n in escriben if not ks.es_tool_placa(n))
+    check(
+        "ninguna tool que escribe en la placa queda en paralelo",
+        not fuera,
+        f"{fuera}  (llegan a serial_mgr sin ir en cadena)",
+    )
     paralelas = ["reloj", "buscar_en_web", "calcular", "leer_url", "guardar_recuerdo", "azar", "leer_estado"]
     check("tools web/local -> paralelas", not any(ks.es_tool_placa(n) for n in paralelas),
           str([n for n in paralelas if ks.es_tool_placa(n)]))

@@ -8,3 +8,4 @@ export * from './memoria';
 export * from './chat';
 export * from './ble';
 export * from './eventos';
+export * from './proveedores';

@@ -35,6 +35,11 @@ export function useEscucha({
   const [escuchando, setEscuchando] = useState(false);
   const [nivelEscucha, setNivelEscucha] = useState(0);
   const [segEscucha, setSegEscucha] = useState(0);
+  // Mientras AssemblyAI convierte el audio en texto. Sin esto, al soltar el
+  // boton de grabar no pasaba NADA visible durante 1-3 segundos (el audio
+  // viaja, se transcribe y recien ahi aparece el mensaje): parecia que la
+  // grabacion se habia perdido. Con esto la UI muestra "transcribiendo...".
+  const [transcribiendo, setTranscribiendo] = useState(false);
   const escuchandoRef = useRef(false);
 
   const escuchaSesionRef = useRef(0);
@@ -140,7 +145,19 @@ export function useEscucha({
     const sesionEscucha = ++escuchaSesionRef.current;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // audio: true a secas deja que el navegador aplique cancelacion de eco y
+      // supresion de ruido AGRESIVAS, pensadas para llamadas: recortan las
+      // consonantes y se comen las palabras cortas, que es justo lo que
+      // necesita el reconocedor. Se apagan y se deja el micro limpio.
+      // (autoGainControl se mantiene: la feria es ruidosa y sube la voz.)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
 
       // Si el usuario cambió de chat mientras aparecía el permiso del micrófono,
       // no dejamos una captura huérfana viva.
@@ -153,7 +170,12 @@ export function useEscucha({
       chunksCel.current = [];
       prenderAnalizador(stream, sesionEscucha);
 
-      const rec = new MediaRecorder(stream);
+      // Bitrate explicito: el default de opus en MediaRecorder ronda los
+      // 24-32 kbps y ahi se pierden las fricativas ("s", "f", "j"). 64 kbps
+      // es voz limpia de sobra y el archivo sigue pesando poco.
+      const rec = new MediaRecorder(stream, {
+        audioBitsPerSecond: 64_000,
+      });
       grabadorCel.current = rec;
 
       rec.ondataavailable = (ev) => {
@@ -176,7 +198,6 @@ export function useEscucha({
 
         setEscuchando(false);
         escuchandoRef.current = false;
-        postSilencioso('/api/loading');
 
         const blob = new Blob(chunksCel.current, { type: rec.mimeType || 'audio/webm' });
         if (blob.size < 800) {
@@ -184,6 +205,11 @@ export function useEscucha({
           return;
         }
 
+        // El audio YA se grabo: de aca en adelante lo que falta es subirlo y
+        // transcribirlo. Se avisa en pantalla para que no parezca que el
+        // audio se perdio (es el segundo o dos mas largo de todo el flujo).
+        setTranscribiendo(true);
+        postSilencioso('/api/loading');
         try {
           const texto = ((await transcribirDesdeCel(blob)) ?? '').trim();
           if (sesionEscucha !== escuchaSesionRef.current) return;
@@ -195,6 +221,8 @@ export function useEscucha({
         } catch (e) {
           if (sesionEscucha !== escuchaSesionRef.current) return;
           mostrarErrorTemporal(e instanceof Error ? e.message : String(e), 5000);
+        } finally {
+          if (sesionEscucha === escuchaSesionRef.current) setTranscribiendo(false);
         }
       };
 
@@ -385,6 +413,7 @@ export function useEscucha({
 
   return {
     escuchando,
+    transcribiendo,
     nivelEscucha,
     segEscucha,
     rutaCelRef,

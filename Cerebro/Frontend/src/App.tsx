@@ -189,6 +189,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     hablando,
     setHablando,
     escuchando,
+    transcribiendo,
     nivelEscucha,
     segEscucha,
     rutaCelRef,
@@ -375,7 +376,6 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     sonidoUI('cerrar');
     setMemoriaAbierta(false);
   }, []);
-  const empezarNuevo = useCallback(() => comenzarDesdeInicio(), []);
   const cosquillas = useCallback(() => {
     void postSilencioso('/api/comando', {
       headers: { 'Content-Type': 'application/json' },
@@ -383,16 +383,25 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
     });
   }, []);
 
-  const color = elegido?.color ?? '#e8443b';
+  const color = elegido?.color ?? '#a3e635';
 
   // Inicio single-character: abre una charla nueva y, si vino de una
   // sugerencia, deja el prompt listo en el composer.
-  const comenzarDesdeInicio = (prompt?: string) => {
-    const kira = personajes[0];
-    if (!kira) return;
-    if (prompt) setInput(prompt);
-    nuevoChat(kira);
-  };
+  //
+  // OJO con las dependencias: `personajes` llega VACIO en el primer render
+  // (se llena cuando responde /api/personajes). Si esto se memorizara con
+  // deps vacias, quedaria congelado con la lista vacia para siempre y el
+  // boton "Empezar a hablar" no haria nada (el `if (!kira) return` cortaba).
+  const comenzarDesdeInicio = useCallback(
+    (prompt?: string) => {
+      const kira = personajes[0];
+      if (!kira) return;
+      if (prompt) setInput(prompt);
+      nuevoChat(kira);
+    },
+    [personajes, nuevoChat, setInput]
+  );
+  const empezarNuevo = useCallback(() => comenzarDesdeInicio(), [comenzarDesdeInicio]);
 
   const hayMensajesUsuario = mensajes.some((m) => m.rol === 'usuario');
   const ultimoKiraId = [...mensajes].reverse().find((m) => m.rol !== 'usuario')?.id;
@@ -513,6 +522,7 @@ export default function App({ usuario, onCerrarSesion }: AppProps) {
             respuestaActiva={respuestaActiva}
             hablando={hablando}
             escuchando={escuchando}
+            transcribiendo={transcribiendo}
             nivelEscucha={nivelEscucha}
             segEscucha={segEscucha}
             labelTrace={labelTrace}

@@ -16,19 +16,19 @@
   filter: blur(18px) saturate(1.1);
   transform: scale(1.08);
 }
-.app:has(.fondo-vivo) .panel,
-.app:has(.fondo-vivo) .chat,
-.app:has(.fondo-vivo) .pantalla,
-.app:has(.fondo-vivo) .input-bar {
+.app:has(.fondo-vivo-listo) .panel,
+.app:has(.fondo-vivo-listo) .chat,
+.app:has(.fondo-vivo-listo) .pantalla,
+.app:has(.fondo-vivo-listo) .input-bar {
   background: transparent;
 }
 /* SIN backdrop-filter a proposito: crea un bloque contenedor para los hijos
    position:fixed, y el menu del header (hoja inferior en el celu) quedaba
    anclado al header y salia por ARRIBA de la pantalla. Fondo casi opaco. */
-.app:has(.fondo-vivo) .chat-header {
+.app:has(.fondo-vivo-listo) .chat-header {
   background: color-mix(in srgb, var(--bg) 90%, transparent);
 }
-.app:has(.fondo-vivo) .sidebar {
+.app:has(.fondo-vivo-listo) .sidebar {
   background: color-mix(in srgb, var(--elev-1) 94%, transparent);
 }
 
@@ -55,7 +55,7 @@
 .chat-header .avatar .kira-cara,
 .turn-avatar .kira-cara,
 .typing-avatar .kira-cara {
-  filter: drop-shadow(0 2px 8px rgba(255, 60, 45, 0.18));
+  filter: drop-shadow(0 2px 8px rgba(163, 230, 53, 0.18));
 }
 .auth-logo {
   width: 56px;
@@ -63,7 +63,7 @@
 }
 .hero-cara {
   margin: 0 auto 6px;
-  filter: drop-shadow(0 10px 40px rgba(255, 60, 45, 0.28));
+  filter: drop-shadow(0 10px 40px rgba(163, 230, 53, 0.28));
 }
 
 /* ---------- chat vacio: la cara saluda ---------- */
@@ -78,7 +78,7 @@
   animation: kira-aparece 0.5s var(--ease-out) both;
 }
 .chat-vacio .kira-cara {
-  filter: drop-shadow(0 8px 34px rgba(255, 60, 45, 0.3));
+  filter: drop-shadow(0 8px 34px rgba(163, 230, 53, 0.3));
 }
 .chat-vacio-saludo {
   margin: 0;
@@ -347,7 +347,7 @@ html:has(.fondo-vivo) body,
   transform: scale(0.97);
 }
 .modo-cara-tocar .kira-cara {
-  filter: drop-shadow(0 18px 70px rgba(255, 60, 45, 0.35));
+  filter: drop-shadow(0 18px 70px rgba(163, 230, 53, 0.35));
 }
 .modo-cara-sub {
   margin: 0;

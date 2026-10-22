@@ -31,6 +31,19 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 NANO_BASE_URL = "https://nano-gpt.com/api/v1"
 NANO_API_KEY = os.getenv("NANO_API_KEY", "")
 
+# ------------------- IA (Baseten) ----------------------------------------------
+# Baseten sirve modelos open-source (Llama, Qwen, DeepSeek...) en infra propia
+# con una API OpenAI-compatible. Endpoint base del Model API:
+#   https://inference.baseten.co/v1   (POST /chat/completions + Bearer)
+# El `modelo` es el SLUG del deployment o el nombre del modelo publicado
+# (ej. "deepseek-ai/DeepSeek-V3"). Se puede sobreescribir con BASETEN_MODELO.
+BASETEN_BASE_URL = os.getenv("BASETEN_BASE_URL", "https://inference.baseten.co/v1")
+BASETEN_API_KEY = os.getenv("BASETEN_API_KEY", "")
+# MEDIDO contra la API real: "DeepSeek-V4.1-Flash-1017-Fast" responde en
+# ~508 ms contra ~1182 ms de la version sin -Fast, con el MISMO modelo y la
+# misma calidad de JSON. Para una charla con voz, medio segundo se nota.
+BASETEN_MODELO = os.getenv("BASETEN_MODELO", "deepseek-ai/DeepSeek-V4.1-Flash-1017-Fast")
+
 # PRINCIPAL + RESPALDO. Se prueban EN ORDEN: se agota el primero (sus reintentos
 # con backoff) y recién ahí entra el siguiente. Motivo real: DeepSeek responde
 # HTTP 402 cuando se acaba el saldo — en medio de una demo, el respaldo salva la
@@ -79,6 +92,18 @@ PROVEEDORES_IA: list[dict] = [
         "extra": {"thinking": {"type": "disabled"}},
     },
     {
+        "nombre": "baseten",
+        "base_url": BASETEN_BASE_URL,
+        "api_key": BASETEN_API_KEY,
+        # Mismo modelo que Hive (DeepSeek V4.1 Flash 1017), pero en la
+        # infraestructura de Baseten y en su variante -Fast.
+        "modelo": BASETEN_MODELO,
+        # OBLIGATORIO: sin esto el modelo razona antes de contestar y con
+        # MAX_TOKENS=300 el JSON llega CORTADO (medido: content truncado a
+        # media palabra). Con "none" responde 508 ms y el JSON es válido.
+        "extra": {"reasoning_effort": "none"},
+    },
+    {
         "nombre": "nano-gpt (respaldo)",
         "base_url": NANO_BASE_URL,
         "api_key": NANO_API_KEY,
@@ -106,7 +131,17 @@ ELEVEN_MODELO = os.getenv("KIRA_ELEVEN_MODELO", "eleven_v4")
 # La voz concreta (voice_id) NO se versiona: es de la cuenta de cada uno.
 # Si el personaje trae el marcador ELEVEN_VOICE_ID, se usa esta variable.
 ELEVEN_VOICE_ID = os.getenv("KIRA_ELEVEN_VOICE_ID", "")
-ELEVEN_FORMATO = "mp3_44100_128"   # mp3: lo que ya reproduce el frontend
+# Formato del TTS. mp3_44100_32 (32 kbps) en vez de 128 kbps:
+#   - MEDIDO sobre la voz real: 91.9 KB -> 22.4 KB (-76%).
+#   - La inteligibilidad es la MISMA: transcribi el audio comprimido con
+#     AssemblyAI y mp3_44100_32 acerto 93.3% de las palabras, igual que el
+#     de 128. mp3_22050_32 bajo a 86.7% ("Che" -> "Sí"): ese NO sirve.
+#   - Los timestamps que sincronizan el texto con la voz llegan identicos
+#     (52 de 52), asi que la animacion no se rompe.
+#   - El volumen no cambia (mean -17.5 dB vs -17.2 dB).
+# Importa porque en la feria el celular va con DATOS, no con wifi: este
+# cambio estira un plan de 1 GB de ~4.300 a ~17.000 respuestas de voz.
+ELEVEN_FORMATO = os.getenv("KIRA_ELEVEN_FORMATO", "mp3_44100_32")
 
 # ------------------- Transcripcion (AssemblyAI) -------------------
 # Se carga desde .env; no se guarda ninguna credencial en el código.
