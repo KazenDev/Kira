@@ -1,16 +1,33 @@
 <div align="center">
 
-# REQUISITOS
+<img src=".github/assets/requisitos.svg" alt="Requisitos — lo que hace falta" width="100%" />
 
-**Todo lo que hace falta para correr Kira en una PC limpia.**
+<br/>
 
-<sub>Linux, Windows o macOS. Si algo falla, mirá el [checklist](#por-qué-no-anda) del final o la guía paso a paso en [CÓMO HACERLO](COMO-HACERLO.md).</sub>
+<a href="#python"><img src="https://img.shields.io/badge/PYTHON-0b1210?style=for-the-badge&logo=python&logoColor=a3e635&labelColor=0f1714" alt="Python" /></a>
+<a href="#dependencias-de-python"><img src="https://img.shields.io/badge/DEPENDENCIAS-0b1210?style=for-the-badge&logo=pypi&logoColor=a3e635&labelColor=0f1714" alt="Dependencias" /></a>
+<a href="#claves-de-api"><img src="https://img.shields.io/badge/CLAVES-0b1210?style=for-the-badge&logo=keycdn&logoColor=a3e635&labelColor=0f1714" alt="Claves" /></a>
+<a href="#hardware-opcional"><img src="https://img.shields.io/badge/HARDWARE-0b1210?style=for-the-badge&logo=micropython&logoColor=a3e635&labelColor=0f1714" alt="Hardware" /></a>
 
-**← Volver al [README](README.md)**
+<br/>
+
+<img src="https://img.shields.io/badge/Python-3.10%2B-0b1210?style=flat-square&logo=python&logoColor=a3e635&labelColor=0f1714" alt="Python 3.10+" />
+<img src="https://img.shields.io/badge/Node-18%2B-0b1210?style=flat-square&logo=nodedotjs&logoColor=a3e635&labelColor=0f1714" alt="Node 18+" />
+<img src="https://img.shields.io/badge/OS-Linux_·_Windows_·_macOS-0b1210?style=flat-square&logo=gnubash&logoColor=a3e635&labelColor=0f1714" alt="Linux, Windows, macOS" />
+<img src="https://img.shields.io/badge/placa-opcional-0b1210?style=flat-square&logo=micropython&logoColor=a3e635&labelColor=0f1714" alt="Placa opcional" />
+
+<br/><br/>
+
+**Lo mínimo para que Kira piense y hable.**<br/>
+<sub>Linux, Windows o macOS. Si algo falla, mirá el <a href="#por-qué-no-anda">checklist del final</a>.</sub>
+
+<br/>
+
+**← [README](README.md)** · **[CÓMO HACERLO](COMO-HACERLO.md)** · **[Arquitectura](Cerebro/ARQUITECTURA.md)**
 
 </div>
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Python
 
@@ -22,7 +39,7 @@
 
 > **Windows:** marcá **"Add Python to PATH"** durante la instalación.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Dependencias de Python
 
@@ -55,7 +72,7 @@ Para desarrollo (agrega `pytest`):
 ./.venv/bin/pip install -r requirements-dev.txt
 ```
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Node.js (solo para el frontend)
 
@@ -73,7 +90,7 @@ npm run dev     # desarrollo
 npm run build   # producción (genera dist/)
 ```
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Programas externos
 
@@ -99,7 +116,7 @@ sudo dnf install ffmpeg
 winget install --id Gyan.FFmpeg
 ```
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Hardware (opcional)
 
@@ -121,7 +138,7 @@ sudo usermod -aG dialout $USER
 > andan; solo no hay cara física ni sensores reales. Las herramientas de
 > sensores van a responder "no pude leerlo", y está bien: Kira no inventa.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Claves de API
 
@@ -141,7 +158,7 @@ Todas se cargan en **`Cerebro/Backend/.env`** (copiá `.env.example`).
 > prueba Vercel Gateway y después DeepSeek directo. Los logs avisan:
 > `[IA] hive se agotó (HTTP 405) -> CAE AL RESPALDO`.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Internet
 
@@ -150,7 +167,7 @@ Sin internet el servidor levanta, pero Kira no puede pensar ni hablar.
 
 La memoria y el índice RAG, en cambio, son **100% locales**.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Cómo arrancar
 
@@ -182,7 +199,7 @@ npm run dev
 
 Si usás el launcher, todo se sirve desde **:8000** y no hace falta la terminal 2.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Por qué no anda
 
@@ -254,10 +271,31 @@ En Windows: `python MicroBit\mb.py test`
 
 </details>
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <div align="center">
 
-**← [README](README.md)** · **[CÓMO HACERLO](COMO-HACERLO.md)** · **[Arquitectura](Cerebro/ARQUITECTURA.md)**
+### ¿Todo listo?
+
+<table align="center">
+<tr>
+<td align="center" width="50%">
+
+**[CÓMO HACERLO](COMO-HACERLO.md)**<br/>
+<sub>la guía paso a paso</sub>
+
+</td>
+<td align="center" width="50%">
+
+**[ARQUITECTURA](Cerebro/ARQUITECTURA.md)**<br/>
+<sub>cómo está armado por dentro</sub>
+
+</td>
+</tr>
+</table>
+
+<br/>
+
+**[← Volver al README](README.md)**
 
 </div>

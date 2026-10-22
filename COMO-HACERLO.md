@@ -1,10 +1,25 @@
 <div align="center">
 
-# CÓMO HACERLO
+<img src=".github/assets/guia.svg" alt="Cómo hacerlo — de cero a Kira hablando" width="100%" />
 
-**Guía práctica para levantar, probar y tocar Kira sin romper nada.**
+<br/>
 
-<sub>Todo lo de acá está verificado contra el código. Si algo no coincide, el código tiene razón.</sub>
+<a href="#1-levantar-el-backend"><img src="https://img.shields.io/badge/INSTALAR-0b1210?style=for-the-badge&logo=gnubash&logoColor=a3e635&labelColor=0f1714" alt="Instalar" /></a>
+<a href="#4-conectar-la-microbit"><img src="https://img.shields.io/badge/CONECTAR_LA_PLACA-0b1210?style=for-the-badge&logo=micropython&logoColor=a3e635&labelColor=0f1714" alt="Conectar la placa" /></a>
+<a href="#6-probar-que-la-ia-responde"><img src="https://img.shields.io/badge/PROBAR-0b1210?style=for-the-badge&logo=curl&logoColor=a3e635&labelColor=0f1714" alt="Probar" /></a>
+<a href="#10-agregar-una-herramienta-a-la-ia"><img src="https://img.shields.io/badge/EXTENDER-0b1210?style=for-the-badge&logo=codecrafters&logoColor=a3e635&labelColor=0f1714" alt="Extender" /></a>
+
+<br/>
+
+<img src="https://img.shields.io/badge/Python-3.10%2B-0b1210?style=flat-square&logo=python&logoColor=a3e635&labelColor=0f1714" alt="Python 3.10+" />
+<img src="https://img.shields.io/badge/Node-18%2B-0b1210?style=flat-square&logo=nodedotjs&logoColor=a3e635&labelColor=0f1714" alt="Node 18+" />
+<img src="https://img.shields.io/badge/micro:bit-opcional-0b1210?style=flat-square&logo=micropython&logoColor=a3e635&labelColor=0f1714" alt="micro:bit opcional" />
+<img src="https://img.shields.io/badge/tiempo-15_min-0b1210?style=flat-square&logo=clockify&logoColor=a3e635&labelColor=0f1714" alt="15 minutos" />
+
+<br/><br/>
+
+**Todo lo de acá está verificado contra el código.**<br/>
+<sub>Si algo no coincide, el código tiene razón: abrí un issue.</sub>
 
 <br/>
 
@@ -12,7 +27,7 @@
 
 </div>
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Índice
 
@@ -29,7 +44,7 @@
 - [Agregar una herramienta a la IA](#10-agregar-una-herramienta-a-la-ia)
 - [Problemas comunes](#problemas-comunes)
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## Antes de empezar
 
@@ -42,7 +57,7 @@
 
 Sin micro:bit la app funciona igual: solo no hay cara física ni sensores.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 1. Levantar el backend
 
@@ -90,7 +105,7 @@ Queda escuchando en **http://127.0.0.1:8000**.
 curl http://127.0.0.1:8000/health
 ```
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 2. Levantar el frontend
 
@@ -109,7 +124,7 @@ El proxy de Vite manda `/api` al backend automáticamente, así que no hay que c
 > **No abras `dist/index.html` con doble clic.** El frontend necesita el servidor
 > de Vite (o el backend sirviendo el build) porque las rutas son relativas.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 3. Crear tu cuenta
 
@@ -122,7 +137,7 @@ que viene con el proyecto; las siguientes arrancan vacías y aisladas.
 
 Cada cuenta guarda su propia memoria, conversaciones, grabaciones e índice RAG.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 4. Conectar la micro:bit
 
@@ -158,7 +173,7 @@ y los escribe por Web Bluetooth.
 El enlace se reconecta solo si se cae, y mantiene la pantalla del celular encendida
 para que Chrome no congele el JavaScript.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 5. Compilar el firmware
 
@@ -188,7 +203,7 @@ La placa se reinicia sola y ya corre el firmware nuevo.
 > (está en `.gitignore`). Si clonaste el repo, tenés que bajar CODAL aparte.
 > Los detalles del protocolo y las emociones están en [`MICROBIT.md`](MicroBit/MICROBIT.md).
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 6. Probar que la IA responde
 
@@ -224,7 +239,7 @@ data: {"tipo":"fin","emotion":"happy","message":"..."}
 
 Si ves `delta` y `fin`, la IA funciona. Si ves `error`, el mensaje dice qué pasó.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 7. Tocar la memoria y el RAG
 
@@ -257,7 +272,7 @@ Backend/usuarios/<hash>/
 **Privacidad:** en Ajustes podés apagar `recordar`, `hechos`, `experiencias` o `usar`.
 Apagar un interruptor **no borra** lo guardado: solo deja de escribir o consultar.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 8. Correr los tests
 
@@ -279,7 +294,7 @@ npm run build
 > `run_tests.py` es la suite larga y determinista. `run_live_tests.py` gasta
 > crédito de IA, por eso exige `--yes`.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 9. Cambiar el tema visual
 
@@ -301,7 +316,7 @@ Cambiá esos valores y todo el tema se actualiza. **No toques `00-legacy.css` ni
 
 Para el tono de cada personaje hay un override por `data-pj` al final de `tokens.css`.
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 ## 10. Agregar una herramienta a la IA
 
@@ -431,13 +446,42 @@ de esta máquina.
 
 </details>
 
----
+<img src=".github/assets/divider.svg" width="100%" alt="" />
 
 <div align="center">
 
-**← [README](README.md)** · **[Requisitos](REQUISITOS.md)** · **[Arquitectura](Cerebro/ARQUITECTURA.md)** · **[micro:bit](MicroBit/MICROBIT.md)**
+<img src=".github/assets/divider.svg" width="100%" alt="" />
+
+### ¿Y ahora?
+
+<table align="center">
+<tr>
+<td align="center" width="33%">
+
+**[REQUISITOS](REQUISITOS.md)**<br/>
+<sub>versiones, claves, hardware</sub>
+
+</td>
+<td align="center" width="33%">
+
+**[ARQUITECTURA](Cerebro/ARQUITECTURA.md)**<br/>
+<sub>cómo está armado el backend</sub>
+
+</td>
+<td align="center" width="33%">
+
+**[MICRO:BIT](MicroBit/MICROBIT.md)**<br/>
+<sub>firmware y protocolo</sub>
+
+</td>
+</tr>
+</table>
 
 <br/>
+
+**[← Volver al README](README.md)**
+
+<br/><br/>
 
 <sub>Si algo de esta guía no te funcionó, el problema es de la guía: abrí un issue.</sub>
 
